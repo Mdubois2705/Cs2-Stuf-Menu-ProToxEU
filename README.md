@@ -25,11 +25,10 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 ## Installation
 
 1. Clone ou télécharge ce dépôt.
-2. Copie `cs2_practice.cfg` dans le dossier cfg de CS2 :
-   `...\Counter-Strike Global Offensive\game\csgo\cfg\`
+2. `cs2_practice.cfg` est copié automatiquement dans le dossier cfg de CS2 au premier lancement du script (rien à faire). Si tu préfères le faire à la main : `...\Counter-Strike Global Offensive\game\csgo\cfg\`
 3. Dans Steam, ajoute `-condebug` aux options de lancement de CS2.
 4. Lance `stuff_menu.ahk` une première fois : il crée `config.ini` à partir de `config.example.ini`.
-5. Ouvre `config.ini` et vérifie `CfgPath` (chemin du fichier `stuff_run.cfg` dans le dossier cfg de CS2). Relance le script.
+5. Au premier lancement, le script trouve tout seul le dossier cfg de CS2 (via Steam). S'il ne le trouve pas, il te demande de le choisir, puis l'enregistre dans `config.ini` (`CfgPath`).
 6. Lance un entraînement local et tape `exec cs2_practice` dans la console **une seule fois** : cela crée la touche qui relie le jeu au menu. Ensuite, le script l'exécute tout seul (voir [Exec automatique](#exec-automatique)).
 
 ## Raccourcis
@@ -43,7 +42,6 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 | `F6` | Relancer l'exec du cfg d'entraînement |
 | `F11` | Gestion des stuffs et des catégories |
 | `F1` | Profils et partage de stuffs (export / import) |
-| `Insert` | Afficher / masquer les coordonnées en temps réel |
 
 Dans le menu :
 
@@ -75,11 +73,11 @@ Toutes les touches se changent dans `config.ini`. Le script utilise aussi la tou
 
 ## Coordonnées en temps réel
 
-`Insert` affiche, dans le **coin inférieur gauche** de l'écran, la map, ta position (X, Y, Z) et ton angle de vue (pitch, yaw), mises à jour plusieurs fois par seconde. Le texte suit l'apparence réglée avec `F10`.
+L'affichage s'active dans `F10`, onglet **Coordonnées** (pas de raccourci clavier). Une fois activé et enregistré, il reste actif à chaque lancement du script, jusqu'à ce que tu le désactives. Il se place par défaut dans le **coin inférieur gauche** de l'écran, ou où tu veux (position X / Y dans le même onglet). Il affiche la map, ta position (X, Y, Z) et ton angle de vue (pitch, yaw), mises à jour plusieurs fois par seconde. Le texte suit l'apparence réglée avec `F10`.
 
 Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dans `console.log` (option `-condebug`). Il ne lit pas la mémoire du jeu.
 
-- La fréquence se règle avec `HudInterval` (en ms, 300 par défaut) ; `HudAtStart=1` l'affiche dès le lancement du script.
+- La fréquence se règle avec `HudInterval` (en ms, 300 par défaut) . `HudAtStart` (0 ou 1) est géré par la case des réglages.
 - Pendant que l'affichage est actif, le script envoie une touche (`kp_multiply`) à chaque mise à jour : **désactive-le avant d'ouvrir la console ou le chat**, sinon le caractère `*` s'y écrit.
 - Il se met en pause quand le menu ou une fenêtre du script est ouverte, et quand CS2 n'est pas la fenêtre active.
 
@@ -124,6 +122,12 @@ Réglages dans `config.ini` :
 
 Avec `ConsoleKey` vide, l'exec passe par la touche liée au menu, créée par ton premier `exec cs2_practice` manuel. Avec `ConsoleKey` renseignée, le script ouvre la console, tape la commande et la referme lui-même, sans exec manuel. Utilise-la seulement si la touche est la bonne : sinon les lettres tapées arrivent dans le jeu.
 
+## Captures d'écran des stuffs
+
+Quand tu sauvegardes un stuff (F9, ou F4 depuis le menu), le script prend une petite capture de 100 x 100 px au centre du jeu (autour du réticule) et la propose dans la fenêtre. Si la case est cochée, elle est liée au stuff. Dans le menu, la capture du stuff sélectionné s'affiche dans le coin supérieur droit de l'écran (placement réglable). Pour la refaire : `F11`, modifier le stuff, bouton « Refaire la capture (en jeu) » (place-toi au point du stuff : les fenêtres se masquent et la capture se fait 3 secondes plus tard). Les captures sont dans `data\shots\`. Elles peuvent être jointes à un export vers un fichier `.stuffpack` (case « Inclure les captures » dans F1) : l'import les restaure. Le code copié ne les contient pas (trop lourd).
+
+Tout se règle dans F10, onglet « Captures » : activer, zone capturée, taille affichée, placement (coin supérieur droit par défaut, ou libre avec position X/Y), arrondi des coins (3 px par défaut). Le liseré de la capture reprend celui du menu et se dessine par-dessus l'image. Équivalents dans `config.ini` : `Shot`, `ShotSize`, `ShotZoom`, `ShotPos`, `ShotCorner`, `ShotX`, `ShotY`. Le jeu doit être en fenêtré ou en plein écran fenêtré.
+
 ## Ajouter des stuffs
 
 **Depuis le jeu (F9)** : place-toi au bon endroit, vise, appuie sur `F9`, puis remplis la map, le type, la catégorie, le nom et le message du chat.
@@ -157,13 +161,37 @@ maps/                 un fichier .txt par map + _commun.txt
 data/                 favoris, récents, copies de sécurité (non versionné)
 ```
 
+## Thèmes et police
+
+`F10` ouvre les réglages du menu. La liste **Thème** applique en un clic une palette complète (fond, titre, nom de map, textes) :
+
+| Thème | Ambiance |
+| --- | --- |
+| Graphite et Or | anthracite, accents or doux |
+| Encre et Glace | bleu nuit, titre bleu glacier |
+| Forêt et Sauge | vert très sombre, titre sauge |
+| Bordeaux et Crème | bordeaux presque noir, titre rose ancien |
+| Ardoise et Lavande | ardoise bleutée, titre lavande |
+| Papier et Encre | fond crème clair, titre bleu acier |
+
+La ligne sélectionnée du menu est mise en valeur par une barre de fond, dont la couleur est choisie par le thème (ou calculée à partir du fond en mode « Personnalisé »).
+
+Le menu a des coins arrondis et un fin liseré dont la couleur suit le thème. Dans F10, tu peux régler l'épaisseur et la couleur du liseré (liste ou code hexadécimal) ainsi que l'arrondi des coins. Réglage dans `config.ini`, section `[Overlay]` : `Corner=14` (rayon des coins, `0` = coins carrés) et `Border=2` (épaisseur du liseré, `0` = aucun).
+
+Si tu modifies ensuite le fond (préréglage ou curseurs), le menu repasse en « Personnalisé » avec des couleurs de texte automatiques. La liste **Police** ne propose que les polices installées sur ton PC (Segoe UI, Bahnschrift, Cascadia, Consolas, Calibri, Georgia…). Le thème est enregistré dans `config.ini` (`Theme=`).
+
+## Sauvegardes et annulation
+
+- **Sauvegarde automatique** : une fois par jour, au lancement du script, tes maps (de chaque profil) sont copiées dans `data\backup\auto\AAAA-MM-JJ\`. Les 14 dernières sont conservées (`BackupKeep` dans `config.ini`, `AutoBackup=0` pour désactiver). Pour restaurer : `F1` > « Restaurer une sauvegarde… ». Ton état actuel est sauvegardé juste avant dans un dossier `avant-restauration-...`.
+- **Annuler une suppression** : `Ctrl+Z` dans le menu, ou le bouton « Annuler la suppression » (et `Ctrl+Z`) dans la fenêtre de gestion `F11`. Le dernier stuff supprimé est remis dans sa catégorie ; les 50 derniers sont mémorisés dans `data\deleted.txt`. Le favori et le cadenas du stuff ne sont pas restaurés. La suppression d'une catégorie ne détruit pas ses stuffs (ils vont dans « Non classés »), donc elle n'a pas besoin d'être annulée.
+
 ## Vérification de l'installation
 
 Au lancement, le script vérifie ce qui peut l'être sans CS2 : dossier cfg, `cs2_practice.cfg`, tes maps, droits d'écriture, présence de `console.log`. Une petite fenêtre affiche le résultat avec ✔, ⚠ ou ✘ et la solution de chaque problème.
 
 Lance ensuite CS2 et une map locale : dès que le jeu est au premier plan, le script teste l'envoi d'une commande (via `console.log`), les cheats et la détection de la map. S'il n'y a aucun problème, la fenêtre se ferme toute seule.
 
-- Pour relancer la vérification : bouton « Vérifier l'installation » dans la fenêtre `F1`.
+- Pour relancer la vérification : bouton « Vérifier l'installation » dans les réglages `F10` (visible sous tous les onglets).
 - Pour la désactiver : `AutoCheck=0` dans `config.ini`.
 - Le test d'envoi appuie sur la touche `*` du pavé numérique dans le jeu : ne laisse pas la console ni le chat ouverts pendant la vérification.
 

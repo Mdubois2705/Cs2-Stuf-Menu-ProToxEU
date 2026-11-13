@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.2.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.8.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -39,12 +39,23 @@ SettingsKey := IniRead(IniFile, "Settings", "SettingsKey", "F10")
 LockKey := IniRead(IniFile, "Settings", "LockKey", "F5")
 ManageKey := IniRead(IniFile, "Settings", "ManageKey", "F11")
 TpZOffset := Number(IniRead(IniFile, "Settings", "TpZOffset", "-64"))
+AutoBackupOn := (IniRead(IniFile, "Settings", "AutoBackup", "1") = "1")
+BackupKeep := Max(0, ToInt(IniRead(IniFile, "Settings", "BackupKeep", "14"), 14))
 AutoCheck := (IniRead(IniFile, "Settings", "AutoCheck", "1") = "1")
 AutoUpdate := (IniRead(IniFile, "Settings", "AutoUpdate", "1") = "1")
 ShareKey := IniRead(IniFile, "Settings", "ShareKey", "F1")
-HudKey := IniRead(IniFile, "Settings", "HudKey", "Insert")
 HudInterval := Max(100, ToInt(IniRead(IniFile, "Settings", "HudInterval", "300"), 300))
 HudAtStart := (IniRead(IniFile, "Settings", "HudAtStart", "0") = "1")
+HudAuto := (IniRead(IniFile, "Settings", "HudAuto", "1") = "1")      ; 1 = coin inférieur gauche, 0 = position libre
+HudX := ToInt(IniRead(IniFile, "Settings", "HudX", "12"), 12)
+HudY := ToInt(IniRead(IniFile, "Settings", "HudY", "900"), 900)
+ShotOn := (IniRead(IniFile, "Settings", "Shot", "1") = "1")                         ; captures d'écran des stuffs
+ShotSize := Max(40, Min(300, ToInt(IniRead(IniFile, "Settings", "ShotSize", "100"), 100)))   ; zone capturée (px)
+ShotZoom := Max(60, Min(500, ToInt(IniRead(IniFile, "Settings", "ShotZoom", "160"), 160)))   ; taille d'affichage (px)
+ShotPlace := Max(1, Min(2, ToInt(IniRead(IniFile, "Settings", "ShotPos", "1"), 1)))   ; 1 = coin supérieur droit, 2 = position libre
+ShotCorner := Max(0, Min(30, ToInt(IniRead(IniFile, "Settings", "ShotCorner", "3"), 3)))   ; arrondi des coins de la capture (px)
+ShotX := ToInt(IniRead(IniFile, "Settings", "ShotX", "520"), 520)
+ShotY := ToInt(IniRead(IniFile, "Settings", "ShotY", "100"), 100)
 ExecKey := IniRead(IniFile, "Settings", "ExecKey", "F6")
 PracticeCfg := IniRead(IniFile, "Settings", "PracticeCfg", "cs2_practice")
 AutoExec := (IniRead(IniFile, "Settings", "AutoExec", "1") = "1")
@@ -58,6 +69,12 @@ ovX := ToInt(IniRead(IniFile, "Overlay", "X", "30"), 30)
 ovY := ToInt(IniRead(IniFile, "Overlay", "Y", "100"), 100)
 ovOpacity := Max(80, Min(255, ToInt(IniRead(IniFile, "Overlay", "Opacity", "225"), 225)))
 ovBg := IniRead(IniFile, "Overlay", "Bg", "14181D")
+ovTheme := IniRead(IniFile, "Overlay", "Theme", "")
+ovCorner := Max(0, Min(30, ToInt(IniRead(IniFile, "Overlay", "Corner", "14"), 14)))   ; rayon des coins arrondis (0 = carré)
+ovBorder := Max(0, Min(6, ToInt(IniRead(IniFile, "Overlay", "Border", "2"), 2)))      ; épaisseur du liseré (0 = aucun)
+ovBorderCol := StrUpper(Trim(IniRead(IniFile, "Overlay", "BorderColor", ""), "# `t"))   ; couleur du liseré (vide = auto selon le thème)
+if !RegExMatch(ovBorderCol, "^[0-9A-F]{6}$")
+    ovBorderCol := ""
 ovTitle := Trim(RegExReplace(IniRead(IniFile, "Overlay", "Title", "Menu Stuf V.{version} ProToxEU"), "[`r`n`t]+", " "))
 if (ovTitle = "Menu Stuf V.2 ProToxEU")   ; ancien titre par défaut : suit maintenant la version
     ovTitle := "Menu Stuf V.{version} ProToxEU"
@@ -67,8 +84,36 @@ if !RegExMatch(ovBg, "^[0-9A-Fa-f]{6}$")
 
 SplitPath(CfgPath, , &cfgDir)
 if (CfgPath = "" || !DirExist(cfgDir)) {
-    MsgBox("Chemin CfgPath invalide dans config.ini :`n" CfgPath)
-    ExitApp
+    ; Chemin absent ou invalide (ex. config copiée d'un autre PC) : détection automatique de CS2 via Steam
+    badPath := CfgPath
+    found := FindCs2Cfg()
+    if (found = "") {
+        badTxt := (badPath != "") ? " (chemin du config.ini : " badPath ")" : ""
+        MsgBox("Le dossier cfg de CS2 n'a pas été trouvé automatiquement" badTxt ".`n`nChoisis le dossier cfg de CS2 à la fenêtre suivante.`nIl se trouve en général ici :`n...\Steam\steamapps\common\Counter-Strike Global Offensive\game\csgo\cfg", "Menu Stuf - installation", 0x40040)
+        picked := DirSelect("*C:\Program Files (x86)\Steam\steamapps\common", 0, "Choisis le dossier cfg de CS2 (game\csgo\cfg)")
+        picked := RTrim(picked, "\")
+        if (picked != "") {
+            found := Cs2CfgIn(picked)
+            if (found = "" && DirExist(picked))
+                found := picked
+        }
+    }
+    if (found = "") {
+        MsgBox("Aucun dossier cfg valide : le menu ne peut pas démarrer.`n`nRelance le script et choisis le dossier cfg de CS2, ou renseigne CfgPath dans config.ini.", "Menu Stuf - installation", 0x40010)
+        ExitApp
+    }
+    CfgPath := found "\stuff_run.cfg"
+    IniWrite(CfgPath, IniFile, "Settings", "CfgPath")
+    SplitPath(CfgPath, , &cfgDir)
+}
+; Copie automatique de cs2_practice.cfg dans le dossier cfg de CS2 (sans jamais écraser un fichier existant)
+practiceSrc := A_ScriptDir "\" PracticeCfg ".cfg"
+practiceDst := cfgDir "\" PracticeCfg ".cfg"
+if (FileExist(practiceSrc) && !FileExist(practiceDst)) {
+    try {
+        FileCopy(practiceSrc, practiceDst)
+        practiceCopied := true
+    }
 }
 if (ConsoleLog = "") {
     SplitPath(cfgDir, , &csgoDir)
@@ -89,6 +134,15 @@ FAV_CAT := "[Favoris]"
 REC_CAT := "[Récents]"
 LOCK_ICON := "🔒"   ; si le cadenas s'affiche comme un carré, remplace par "[L]"
 DEFAULT_LOCKED_CATS := ["Utilitaires"]   ; verrouillées au premier lancement
+; Thèmes de couleurs : [id, nom affiché, fond, texte, titre, nom de map, texte secondaire, ligne sélectionnée]
+THEMES := [
+    ["graphite", "Graphite et Or", "16181D", "E8E4DA", "D4B483", "D4B483", "8B8F98", "23262D"],
+    ["encre", "Encre et Glace", "0F1822", "E3ECF2", "7DB7D1", "E9C98F", "7F93A3", "1B2A38"],
+    ["foret", "Forêt et Sauge", "101A17", "E3EBE4", "A3C9A8", "E2CF9C", "80978A", "1C2B25"],
+    ["bordeaux", "Bordeaux et Crème", "1B1316", "EFE3D8", "D98B95", "ECD9B0", "9A8587", "2A1D22"],
+    ["ardoise", "Ardoise et Lavande", "171A27", "E7E8F3", "AEB1EE", "F2BD9E", "8B8FAB", "252A40"],
+    ["papier", "Papier et Encre", "F4F1EA", "22262E", "3B5B7A", "9A6330", "6D7480", "E6E1D5"]
+]
 FALLBACK_CAT := "Non classés"            ; où vont les stuffs d'une catégorie supprimée
 NO_TYPE := "(aucun)"
 Types := ["Smoke", "Molotov", "Flash", "HE", "Position", "Autre", NO_TYPE]
@@ -129,8 +183,14 @@ chkAttempts := 0
 chkTicks := 0
 chkBusy := false
 g := ""
+gb := ""            ; fenêtre derrière le menu qui forme le liseré coloré
+hudB := ""          ; liseré des coordonnées
+gs := ""            ; fenêtre qui affiche la capture du stuff sélectionné
+gsPic := ""
+gsTxt := ""
 titleCtl := ""
-listCtl := ""
+listRows := []     ; 13 lignes du menu (texte normal)
+listRowsS := []    ; 13 lignes du menu (ligne sélectionnée, fond mis en valeur)
 infoCtl := ""
 hintCtl := ""
 statusCtl := ""
@@ -376,7 +436,11 @@ RunCmd(cmd, info := "") {
 
 ; Retrouve la map en cours via la commande "status"
 DetectMap() {
-    txt := RunAndReadLog("status", "main lump")
+    return MapFromStatus(RunAndReadLog("status", "main lump"))
+}
+
+; Nom de la map (parmi tes fichiers) d'après la réponse de la commande status
+MapFromStatus(txt) {
     if (txt = "")
         return ""
     if RegExMatch(txt, "\[\d+:\s*([A-Za-z0-9_\-/]+)\s*\|\s*main lump", &m) {
@@ -403,6 +467,152 @@ NormalizePos(txt) {
 CapturePos() {
     txt := RunAndReadLog("getpos", "setpos\s+" NUM)
     return NormalizePos(txt)
+}
+
+; =====================================================================
+;  Captures d'écran des stuffs (zone au centre de l'écran du jeu)
+; =====================================================================
+ShotDir(prof := "") {
+    return ((prof = "") ? DataDir : ProfData(prof)) "\shots"
+}
+
+; Fichier image d'un stuff : lié à la map et à la position (donc stable si on renomme ou déplace le stuff)
+ShotPath(mapName, cmd, prof := "") {
+    if !RegExMatch(cmd, "i)setpos\s+(" NUM ")\s+(" NUM ")\s+(" NUM ")", &m)
+        return ""
+    k := m[1] "_" m[2] "_" m[3]
+    k := StrReplace(StrReplace(k, "-", "m"), ".", "p")
+    return ShotDir(prof) "\" mapName "_" k ".bmp"
+}
+
+; Capture ShotSize x ShotSize px au centre de la fenêtre CS2 (sinon de l'écran) et l'enregistre en .bmp
+CaptureShot(dest) {
+    sz := ShotSize
+    cx := A_ScreenWidth // 2
+    cy := A_ScreenHeight // 2
+    if WinExist("ahk_exe cs2.exe") {
+        try {
+            WinGetClientPos(&wx, &wy, &ww, &wh, "ahk_exe cs2.exe")
+            if (ww > 200 && wh > 200) {
+                cx := wx + ww // 2
+                cy := wy + wh // 2
+            }
+        }
+    }
+    sx := cx - sz // 2
+    sy := cy - sz // 2
+    stride := ((sz * 3 + 3) // 4) * 4
+    imgSize := stride * sz
+    bi := Buffer(40, 0)
+    NumPut("UInt", 40, bi, 0)
+    NumPut("Int", sz, bi, 4)
+    NumPut("Int", sz, bi, 8)
+    NumPut("UShort", 1, bi, 12)
+    NumPut("UShort", 24, bi, 14)
+    NumPut("UInt", imgSize, bi, 20)
+    hdcScr := DllCall("GetDC", "Ptr", 0, "Ptr")
+    hdcMem := DllCall("CreateCompatibleDC", "Ptr", hdcScr, "Ptr")
+    bits := 0
+    hbm := DllCall("CreateDIBSection", "Ptr", hdcScr, "Ptr", bi, "UInt", 0, "Ptr*", &bits, "Ptr", 0, "UInt", 0, "Ptr")
+    ok := false
+    if (hbm && bits) {
+        oldObj := DllCall("SelectObject", "Ptr", hdcMem, "Ptr", hbm, "Ptr")
+        DllCall("BitBlt", "Ptr", hdcMem, "Int", 0, "Int", 0, "Int", sz, "Int", sz, "Ptr", hdcScr, "Int", sx, "Int", sy, "UInt", 0x40CC0020)
+        try {
+            DirCreate(ShotDir())
+            hdr := Buffer(54, 0)
+            NumPut("UShort", 0x4D42, hdr, 0)
+            NumPut("UInt", 54 + imgSize, hdr, 2)
+            NumPut("UInt", 54, hdr, 10)
+            Loop 40
+                NumPut("UChar", NumGet(bi, A_Index - 1, "UChar"), hdr, 14 + A_Index - 1)
+            f := FileOpen(dest, "w")
+            f.RawWrite(hdr, 54)
+            f.RawWrite(bits, imgSize)
+            f.Close()
+            ok := true
+        }
+        DllCall("SelectObject", "Ptr", hdcMem, "Ptr", oldObj)
+        DllCall("DeleteObject", "Ptr", hbm)
+    }
+    DllCall("DeleteDC", "Ptr", hdcMem)
+    DllCall("ReleaseDC", "Ptr", 0, "Ptr", hdcScr)
+    return ok
+}
+
+HideShot() {
+    if IsObject(gs)
+        gs.Hide()
+}
+
+; Affiche (ou cache) la capture du stuff sélectionné. preview = true : aperçu depuis les réglages F10
+UpdateShot(preview := false) {
+    global gs, gsPic, gsTxt
+    if (!ShotOn || (!menuOpen && !preview)) {
+        HideShot()
+        return
+    }
+    path := ""
+    if preview {
+        Loop Files, ShotDir() "\*.bmp" {
+            if (SubStr(A_LoopFileName, 1, 1) != "_") {
+                path := A_LoopFileFullPath
+                break
+            }
+        }
+    } else {
+        cur := CurrentItem()
+        if IsObject(cur)
+            path := ShotPath(StrSplit(cur[5], "|")[1], cur[2])
+        if (path = "" || !FileExist(path)) {
+            HideShot()
+            return
+        }
+    }
+    bw := ovBorder
+    if !IsObject(gs) {
+        gs := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+        gs.BackColor := SelColor()
+        gsPic := gs.Add("Picture", "x0 y0 w" ShotZoom " h" ShotZoom, "")
+        gsTxt := gs.Add("Text", "x0 y0 w" ShotZoom " h" ShotZoom " Center 0x200 Background" SelColor() " cA0A6AE", "Aperçu de la capture")
+        if (bw > 0) {
+            ; liseré dessiné PAR-DESSUS l'image (créé après elle)
+            bc := BorderColor()
+            gs.Add("Text", "x0 y0 w" ShotZoom " h" bw " Background" bc, "")
+            gs.Add("Text", "x0 y" (ShotZoom - bw) " w" ShotZoom " h" bw " Background" bc, "")
+            gs.Add("Text", "x0 y0 w" bw " h" ShotZoom " Background" bc, "")
+            gs.Add("Text", "x" (ShotZoom - bw) " y0 w" bw " h" ShotZoom " Background" bc, "")
+        }
+    }
+    if (path != "") {
+        gsPic.Value := "*w" ShotZoom " *h" ShotZoom " " path
+        gsPic.Visible := true
+        gsTxt.Visible := false
+    } else {
+        gsPic.Visible := false
+        gsTxt.Visible := true
+    }
+    tw := ShotZoom
+    vl := SysGet(76)
+    vt := SysGet(77)
+    vw := SysGet(78)
+    vh := SysGet(79)
+    if (ShotPlace = 1) {
+        MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+        px := mr - tw - 12
+        py := mt + 12
+    } else {
+        px := Max(vl, Min(ShotX, vl + vw - tw))
+        py := Max(vt, Min(ShotY, vt + vh - tw))
+    }
+    gs.Show("NA x" px " y" py " w" tw " h" tw)
+    if (ShotCorner > 0) {
+        rd := 2 * Min(ShotCorner, ShotZoom // 2)
+        WinSetRegion("0-0 W" tw " H" tw " R" rd "-" rd, gs)
+    } else {
+        WinSetRegion("", gs)
+    }
+    WinSetTransparent(Max(ovOpacity, 200), gs)
 }
 
 ; =====================================================================
@@ -465,21 +675,22 @@ Render() {
     }
     n := names.Length
     if (n = 0) {
-        listCtl.Text := (level = 2) ? "(vide - " AddKey " pour ajouter un stuff)" : "(vide)"
+        SetList([(level = 2) ? "(vide - " AddKey " pour ajouter un stuff)" : "(vide)"], 0)
     } else {
         start := Max(1, Min(sel - 6, n - 12))
-        txt := ""
+        vis := []
         Loop Min(13, n) {
             i := start + A_Index - 1
-            txt .= (i = sel ? "> " : "   ") names[i] "`n"
+            vis.Push((i = sel ? "> " : "   ") names[i])
         }
-        listCtl.Text := txt
+        SetList(vis, sel - start + 1)
     }
     titleCtl.Text := title
     cur := CurrentItem()
     infoCtl.Text := (IsObject(cur) && cur[3] != "") ? "Info : " cur[3] : ""
-    hintCtl.Text := HintText() "`n" SaveKey " : sauver la position   " ManageKey " : gestion   " ShareKey " : profils   " HudKey " : coordonnées"
+    hintCtl.Text := HintText() "`n" SaveKey " sauver · " ManageKey " gestion · " ShareKey " profils · Ctrl+Z annuler"
     ShowOverlay()
+    UpdateShot()
 }
 
 HintText() {
@@ -558,6 +769,9 @@ CloseMenu() {
     if ih.InProgress
         ih.Stop()
     g.Hide()
+    if IsObject(gb)
+        gb.Hide()
+    HideShot()
 }
 
 Move(d) {
@@ -821,12 +1035,23 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     global dlgOpen
     if dlgOpen
         return
-    if menuOpen
+    if menuOpen {
         CloseMenu()
+        Sleep(120)
+    }
     LoadMaps()
     if (mapNames.Length = 0) {
         MsgBox("Aucun fichier .txt dans " MapsDir)
         return
+    }
+
+    ; Capture d'écran (centre du jeu) avant d'afficher la fenêtre
+    tmpShot := ShotDir() "\_pending.bmp"
+    shotPending := false
+    chkShot := ""
+    if (ShotOn && WinActive("ahk_exe cs2.exe")) {
+        Sleep(100)
+        shotPending := CaptureShot(tmpShot)
     }
 
     ; Position + map actuelles (via console.log)
@@ -861,6 +1086,12 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     edPos := d.Add("Edit", "x110 yp-3 w340 r2", posCaptured)
     if (posCaptured = "")
         d.Add("Text", "xm y+8 w450 cC0392B", "Position non capturée : lance le jeu avec -condebug, ou colle ici la sortie de getpos.")
+    if shotPending {
+        d.Add("Text", "xm y+14 w95", "Capture")
+        d.Add("Picture", "x110 yp-3 w" ShotSize " h" ShotSize, tmpShot)
+        chkDy := ShotSize // 2 - 10
+        chkShot := d.Add("CheckBox", "x+14 yp+" chkDy " Checked", "Joindre cette capture au stuff")
+    }
     chkGive := d.Add("CheckBox", "xm y+14 Checked", "Donner la grenade du type choisi (give)")
     chkFav := d.Add("CheckBox", "xm y+6", "Ajouter aux favoris")
     btnSave := d.Add("Button", "xm y+14 w170", "Enregistrer")
@@ -899,6 +1130,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
         global dlgOpen
         dlgOpen := false
         d.Destroy()
+        try FileDelete(tmpShot)
         WinActivate("ahk_exe cs2.exe")
     }
 
@@ -947,6 +1179,11 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
         if chkFav.Value {
             favs[mapName "|" catFull "|" nm] := 1
             SaveFavs()
+        }
+        if (IsObject(chkShot) && chkShot.Value) {
+            shotDest := ShotPath(mapName, cmdFull)
+            if (shotDest != "")
+                try FileCopy(tmpShot, shotDest, 1)
         }
         CloseDlg()
         ToolTip("Stuff enregistré dans " mapName)
@@ -1033,13 +1270,16 @@ DeleteLineFrom(path, cat, name) {
             p := StrSplit(t, "|", " `t", 4)
             if (p.Length >= 3 && p[1] = cat && p[2] = name) {
                 removed := true
+                gone := p
                 continue
             }
         }
         keep.Push(line)
     }
-    if removed
+    if removed {
         RewriteFile(path, keep)
+        LogDeleted(path, gone)
+    }
     return removed
 }
 
@@ -1303,6 +1543,54 @@ AddPress() {
 ; =====================================================================
 ;  Apparence de l'overlay (police, taille, couleurs, position)
 ; =====================================================================
+; Dossier cfg de CS2 à partir d'un dossier choisi (Steam, jeu, csgo, cfg...) ou ""
+Cs2CfgIn(base) {
+    base := RTrim(base, "\")
+    for sub in ["", "\game\csgo\cfg", "\csgo\cfg", "\cfg", "\Counter-Strike Global Offensive\game\csgo\cfg", "\common\Counter-Strike Global Offensive\game\csgo\cfg", "\steamapps\common\Counter-Strike Global Offensive\game\csgo\cfg"] {
+        c := base sub
+        if DirExist(c) {
+            SplitPath(c, &nm)
+            if (StrLower(nm) = "cfg")
+                return c
+        }
+    }
+    return ""
+}
+
+; Cherche le dossier cfg de CS2 dans les bibliothèques Steam de l'ordinateur
+FindCs2Cfg() {
+    libs := []
+    steams := []
+    for key in ["HKEY_CURRENT_USER\Software\Valve\Steam|SteamPath", "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam|InstallPath", "HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam|InstallPath"] {
+        kp := StrSplit(key, "|")
+        try {
+            sp := RegRead(kp[1], kp[2])
+            if (sp != "")
+                steams.Push(RTrim(StrReplace(sp, "/", "\"), "\"))
+        }
+    }
+    steams.Push("C:\Program Files (x86)\Steam")
+    steams.Push("C:\Program Files\Steam")
+    for st in steams {
+        libs.Push(st)
+        vdf := st "\steamapps\libraryfolders.vdf"
+        if FileExist(vdf) {
+            try {
+                for ln in StrSplit(FileRead(vdf, "UTF-8"), "`n", "`r") {
+                    if RegExMatch(ln, 'i)"path"\s+"([^"]+)"', &pm)
+                        libs.Push(RTrim(StrReplace(pm[1], "\\", "\"), "\"))
+                }
+            }
+        }
+    }
+    for lib in libs {
+        c := lib "\steamapps\common\Counter-Strike Global Offensive\game\csgo\cfg"
+        if DirExist(c)
+            return c
+    }
+    return ""
+}
+
 ToInt(v, def) {
     try
         return Integer(v)
@@ -1320,11 +1608,96 @@ FS(n) {
     return Max(6, Round(n * ovScale / 100))
 }
 
+; Couleur du liseré : mélange du fond et de la couleur du titre (thème), sinon fond éclairci ou assombri
+BorderColor() {
+    if (ovBorderCol != "")
+        return ovBorderCol
+    th := ThemeById(ovTheme)
+    if IsObject(th)
+        return MixHex(th[3], th[5], 55)
+    return (Lum(ovBg) < 140) ? MixHex(ovBg, "FFFFFF", 30) : MixHex(ovBg, "000000", 28)
+}
+
+; Couleur de la ligne sélectionnée : celle du thème, sinon le fond éclairci (ou assombri)
+SelColor() {
+    th := ThemeById(ovTheme)
+    if IsObject(th)
+        return th[8]
+    return (Lum(ovBg) < 140) ? MixHex(ovBg, "FFFFFF", 12) : MixHex(ovBg, "000000", 8)
+}
+
+MixHex(a, b, pct) {
+    r := Round(Integer("0x" SubStr(a, 1, 2)) + (Integer("0x" SubStr(b, 1, 2)) - Integer("0x" SubStr(a, 1, 2))) * pct / 100)
+    gg := Round(Integer("0x" SubStr(a, 3, 2)) + (Integer("0x" SubStr(b, 3, 2)) - Integer("0x" SubStr(a, 3, 2))) * pct / 100)
+    bb := Round(Integer("0x" SubStr(a, 5, 2)) + (Integer("0x" SubStr(b, 5, 2)) - Integer("0x" SubStr(a, 5, 2))) * pct / 100)
+    return Format("{:02X}{:02X}{:02X}", r, gg, bb)
+}
+
+; Affiche jusqu'à 13 lignes ; selIdx = numéro de la ligne mise en valeur (0 = aucune)
+SetZ(ctl, pos) {
+    ; pos : 0 = devant les autres contrôles, 1 = derrière
+    DllCall("SetWindowPos", "Ptr", ctl.Hwnd, "Ptr", pos, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
+}
+
+SetList(lines, selIdx) {
+    Loop 13 {
+        i := A_Index
+        t := (i <= lines.Length) ? lines[i] : ""
+        isSel := (i = selIdx)
+        listRows[i].Text := t
+        listRowsS[i].Text := t
+        listRows[i].Visible := !isSel
+        listRowsS[i].Visible := isSel
+    }
+}
+
+ThemeById(id) {
+    if (id = "")
+        return ""
+    for t in THEMES {
+        if (t[1] = id)
+            return t
+    }
+    return ""
+}
+
+; Ne garde que les polices réellement installées (lecture du registre Windows)
+InstalledFonts(cands) {
+    names := ""
+    try {
+        Loop Reg "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+            names .= A_LoopRegName "|"
+    }
+    try {
+        Loop Reg "HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+            names .= A_LoopRegName "|"
+    }
+    if (names = "")
+        return cands
+    out := []
+    for f in cands {
+        if (f = "Par défaut" || InStr(names, f))
+            out.Push(f)
+    }
+    return out
+}
+
 BuildOverlay() {
-    global g, titleCtl, listCtl, infoCtl, hintCtl, statusCtl
+    global g, gb, gs, titleCtl, infoCtl, hintCtl, statusCtl, ovBg, listRows, listRowsS
     if IsObject(g)
         g.Destroy()
+    if IsObject(gb) {
+        gb.Destroy()
+        gb := ""
+    }
+    if IsObject(gs) {
+        gs.Destroy()
+        gs := ""
+    }
     W := Round(460 * ovScale / 100)
+    th := ThemeById(ovTheme)
+    if IsObject(th)
+        ovBg := th[3]
     dark := (Lum(ovBg) < 140)
     cTitle := dark ? "FFB000" : "8A4B00"
     cList := dark ? "FFFFFF" : "111111"
@@ -1333,6 +1706,15 @@ BuildOverlay() {
     cHint := dark ? "FFFFFF" : "000000"
     cFoot := dark ? "B4BAC2" : "444444"
     cBrand := dark ? "7AD7FF" : "005A8C"
+    if IsObject(th) {
+        cBrand := th[5]
+        cTitle := th[6]
+        cList := th[4]
+        cInfo := th[6]
+        cStatus := th[5]
+        cHint := th[4]
+        cFoot := th[7]
+    }
     fText := (ovFont = "") ? "Segoe UI" : ovFont
     fList := (ovFont = "") ? "Consolas" : ovFont
     g := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000")
@@ -1344,7 +1726,22 @@ BuildOverlay() {
     g.SetFont("s" FS(16) " bold c" cTitle, fText)
     titleCtl := g.Add("Text", "w" W, "")
     g.SetFont("s" FS(13) " norm c" cList, fList)
-    listCtl := g.Add("Text", "w" W " r13", "")
+    listRows := []
+    listRowsS := []
+    selCol := SelColor()
+    Loop 13 {
+        rowOpt := (A_Index = 1) ? "" : " y+0"
+        rn := g.Add("Text", "w" W " r1 0x4000" rowOpt, "")
+        rn.GetPos(&rx, &ry, &rw, &rh)
+        rs := g.Add("Text", "x" rx " y" ry " w" rw " h" rh " 0x4000 Background" selCol, "")
+        rs.Visible := false
+        if (ovCorner > 0) {
+            rr := Min(Max(4, Round(ovCorner * 0.9)), rh)
+            WinSetRegion("0-0 W" rw " H" rh " R" rr "-" rr, rs)
+        }
+        listRows.Push(rn)
+        listRowsS.Push(rs)
+    }
     g.SetFont("s" FS(10) " c" cInfo, fText)
     infoCtl := g.Add("Text", "w" W " r3", "")
     g.SetFont("s" FS(9) " c" cStatus, fText)
@@ -1352,7 +1749,11 @@ BuildOverlay() {
     g.SetFont("s" FS(10) " bold c" cHint, fText)
     hintCtl := g.Add("Text", "w" W " r3", "")
     g.SetFont("s" FS(9) " norm c" cFoot, fText)
-    g.Add("Text", "w" W, "Haut/Bas : naviguer   Droite/Entrée : valider   Gauche : retour   Échap : fermer`n" ToggleKey " : ouvrir/fermer   " RepeatKey " : relancer le dernier stuff   " SaveKey " : sauvegarder la position`n" SettingsKey " : réglages du menu (couleur, police, taille, position)`n" ExecKey " : relancer l'exec de " PracticeCfg "`n" ManageKey " : gérer les stuffs et les catégories (déplacer, renommer…)`n" HudKey " : coordonnées en temps réel (coin inférieur gauche)`n" ShareKey " : profils et partage de stuffs (export / import)")
+    g.Add("Text", "w" W, "Haut/Bas : naviguer   Droite/Entrée : valider   Gauche : retour   Échap : fermer`n" ToggleKey " : ouvrir/fermer   " RepeatKey " : relancer le dernier stuff   " SaveKey " : sauvegarder la position`n" SettingsKey " : réglages du menu (couleur, police, taille, position)`n" ExecKey " : relancer l'exec de " PracticeCfg "`n" ManageKey " : gérer les stuffs et les catégories (déplacer, renommer…)`n" ShareKey " : profils et partage de stuffs (export / import)`nCtrl+Z (menu ouvert) : annuler la dernière suppression de stuff")
+    if (ovBorder > 0) {
+        gb := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+        gb.BackColor := BorderColor()
+    }
 }
 
 ShowOverlay() {
@@ -1363,16 +1764,35 @@ ShowOverlay() {
     x := Max(vl, Min(ovX, vl + vw - 100))
     y := Max(vt, Min(ovY, vt + vh - 60))
     g.Show("NA x" x " y" y " AutoSize")
+    g.GetPos(&gx, &gy, &gw, &gh)
+    dia := 2 * ovCorner
+    if (ovCorner > 0)
+        WinSetRegion("0-0 W" gw " H" gh " R" dia "-" dia, g)
     WinSetTransparent(ovOpacity, g)
+    if IsObject(gb) {
+        b := ovBorder
+        bx := gx - b
+        by := gy - b
+        bw := gw + 2 * b
+        bh := gh + 2 * b
+        gb.Show("NA x" bx " y" by " w" bw " h" bh)
+        if (ovCorner > 0) {
+            bd := dia + 2 * b
+            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, gb)
+        }
+        WinSetTransparent(ovOpacity, gb)
+        DllCall("SetWindowPos", "Ptr", g.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
+    }
 }
 
 ShowPreview() {
     titleCtl.Text := "APERÇU DU MENU"
-    listCtl.Text := "> Exemple de stuff`n   Autre stuff`n   * Stuff favori`n   Smoke - Site A"
+    SetList(["> Exemple de stuff", "   Autre stuff", "   * Stuff favori", "   Smoke - Site A"], 1)
     infoCtl.Text := "Info : message affiché dans le chat"
     statusCtl.Text := ""
     hintCtl.Text := "Droite/Entrée : valider   Gauche : retour"
     ShowOverlay()
+    UpdateShot(true)
 }
 
 ApplyStyle() {
@@ -1392,14 +1812,30 @@ ShowSettings() {
     if setOpen
         return
     setOpen := true
-    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg)
+    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY)
     vl := SysGet(76)
     vt := SysGet(77)
     vw := SysGet(78)
     vh := SysGet(79)
     xr := Max(1, vw - 100)
     yr := Max(1, vh - 60)
-    fonts := ["Par défaut", "Segoe UI", "Consolas", "Arial", "Verdana", "Tahoma", "Calibri", "Trebuchet MS", "Courier New", "Lucida Console"]
+    fonts := InstalledFonts(["Par défaut", "Segoe UI", "Segoe UI Semibold", "Bahnschrift", "Cascadia Code", "Cascadia Mono", "Consolas", "Calibri", "Candara", "Corbel", "Trebuchet MS", "Verdana", "Tahoma", "Arial", "Georgia", "Franklin Gothic Medium", "Courier New", "Lucida Console"])
+    if (ovFont != "") {
+        known := false
+        for f in fonts {
+            if (f = ovFont)
+                known := true
+        }
+        if !known
+            fonts.Push(ovFont)
+    }
+    thNames := ["Personnalisé"]
+    tSel := 1
+    for k, t in THEMES {
+        thNames.Push(t[2])
+        if (t[1] = ovTheme)
+            tSel := k + 1
+    }
     pNames := ["Personnalisé", "Sombre (défaut)", "Noir", "Bleu nuit", "Gris", "Vert foncé", "Violet", "Clair"]
     pHex := ["", "14181D", "000000", "0B1530", "2B2F36", "0F2A1A", "241238", "E8E8E8"]
     fSel := 1
@@ -1415,59 +1851,170 @@ ShowSettings() {
     r0 := Integer("0x" SubStr(ovBg, 1, 2))
     g0 := Integer("0x" SubStr(ovBg, 3, 2))
     b0 := Integer("0x" SubStr(ovBg, 5, 2))
+    bcNames := ["Auto (selon le thème)", "Or", "Blanc", "Bleu", "Cyan", "Vert", "Rouge", "Orange", "Rose", "Violet", "Gris", "Personnalisé"]
+    bcHex := ["", "E3C48A", "F2F2F2", "5B9BFF", "4FD8E8", "4FD17A", "FF5C5C", "FF9F43", "FF7EB6", "B28DFF", "8A8F98", ""]
+    bcSel := 1
+    if (ovBorderCol != "") {
+        bcSel := 12
+        for i, h in bcHex {
+            if (h != "" && h = ovBorderCol)
+                bcSel := i
+        }
+    }
     x0 := Max(0, Min(ovX - vl, xr))
     y0 := Max(0, Min(ovY - vt, yr))
 
     d := Gui("+AlwaysOnTop", "Réglages du menu")
     d.SetFont("s10", "Segoe UI")
-    y := 14
+    tabs := d.Add("Tab3", "x6 y6 w500 h700", ["Menu", "Captures", "Coordonnées"])
+    tabs.UseTab(1)
+    y := 44
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Police")
-    ddFont := d.Add("DropDownList", "x130 y" y " w260 Choose" fSel, fonts)
+    d.Add("Text", "x22 y" ty " w110", "Thème")
+    ddTheme := d.Add("DropDownList", "x140 y" y " w260 Choose" tSel, thNames)
     y += 40
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Taille")
-    slScale := d.Add("Slider", "x130 y" y " w260 Range60-200 ToolTip", ovScale)
-    txScale := d.Add("Text", "x396 y" ty " w70", "")
+    d.Add("Text", "x22 y" ty " w110", "Police")
+    ddFont := d.Add("DropDownList", "x140 y" y " w260 Choose" fSel, fonts)
     y += 40
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Position X")
-    slX := d.Add("Slider", "x130 y" y " w260 Range0-" xr " ToolTip", x0)
-    txX := d.Add("Text", "x396 y" ty " w70", "")
+    d.Add("Text", "x22 y" ty " w110", "Taille")
+    slScale := d.Add("Slider", "x140 y" y " w260 Range60-200 ToolTip", ovScale)
+    txScale := d.Add("Text", "x406 y" ty " w70", "")
     y += 40
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Position Y")
-    slY := d.Add("Slider", "x130 y" y " w260 Range0-" yr " ToolTip", y0)
-    txY := d.Add("Text", "x396 y" ty " w70", "")
+    d.Add("Text", "x22 y" ty " w110", "Position X")
+    slX := d.Add("Slider", "x140 y" y " w260 Range0-" xr " ToolTip", x0)
+    txX := d.Add("Text", "x406 y" ty " w70", "")
     y += 40
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Opacité")
-    slOp := d.Add("Slider", "x130 y" y " w260 Range80-255 ToolTip", ovOpacity)
-    txOp := d.Add("Text", "x396 y" ty " w70", "")
+    d.Add("Text", "x22 y" ty " w110", "Position Y")
+    slY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", y0)
+    txY := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Opacité")
+    slOp := d.Add("Slider", "x140 y" y " w260 Range80-255 ToolTip", ovOpacity)
+    txOp := d.Add("Text", "x406 y" ty " w70", "")
     y += 46
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Couleur de fond")
-    ddPreset := d.Add("DropDownList", "x130 y" y " w260 Choose" pSel, pNames)
+    d.Add("Text", "x22 y" ty " w110", "Couleur de fond")
+    ddPreset := d.Add("DropDownList", "x140 y" y " w260 Choose" pSel, pNames)
     y += 40
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Rouge")
-    slR := d.Add("Slider", "x130 y" y " w260 Range0-255 ToolTip", r0)
+    d.Add("Text", "x22 y" ty " w110", "Rouge")
+    slR := d.Add("Slider", "x140 y" y " w260 Range0-255 ToolTip", r0)
     y += 34
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Vert")
-    slG := d.Add("Slider", "x130 y" y " w260 Range0-255 ToolTip", g0)
+    d.Add("Text", "x22 y" ty " w110", "Vert")
+    slG := d.Add("Slider", "x140 y" y " w260 Range0-255 ToolTip", g0)
     y += 34
     ty := y + 4
-    d.Add("Text", "x12 y" ty " w110", "Bleu")
-    slB := d.Add("Slider", "x130 y" y " w260 Range0-255 ToolTip", b0)
-    txHex := d.Add("Text", "x396 y" ty " w70", "")
+    d.Add("Text", "x22 y" ty " w110", "Bleu")
+    slB := d.Add("Slider", "x140 y" y " w260 Range0-255 ToolTip", b0)
+    txHex := d.Add("Text", "x406 y" ty " w70", "")
     y += 46
-    btnSave := d.Add("Button", "x12 y" y " w140 Default", "Enregistrer")
-    btnReset := d.Add("Button", "x+8 yp w140", "Réinitialiser")
-    btnCancel := d.Add("Button", "x+8 yp w140", "Annuler")
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Liseré épaisseur")
+    slBw := d.Add("Slider", "x140 y" y " w260 Range0-6 ToolTip", ovBorder)
+    txBw := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Coins arrondis")
+    slCr := d.Add("Slider", "x140 y" y " w260 Range0-30 ToolTip", ovCorner)
+    txCr := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Liseré couleur")
+    ddBc := d.Add("DropDownList", "x140 y" y " w260 Choose" bcSel, bcNames)
+    y += 36
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Code couleur")
+    edBc := d.Add("Edit", "x140 y" y " w100 Limit7", (ovBorderCol != "") ? ovBorderCol : "")
+    d.Add("Text", "x250 y" ty " w230", "ex : FF8800 (6 caractères)")
+    y += 46
+    yEnd1 := y
+
+    ; ----- Onglet Captures -----
+    tabs.UseTab(2)
+    y := 44
+    ty := y + 4
+    shotChk := ShotOn ? " Checked" : ""
+    chkShotOn := d.Add("CheckBox", "x22 y" y " w440" shotChk, "Activer les captures d'écran des stuffs")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Zone capturée")
+    slShotSz := d.Add("Slider", "x140 y" y " w260 Range40-300 ToolTip", ShotSize)
+    txShotSz := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Taille affichée")
+    slShotZm := d.Add("Slider", "x140 y" y " w260 Range60-500 ToolTip", ShotZoom)
+    txShotZm := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Coins arrondis")
+    slShotCr := d.Add("Slider", "x140 y" y " w260 Range0-30 ToolTip", ShotCorner)
+    txShotCr := d.Add("Text", "x406 y" ty " w70", "")
+    y += 44
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Placement")
+    shotSel := ShotPlace
+    ddShotPos := d.Add("DropDownList", "x140 y" y " w260 Choose" shotSel, ["Coin supérieur droit (par défaut)", "Libre (où je veux sur l'écran)"])
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Position X")
+    slShotX := d.Add("Slider", "x140 y" y " w260 Range0-" xr " ToolTip", Max(0, Min(ShotX - vl, xr)))
+    txShotX := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Position Y")
+    slShotY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", Max(0, Min(ShotY - vt, yr)))
+    txShotY := d.Add("Text", "x406 y" ty " w70", "")
+    y += 46
+    d.SetFont("s9 c8A8F96")
+    d.Add("Text", "x22 y" y " w460 r4", "Le liseré de la capture (épaisseur et couleur) suit automatiquement celui du menu (onglet Menu) et se dessine par-dessus l'image. La zone capturée s'applique aux prochaines captures. Pour refaire la capture d'un stuff : F11, modifier le stuff, bouton « Refaire la capture ».")
+    d.SetFont("s10 cDefault")
+    y += 80
+    yEnd2 := y
+
+    ; ----- Onglet Coordonnées -----
+    tabs.UseTab(3)
+    y := 44
+    hudChk := hudOn ? " Checked" : ""
+    chkHud := d.Add("CheckBox", "x22 y" y " w460" hudChk, "Afficher les coordonnées en temps réel")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Placement")
+    hudSel := HudAuto ? 1 : 2
+    ddHudPos := d.Add("DropDownList", "x140 y" y " w260 Choose" hudSel, ["Coin inférieur gauche (par défaut)", "Libre (où je veux sur l'écran)"])
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Position X")
+    slHudX := d.Add("Slider", "x140 y" y " w260 Range0-" xr " ToolTip", Max(0, Min(HudX - vl, xr)))
+    txHudX := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Position Y")
+    slHudY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", Max(0, Min(HudY - vt, yr)))
+    txHudY := d.Add("Text", "x406 y" ty " w70", "")
+    y += 46
+    d.SetFont("s9 c8A8F96")
+    d.Add("Text", "x22 y" y " w460 r8", "Affiche la map, ta position (X, Y, Z) et ton angle de vue dans le coin inférieur gauche de l'écran.`n`nSi tu l'actives puis cliques sur Enregistrer, il reste activé à chaque lancement du script, jusqu'à ce que tu le désactives ici.`n`nAttention : le script envoie une touche (kp_multiply) à chaque mise à jour. Désactive l'affichage avant d'ouvrir la console ou le chat, sinon le caractère * s'y écrit.")
+    d.SetFont("s10 cDefault")
+    y += 150
+    yEnd3 := y
+    tabs.UseTab(0)
+    tabH := Max(yEnd1, yEnd2, yEnd3) + 6
+    tabs.Move(6, 6, 500, tabH)
+    y := tabH + 18
+    btnSave := d.Add("Button", "x12 y" y " w150 Default", "Enregistrer")
+    btnReset := d.Add("Button", "x+8 yp w150", "Réinitialiser")
+    btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
+    btnChkS := d.Add("Button", "x12 y+10 w462", "Vérifier l'installation")
 
     Sync(*) {
-        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg
+        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY
         ovFont := (ddFont.Value = 1) ? "" : ddFont.Text
         ovScale := slScale.Value
         ovX := vl + slX.Value
@@ -1478,11 +2025,82 @@ ShowSettings() {
         txX.Text := ovX
         txY.Text := ovY
         txOp.Text := ovOpacity
+        ovBorder := slBw.Value
+        ovCorner := slCr.Value
+        txBw.Text := ovBorder " px"
+        txCr.Text := ovCorner
         txHex.Text := "#" ovBg
+        ShotOn := chkShotOn.Value
+        ShotSize := slShotSz.Value
+        ShotZoom := slShotZm.Value
+        ShotPlace := ddShotPos.Value
+        ShotCorner := slShotCr.Value
+        txShotCr.Text := ShotCorner " px"
+        ShotX := vl + slShotX.Value
+        ShotY := vt + slShotY.Value
+        txShotSz.Text := ShotSize " px"
+        txShotZm.Text := ShotZoom " px"
+        txShotX.Text := ShotX
+        txShotY.Text := ShotY
+        slShotX.Enabled := (ShotPlace = 2)
+        slShotY.Enabled := (ShotPlace = 2)
+        HudAuto := (ddHudPos.Value = 1)
+        HudX := vl + slHudX.Value
+        HudY := vt + slHudY.Value
+        txHudX.Text := HudX
+        txHudY.Text := HudY
+        slHudX.Enabled := !HudAuto
+        slHudY.Enabled := !HudAuto
+        HudSet(chkHud.Value)
         SetTimer(ApplyStyle, -40)
     }
 
+    ThemeChange(*) {
+        global ovTheme
+        if (ddTheme.Value = 1) {
+            ovTheme := ""
+            Sync()
+            return
+        }
+        th := THEMES[ddTheme.Value - 1]
+        ovTheme := th[1]
+        slR.Value := Integer("0x" SubStr(th[3], 1, 2))
+        slG.Value := Integer("0x" SubStr(th[3], 3, 2))
+        slB.Value := Integer("0x" SubStr(th[3], 5, 2))
+        ddPreset.Choose(1)
+        Sync()
+    }
+
+    BcChange(*) {
+        global ovBorderCol
+        if (ddBc.Value = 1) {
+            ovBorderCol := ""
+            edBc.Text := ""
+        } else if (ddBc.Value < 12) {
+            ovBorderCol := bcHex[ddBc.Value]
+            edBc.Text := ovBorderCol
+        }
+        Sync()
+    }
+
+    BcEdit(*) {
+        global ovBorderCol
+        h := StrUpper(Trim(edBc.Text, "# `t"))
+        if RegExMatch(h, "^[0-9A-F]{6}$") {
+            ovBorderCol := h
+            ddBc.Choose(12)
+            for i, c in bcHex {
+                if (c != "" && c = h)
+                    ddBc.Choose(i)
+            }
+            Sync()
+        }
+    }
+
     PresetChange(*) {
+        global ovTheme
+        ovTheme := ""
+        ddTheme.Choose(1)
         if (ddPreset.Value = 1)
             return
         h := pHex[ddPreset.Value]
@@ -1493,11 +2111,17 @@ ShowSettings() {
     }
 
     RgbChange(*) {
+        global ovTheme
+        ovTheme := ""
+        ddTheme.Choose(1)
         ddPreset.Choose(1)
         Sync()
     }
 
     ResetClick(*) {
+        global ovTheme
+        ovTheme := ""
+        ddTheme.Choose(1)
         ddFont.Choose(1)
         slScale.Value := 100
         slX.Value := Max(0, Min(30 - vl, xr))
@@ -1507,18 +2131,49 @@ ShowSettings() {
         slG.Value := 24
         slB.Value := 29
         ddPreset.Choose(2)
+        slBw.Value := 2
+        slCr.Value := 14
+        ddBc.Choose(1)
+        edBc.Text := ""
+        ovBorderCol := ""
+        chkHud.Value := 0
+        ddHudPos.Choose(1)
+        slHudX.Value := Max(0, Min(12 - vl, xr))
+        slHudY.Value := Max(0, Min(900 - vt, yr))
+        chkShotOn.Value := 1
+        slShotSz.Value := 100
+        slShotZm.Value := 160
+        slShotCr.Value := 3
+        ddShotPos.Choose(1)
+        slShotX.Value := Max(0, Min(520 - vl, xr))
+        slShotY.Value := Max(0, Min(100 - vt, yr))
         Sync()
     }
 
     Finish(save, *) {
-        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg
+        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY
         if save {
+            IniWrite(ovTheme, IniFile, "Overlay", "Theme")
             IniWrite(ovFont, IniFile, "Overlay", "Font")
             IniWrite(ovScale, IniFile, "Overlay", "Scale")
             IniWrite(ovX, IniFile, "Overlay", "X")
             IniWrite(ovY, IniFile, "Overlay", "Y")
             IniWrite(ovOpacity, IniFile, "Overlay", "Opacity")
             IniWrite(ovBg, IniFile, "Overlay", "Bg")
+            IniWrite(ovBorder, IniFile, "Overlay", "Border")
+            IniWrite(ovCorner, IniFile, "Overlay", "Corner")
+            IniWrite(ovBorderCol, IniFile, "Overlay", "BorderColor")
+            IniWrite(ShotOn ? 1 : 0, IniFile, "Settings", "Shot")
+            IniWrite(ShotSize, IniFile, "Settings", "ShotSize")
+            IniWrite(ShotZoom, IniFile, "Settings", "ShotZoom")
+            IniWrite(ShotPlace, IniFile, "Settings", "ShotPos")
+            IniWrite(ShotCorner, IniFile, "Settings", "ShotCorner")
+            IniWrite(ShotX, IniFile, "Settings", "ShotX")
+            IniWrite(ShotY, IniFile, "Settings", "ShotY")
+            IniWrite(hudOn ? 1 : 0, IniFile, "Settings", "HudAtStart")
+            IniWrite(HudAuto ? 1 : 0, IniFile, "Settings", "HudAuto")
+            IniWrite(HudX, IniFile, "Settings", "HudX")
+            IniWrite(HudY, IniFile, "Settings", "HudY")
         } else {
             ovFont := old["Font"]
             ovScale := old["Scale"]
@@ -1526,6 +2181,25 @@ ShowSettings() {
             ovY := old["Y"]
             ovOpacity := old["Opacity"]
             ovBg := old["Bg"]
+            ovTheme := old["Theme"]
+            ovBorder := old["Border"]
+            ovCorner := old["Corner"]
+            ovBorderCol := old["BorderCol"]
+            ShotOn := old["ShotOn"]
+            ShotSize := old["ShotSize"]
+            ShotZoom := old["ShotZoom"]
+            ShotPlace := old["ShotPlace"]
+            ShotCorner := old["ShotCorner"]
+            ShotX := old["ShotX"]
+            ShotY := old["ShotY"]
+            HudAuto := old["HudAuto"]
+            HudX := old["HudX"]
+            HudY := old["HudY"]
+            HudSet(old["Hud"])
+            if hudOn {
+                BuildHud()
+                ShowHud()
+            }
         }
         setOpen := false
         d.Destroy()
@@ -1535,6 +2209,7 @@ ShowSettings() {
         WinActivate("ahk_exe cs2.exe")
     }
 
+    ddTheme.OnEvent("Change", ThemeChange)
     ddFont.OnEvent("Change", Sync)
     slScale.OnEvent("Change", Sync)
     slX.OnEvent("Change", Sync)
@@ -1544,8 +2219,24 @@ ShowSettings() {
     slR.OnEvent("Change", RgbChange)
     slG.OnEvent("Change", RgbChange)
     slB.OnEvent("Change", RgbChange)
+    slBw.OnEvent("Change", Sync)
+    chkShotOn.OnEvent("Click", Sync)
+    chkHud.OnEvent("Click", Sync)
+    ddHudPos.OnEvent("Change", Sync)
+    slHudX.OnEvent("Change", Sync)
+    slHudY.OnEvent("Change", Sync)
+    slShotSz.OnEvent("Change", Sync)
+    slShotZm.OnEvent("Change", Sync)
+    slShotCr.OnEvent("Change", Sync)
+    ddShotPos.OnEvent("Change", Sync)
+    slShotX.OnEvent("Change", Sync)
+    slShotY.OnEvent("Change", Sync)
+    slCr.OnEvent("Change", Sync)
+    ddBc.OnEvent("Change", BcChange)
+    edBc.OnEvent("Change", BcEdit)
     btnSave.OnEvent("Click", Finish.Bind(true))
     btnReset.OnEvent("Click", ResetClick)
+    btnChkS.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
     btnCancel.OnEvent("Click", Finish.Bind(false))
     d.OnEvent("Close", Finish.Bind(false))
     d.OnEvent("Escape", Finish.Bind(false))
@@ -1892,6 +2583,7 @@ ShowManager() {
     stText := d.Add("Text", "x12 y" status " w748", "")
     d.SetFont("s10 cDefault")
     btnClose := d.Add("Button", "x12 y" bottom " w120", "Fermer")
+    btnUndo := d.Add("Button", "x+8 yp w260", "Annuler la suppression (Ctrl+Z)")
 
     MapPath() {
         if (ddMap.Value = commonIdx)
@@ -2214,9 +2906,24 @@ ShowManager() {
         }
     }
 
+    UndoStuff(*) {
+        r := UndoLast()
+        if !IsObject(r) {
+            Say("Rien à annuler")
+            return
+        }
+        RefreshCats()
+        Say("Stuff restauré : « " r[1] " » (" r[2] ", catégorie « " r[3] " »)")
+    }
+
     Finish(*) {
         global mgrOpen
         mgrOpen := false
+        try {
+            HotIfWinActive("ahk_id " d.Hwnd)
+            Hotkey("^z", "Off")
+            HotIf()
+        }
         d.Destroy()
         WinActivate("ahk_exe cs2.exe")
     }
@@ -2227,6 +2934,10 @@ ShowManager() {
     btnCatRen.OnEvent("Click", RenCat)
     btnCatDel.OnEvent("Click", DelCat)
     btnCatLock.OnEvent("Click", LockCat)
+    btnUndo.OnEvent("Click", UndoStuff)
+    HotIfWinActive("ahk_id " d.Hwnd)
+    Hotkey("^z", UndoStuff)
+    HotIf()
     btnStEdit.OnEvent("Click", EditStuff)
     lvSt.OnEvent("DoubleClick", EditStuff)
     btnStRen.OnEvent("Click", RenStuff)
@@ -2297,6 +3008,17 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     d.SetFont("s9 c8A8F96")
     d.Add("Text", "xm y+6 w500", "Exemples : give weapon_smokegrenade ou sv_rethrow_last_grenade. Sépare les commandes par un point-virgule.")
     d.SetFont("s10 cDefault")
+    shotFile := ShotPath(keyMap, cmd)
+    curShot := shotFile
+    shotRedone := false
+    picSz := Min(ShotZoom, 160)
+    hasShot := (shotFile != "" && FileExist(shotFile))
+    picSrc := hasShot ? "*w" picSz " *h" picSz " " shotFile : ""
+    d.Add("Text", "xm y+10 w110", "Capture")
+    picShot := d.Add("Picture", "x130 yp-3 w" picSz " h" picSz, picSrc)
+    btnShotNew := d.Add("Button", "x+12 yp w210", "Refaire la capture (en jeu)")
+    btnShotDel := d.Add("Button", "xp y+6 w210", "Supprimer la capture")
+    btnShotDel.Enabled := hasShot
     btnSave := d.Add("Button", "xm y+14 w180 Default", "Enregistrer")
     btnCancel := d.Add("Button", "x+10 yp w180", "Annuler")
 
@@ -2392,6 +3114,9 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             return
         }
         ReplaceStuffInFile(path, oldCat, oldName, nCat, nName, nCmd, CleanInfo(edInfo.Value))
+        newShot := ShotPath(keyMap, nCmd)
+        if (!shotRedone && shotFile != "" && newShot != "" && newShot != shotFile && FileExist(shotFile))
+            try FileMove(shotFile, newShot, 1)
         if changedId {
             Rekey(oldKey, keyMap "|" nCat "|" nName)
             if (nCat !== oldCat)
@@ -2405,6 +3130,55 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
         d.Destroy()
     }
 
+    ShotDelClick(*) {
+        if (MsgBox("Supprimer la capture de ce stuff ?", "Modifier", 0x24) = "Yes") {
+            try FileDelete(curShot)
+            btnShotDel.Enabled := false
+            picShot.Value := ""
+        }
+    }
+
+    ; Refait la capture : masque les fenêtres, laisse 3 secondes pour viser, puis capture le centre du jeu
+    ShotRedoClick(*) {
+        sp := ShotPath(keyMap, edPos.Value)
+        if (sp = "") {
+            MsgBox("Renseigne d'abord une position valide (setpos x y z; setang pitch yaw).", "Modifier", 0x40030)
+            return
+        }
+        if !ProcessExist("cs2.exe") {
+            MsgBox("CS2 n'est pas lancé.", "Modifier", 0x40030)
+            return
+        }
+        ans := MsgBox("Place-toi au point du stuff en jeu et vise le point à capturer.`n`nAprès OK, les fenêtres se masquent et la capture se fait 3 secondes plus tard, au centre du jeu.", "Refaire la capture", 0x41)
+        if (ans != "OK")
+            return
+        d.Hide()
+        try WinHide("ahk_id " ownerHwnd)
+        WinActivate("ahk_exe cs2.exe")
+        WinWaitActive("ahk_exe cs2.exe", , 2)
+        Loop 3 {
+            left := 4 - A_Index
+            ToolTip("Capture dans " left " s...")
+            Sleep(1000)
+        }
+        ToolTip()
+        Sleep(80)
+        ok := CaptureShot(sp)
+        try WinShow("ahk_id " ownerHwnd)
+        d.Show()
+        WinActivate("ahk_id " d.Hwnd)
+        if ok {
+            shotRedone := true
+            curShot := sp
+            picShot.Value := "*w" picSz " *h" picSz " " sp
+            btnShotDel.Enabled := true
+        } else {
+            MsgBox("Capture impossible.", "Modifier", 0x40030)
+        }
+    }
+
+    btnShotNew.OnEvent("Click", ShotRedoClick)
+    btnShotDel.OnEvent("Click", ShotDelClick)
     cbCat.OnEvent("Change", CatChange)
     ddType.OnEvent("Change", TypeChange)
     btnRecap.OnEvent("Click", Recap)
@@ -2425,16 +3199,27 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
 ; Le script demande "getpos" au jeu à intervalle régulier (via le cfg) et lit
 ; la réponse dans console.log. Aucune lecture de la mémoire du jeu.
 BuildHud() {
-    global hudGui, hudTxt
+    global hudGui, hudTxt, hudB
     if IsObject(hudGui)
         hudGui.Destroy()
+    if IsObject(hudB) {
+        hudB.Destroy()
+        hudB := ""
+    }
+    if (ovBorder > 0) {
+        hudB := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+        hudB.BackColor := BorderColor()
+    }
     dark := (Lum(ovBg) < 140)
     cTxt := dark ? "FFFFFF" : "111111"
+    thh := ThemeById(ovTheme)
+    if IsObject(thh)
+        cTxt := thh[4]
     fnt := (ovFont = "") ? "Consolas" : ovFont
     hudGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
     hudGui.BackColor := ovBg
-    hudGui.MarginX := 10
-    hudGui.MarginY := 6
+    hudGui.MarginX := 10 + ovCorner // 3
+    hudGui.MarginY := 6 + ovCorner // 4
     hudGui.SetFont("s" FS(11) " bold c" cTxt, fnt)
     hudTxt := hudGui.Add("Text", "w" Round(330 * ovScale / 100) " r3", hudLast)
 }
@@ -2445,8 +3230,33 @@ ShowHud() {
     hy := mt + 12
     hudGui.Show("NA AutoSize x" hx " y" hy)
     hudGui.GetPos(, , , &hh)
-    hudGui.Move(ml + 12, mb - hh - 12)
+    hudGui.GetPos(&hx0, &hy0, &hw0, &hh0)
+    if HudAuto {
+        hudGui.Move(ml + 12 + ovBorder, mb - hh - 12 - ovBorder)
+    } else {
+        vl := SysGet(76)
+        vt := SysGet(77)
+        vw := SysGet(78)
+        vh := SysGet(79)
+        hudGui.Move(Max(vl, Min(HudX, vl + vw - hw0)), Max(vt, Min(HudY, vt + vh - hh)))
+    }
+    hudGui.GetPos(&px, &py, &pw, &ph)
+    dia := 2 * Min(ovCorner, ph // 2)
+    if (ovCorner > 0)
+        WinSetRegion("0-0 W" pw " H" ph " R" dia "-" dia, hudGui)
     WinSetTransparent(ovOpacity, hudGui)
+    if IsObject(hudB) {
+        b := ovBorder
+        bw := pw + 2 * b
+        bh := ph + 2 * b
+        hudB.Show("NA x" (px - b) " y" (py - b) " w" bw " h" bh)
+        if (ovCorner > 0) {
+            bd := dia + 2 * b
+            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, hudB)
+        }
+        WinSetTransparent(ovOpacity, hudB)
+        DllCall("SetWindowPos", "Ptr", hudGui.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
+    }
 }
 
 HudSetText(p) {
@@ -2498,6 +3308,14 @@ HudTick() {
     WriteAndExec("getpos")
 }
 
+; Affiche (true) ou masque (false) les coordonnées
+HudSet(on) {
+    if (on && !hudOn)
+        HudToggle()
+    else if (!on && hudOn)
+        HudToggle()
+}
+
 HudToggle() {
     global hudOn, hudPos, hudLast
     hudOn := !hudOn
@@ -2510,6 +3328,8 @@ HudToggle() {
     } else {
         SetTimer(HudTick, 0)
         hudGui.Hide()
+        if IsObject(hudB)
+            hudB.Hide()
     }
 }
 
@@ -2569,6 +3389,7 @@ CreateProfile(name) {
 
 SwitchProfile(name) {
     IniWrite(name, IniFile, "State", "Profile")
+    IniWrite(1, IniFile, "State", "SkipCheck")   ; pas de vérification de l'installation après ce rechargement
     Reload()
 }
 
@@ -2599,10 +3420,89 @@ BlockedCmd(cmd) {
 }
 
 ; list = tableau de [map, catégorie, nom, commande, info]
-BuildPack(list) {
+; Convertit une image (GDI+) : fmt = "jpeg" ou "bmp"
+ConvertImage(src, dest, fmt) {
+    DllCall("LoadLibrary", "Str", "gdiplus")
+    si := Buffer(24, 0)
+    NumPut("UInt", 1, si, 0)
+    token := 0
+    DllCall("gdiplus\GdiplusStartup", "Ptr*", &token, "Ptr", si, "Ptr", 0)
+    img := 0
+    ok := false
+    if (DllCall("gdiplus\GdipLoadImageFromFile", "WStr", src, "Ptr*", &img) = 0 && img) {
+        clsid := Buffer(16, 0)
+        id := (fmt = "jpeg") ? "{557CF401-1A04-11D3-9A73-0000F81EF32E}" : "{557CF400-1A04-11D3-9A73-0000F81EF32E}"
+        DllCall("ole32\CLSIDFromString", "WStr", id, "Ptr", clsid)
+        ok := (DllCall("gdiplus\GdipSaveImageToFile", "Ptr", img, "WStr", dest, "Ptr", clsid, "Ptr", 0) = 0)
+        DllCall("gdiplus\GdipDisposeImage", "Ptr", img)
+    }
+    DllCall("gdiplus\GdiplusShutdown", "Ptr", token)
+    return (ok && FileExist(dest))
+}
+
+; Fichier -> texte base64 (une seule ligne)
+FileToB64(path) {
+    try data := FileRead(path, "RAW")
+    catch
+        return ""
+    if (data.Size = 0)
+        return ""
+    n := 0
+    DllCall("crypt32\CryptBinaryToStringA", "Ptr", data, "UInt", data.Size, "UInt", 0x40000001, "Ptr", 0, "UInt*", &n)
+    buf := Buffer(n + 1, 0)
+    DllCall("crypt32\CryptBinaryToStringA", "Ptr", data, "UInt", data.Size, "UInt", 0x40000001, "Ptr", buf, "UInt*", &n)
+    return StrGet(buf, "CP0")
+}
+
+; Texte base64 -> fichier
+B64ToFile(b64, path) {
+    n := 0
+    if !DllCall("crypt32\CryptStringToBinaryA", "AStr", b64, "UInt", 0, "UInt", 1, "Ptr", 0, "UInt*", &n, "Ptr", 0, "Ptr", 0)
+        return false
+    buf := Buffer(n, 0)
+    if !DllCall("crypt32\CryptStringToBinaryA", "AStr", b64, "UInt", 0, "UInt", 1, "Ptr", buf, "UInt*", &n, "Ptr", 0, "Ptr", 0)
+        return false
+    try FileDelete(path)
+    try {
+        f := FileOpen(path, "w")
+        f.RawWrite(buf, n)
+        f.Close()
+    } catch
+        return false
+    return FileExist(path) ? true : false
+}
+
+; Compte les stuffs de la liste qui ont une capture
+CountShots(list) {
+    n := 0
+    for e in list {
+        sp := ShotPath(e[1], e[4])
+        if (sp != "" && FileExist(sp))
+            n += 1
+    }
+    return n
+}
+
+; withImgs : ajoute une ligne @IMG par capture (JPEG en base64). Les anciennes versions ignorent ces lignes.
+BuildPack(list, withImgs := false) {
     out := "CS2STUFFPACK;1;" TpZOffset ";" CleanField(curProfile) "`n"
     for e in list
         out .= e[1] " | " e[2] " | " e[3] " | " e[4] " | " e[5] "`n"
+    if withImgs {
+        tmp := A_Temp "\stuffshot_export.jpg"
+        for e in list {
+            sp := ShotPath(e[1], e[4])
+            if (sp = "" || !FileExist(sp))
+                continue
+            try FileDelete(tmp)
+            if !ConvertImage(sp, tmp, "jpeg")
+                continue
+            b := FileToB64(tmp)
+            if (b != "")
+                out .= "@IMG | " e[1] " | " e[2] " | " e[3] " | " b "`n"
+        }
+        try FileDelete(tmp)
+    }
     return out
 }
 
@@ -2628,8 +3528,14 @@ ParsePack(txt) {
     zoff := (h.Length >= 3 && IsNumber(h[3])) ? Number(h[3]) : TpZOffset
     from := (h.Length >= 4) ? h[4] : ""
     ents := []
+    imgs := Map()
     Loop lines.Length - hi {
         p := StrSplit(lines[hi + A_Index], "|", " `t", 5)
+        if (p[1] = "@IMG") {
+            if (p.Length >= 5 && p[5] != "")
+                imgs[CleanField(p[2]) "|" CleanField(p[3]) "|" CleanField(p[4])] := p[5]
+            continue
+        }
         if (p.Length < 4)
             continue
         if !RegExMatch(p[1], "^[A-Za-z0-9_\-]+$")
@@ -2641,7 +3547,7 @@ ParsePack(txt) {
             continue
         ents.Push([p[1], cat, nm, p[4], (p.Length >= 5) ? p[5] : ""])
     }
-    return Map("z", zoff, "from", from, "ents", ents)
+    return Map("z", zoff, "from", from, "ents", ents, "imgs", imgs)
 }
 
 ; Statut d'un stuff reçu par rapport au profil de destination
@@ -2664,9 +3570,45 @@ ImportStatus(e, prof, zdelta, cache) {
     return "Nouveau"
 }
 
+; Stuff déjà présent (même map, catégorie, nom) dans le profil, ou "" s'il n'existe pas
+FindExisting(e, prof) {
+    path := ProfMaps(prof) "\" e[1] ".txt"
+    if !FileExist(path)
+        return ""
+    for x in ReadEntries(path)[2] {
+        if (x[1] = e[2] && StrLower(x[2]) = StrLower(e[3]))
+            return x
+    }
+    return ""
+}
+
+; Texte lisible des commandes (une commande par ligne)
+PrettyCmd(c) {
+    t := StrReplace(c, ";", "`r`n")
+    return Trim(t, " `r`n`t")
+}
+
+; Enregistre la capture reçue d'un stuff importé (sans écraser la tienne sauf remplacement)
+SaveImportedShot(imgs, e, cmd, prof, overwrite, tmpImg, stats) {
+    if !IsObject(imgs)
+        return
+    key := e[1] "|" e[2] "|" e[3]
+    if !imgs.Has(key)
+        return
+    dest := ShotPath(e[1], cmd, prof)
+    if (dest = "" || (FileExist(dest) && !overwrite))
+        return
+    if !B64ToFile(imgs[key], tmpImg)
+        return
+    DirCreate(ShotDir(prof))
+    if ConvertImage(tmpImg, dest, "bmp")
+        stats["img"] += 1
+}
+
 ; policy : 1 = ignorer les doublons, 2 = garder les deux, 3 = remplacer
-ApplyImport(rows, prof, zdelta, policy) {
-    stats := Map("add", 0, "rep", 0, "skip", 0)
+ApplyImport(rows, prof, zdelta, policy, imgs := "") {
+    stats := Map("add", 0, "rep", 0, "skip", 0, "img", 0)
+    tmpImg := A_Temp "\stuffshot_import.jpg"
     mdir := ProfMaps(prof)
     DirCreate(mdir)
     DirCreate(ProfData(prof) "\backup")
@@ -2700,6 +3642,7 @@ ApplyImport(rows, prof, zdelta, policy) {
             if (policy = 3) {
                 ReplaceStuffInFile(path, old[1], old[2], e[2], nm, cmd, e[5])
                 stats["rep"] += 1
+                SaveImportedShot(imgs, e, cmd, prof, true, tmpImg, stats)
                 continue
             }
             n := 2
@@ -2709,7 +3652,9 @@ ApplyImport(rows, prof, zdelta, policy) {
         }
         AppendLine(path, BuildLine(e[2], nm, cmd, e[5]))
         stats["add"] += 1
+        SaveImportedShot(imgs, e, cmd, prof, false, tmpImg, stats)
     }
+    try FileDelete(tmpImg)
     return stats
 }
 
@@ -2726,6 +3671,7 @@ ShowImport(txt, ownerHwnd) {
         return false
     }
     zdelta := pack["z"] - TpZOffset
+    imgs := pack["imgs"]
     res := Map("done", false)
     d := Gui("+AlwaysOnTop +OwnDialogs", "Importer des stuffs")
     d.SetFont("s10", "Segoe UI")
@@ -2740,6 +3686,12 @@ ShowImport(txt, ownerHwnd) {
     lv.ModifyCol(2, 190)
     lv.ModifyCol(3, 250)
     lv.ModifyCol(4, 140)
+    sumT := d.Add("Text", "x12 y+6 w720", "")
+    imgNote := (imgs.Count > 0) ? "Ce pack contient " imgs.Count " capture(s) d'écran, importée(s) avec les stuffs." : "Ce pack ne contient pas de captures d'écran."
+    d.Add("Text", "x12 y+4 w720", "Aperçu du stuff sélectionné (clique sur une ligne). " imgNote)
+    picPrev := d.Add("Picture", "x582 y+2 w130 h130", "")
+    picPrev.Visible := false
+    edPrev := d.Add("Edit", "x12 yp w560 r7 ReadOnly -Wrap +HScroll", "")
     d.SetFont("s9 c8A8F96")
     note := "Pour un nouveau profil, écris simplement son nom dans la case. Tes autres stuffs ne sont jamais supprimés, et une copie de sécurité est faite avant l'import."
     if (zdelta != 0)
@@ -2763,11 +3715,70 @@ ShowImport(txt, ownerHwnd) {
             opt := (stt = "Nouveau" || stt = "Doublon") ? "Check" : ""
             lv.Add(opt, e[1], e[2], e[3], stt)
         }
+        UpdateSummary()
+        edPrev.Value := "Clique sur un stuff de la liste pour voir ses commandes avant de l'importer."
+    }
+
+    UpdateSummary(*) {
+        nNew := 0
+        nDup := 0
+        nSame := 0
+        nBad := 0
+        Loop lv.GetCount() {
+            st := lv.GetText(A_Index, 4)
+            if (st = "Nouveau")
+                nNew += 1
+            else if (st = "Doublon")
+                nDup += 1
+            else if (st = "Identique")
+                nSame += 1
+            else
+                nBad += 1
+        }
+        nChk := 0
+        r := 0
+        while (r := lv.GetNext(r, "Checked"))
+            nChk += 1
+        sumT.Text := nNew " nouveau(x), " nDup " doublon(s), " nSame " identique(s), " nBad " refusé(s)  -  " nChk " coché(s) sur " lv.GetCount()
+    }
+
+    ShowPrev(ctrl, item, sel := 1) {
+        if (!sel || item < 1 || item > ents.Length)
+            return
+        e := ents[item]
+        tgt := CleanProfileName(cbTarget.Text)
+        if (tgt = "")
+            tgt := curProfile
+        cmdNew := ShiftZ(e[4], zdelta)
+        t := e[1] "  >  " e[2] "  >  " e[3] "`r`n"
+        if (e[5] != "")
+            t .= "Info : " e[5] "`r`n"
+        b := BlockedCmd(e[4])
+        if (b != "")
+            t .= "REFUSÉ : commande dangereuse (" b ")`r`n"
+        adj := (zdelta != 0) ? " (hauteur ajustée)" : ""
+        t .= "`r`nCommandes reçues" adj " :`r`n" PrettyCmd(cmdNew)
+        old := FindExisting(e, tgt)
+        if IsObject(old) {
+            t .= "`r`n`r`nTon stuff actuel du même nom :`r`n" PrettyCmd(old[3])
+            if (old[4] != "")
+                t .= "`r`nInfo : " old[4]
+        }
+        edPrev.Value := t
+        ik := e[1] "|" e[2] "|" e[3]
+        tmpP := A_Temp "\stuffshot_preview.jpg"
+        if (imgs.Has(ik) && B64ToFile(imgs[ik], tmpP)) {
+            picPrev.Value := "*w130 *h130 " tmpP
+            picPrev.Visible := true
+        } else {
+            picPrev.Visible := false
+        }
     }
 
     CheckAll(on, *) {
         Loop lv.GetCount()
             lv.Modify(A_Index, on ? "Check" : "-Check")
+        UpdateSummary()
     }
 
     DoImport(*) {
@@ -2790,10 +3801,12 @@ ShowImport(txt, ownerHwnd) {
         isNew := !ProfileExists(tgt)
         if isNew
             CreateProfile(tgt)
-        st := ApplyImport(picked, tgt, zdelta, ddPolicy.Value)
+        st := ApplyImport(picked, tgt, zdelta, ddPolicy.Value, imgs)
         res["done"] := true
         res["target"] := tgt
         res["msg"] := st["add"] " ajouté(s), " st["rep"] " remplacé(s), " st["skip"] " ignoré(s)."
+        if (imgs.Count > 0)
+            res["msg"] .= "`n" st["img"] " capture(s) d'écran importée(s)."
         d.Destroy()
     }
 
@@ -2802,6 +3815,8 @@ ShowImport(txt, ownerHwnd) {
     }
 
     cbTarget.OnEvent("Change", Refill)
+    lv.OnEvent("ItemSelect", ShowPrev)
+    lv.OnEvent("ItemCheck", (*) => SetTimer(UpdateSummary, -30))
     ddPolicy.OnEvent("Change", (*) => 0)
     btnOk.OnEvent("Click", DoImport)
     btnAll.OnEvent("Click", CheckAll.Bind(true))
@@ -2856,14 +3871,16 @@ ShowShare() {
     lvEx.ModifyCol(4, 190)
     lvEx.GetPos(&lx, &ly, &lw, &lh)
     r1 := ly + lh + 8
-    yImpT := r1 + 48
-    yImpB := r1 + 74
-    yStat := r1 + 118
-    yClose := r1 + 148
+    yImg := r1 + 36
+    yImpT := r1 + 78
+    yImpB := r1 + 104
+    yStat := r1 + 148
+    yClose := r1 + 178
     btnAll := d.Add("Button", "x12 y" r1 " w120", "Tout cocher")
     btnNone := d.Add("Button", "x+8 yp w120", "Tout décocher")
     btnFile := d.Add("Button", "x+8 yp w200", "Exporter vers un fichier…")
     btnCode := d.Add("Button", "x+8 yp w200", "Copier le code")
+    chkImg := d.Add("CheckBox", "x12 y" yImg " w740 Checked", "Inclure les captures d'écran des stuffs (export vers un fichier uniquement)")
     d.Add("Text", "x12 y" yImpT " w740", "Importer : reçu d'un ami ?")
     btnImpF := d.Add("Button", "x12 y" yImpB " w240", "Importer un fichier .stuffpack…")
     btnImpC := d.Add("Button", "x+8 yp w300", "Importer depuis le presse-papiers (code)")
@@ -2871,7 +3888,7 @@ ShowShare() {
     stT := d.Add("Text", "x12 y" yStat " w740", "")
     d.SetFont("s10 cDefault")
     btnClose := d.Add("Button", "x12 y" yClose " w120", "Fermer")
-    btnChk := d.Add("Button", "x+8 yp w220", "Vérifier l'installation")
+    btnRest := d.Add("Button", "x+8 yp w230", "Restaurer une sauvegarde…")
 
     pick := 1
     for k, pn in ListProfiles() {
@@ -2921,8 +3938,14 @@ ShowShare() {
         if !RegExMatch(f, "i)\.stuffpack$")
             f .= ".stuffpack"
         try FileDelete(f)
-        FileAppend(BuildPack(sel), f, "UTF-8-RAW")
+        nShots := CountShots(sel)
+        withI := (chkImg.Value && nShots > 0)
+        FileAppend(BuildPack(sel, withI), f, "UTF-8-RAW")
         Say(sel.Length " stuff(s) exporté(s) dans " f)
+        if withI
+            MsgBox("Export terminé : " sel.Length " stuff(s) et " nShots " capture(s) d'écran dans le fichier.`n`nTon ami verra les captures à l'import. Elles ne sont incluses que dans les fichiers .stuffpack, pas dans le code copié.", "Export", 0x40040)
+        else if (nShots > 0)
+            MsgBox("Export terminé SANS captures d'écran (case décochée). Coche « Inclure les captures » pour les envoyer aussi.", "Export", 0x40040)
     }
 
     ExportCode(*) {
@@ -2932,6 +3955,9 @@ ShowShare() {
             return
         }
         A_Clipboard := BuildPack(sel)
+        nShots := CountShots(sel)
+        if (nShots > 0)
+            MsgBox("Code copié, mais SANS les " nShots " capture(s) d'écran : les images sont trop lourdes pour un code à copier-coller.`n`nPour envoyer les captures avec les stuffs, utilise « Exporter vers un fichier… » avec la case « Inclure les captures » cochée.", "Export par code", 0x40030)
         Say("Code copié (" sel.Length " stuff(s)) : colle-le à ton ami, de préférence dans un bloc de code. Pour beaucoup de stuffs, envoie plutôt un fichier.")
     }
 
@@ -3010,11 +4036,222 @@ ShowShare() {
     btnNew.OnEvent("Click", NewProf)
     btnDelP.OnEvent("Click", DelProf)
     btnClose.OnEvent("Click", Finish)
-    btnChk.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
+    btnRest.OnEvent("Click", (*) => ShowRestore(d.Hwnd))
     d.OnEvent("Close", Finish)
     d.OnEvent("Escape", Finish)
     Fill()
     d.Show("AutoSize Center")
+}
+
+; =====================================================================
+;  Annulation des suppressions de stuffs (Ctrl+Z)
+; =====================================================================
+; Chaque stuff supprimé est noté dans data\deleted.txt (les 50 derniers).
+DeletedFile() {
+    return DataDir "\deleted.txt"
+}
+
+ReadDeletedLines() {
+    lines := []
+    f := DeletedFile()
+    if !FileExist(f)
+        return lines
+    for l in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
+        if (l != "")
+            lines.Push(l)
+    }
+    return lines
+}
+
+SaveDeletedLines(lines) {
+    out := ""
+    for l in lines
+        out .= l "`n"
+    try FileDelete(DeletedFile())
+    if (out != "")
+        FileAppend(out, DeletedFile(), "UTF-8-RAW")
+}
+
+LogDeleted(path, p) {
+    SplitPath(path, &fn)
+    ln := fn "`t" p[1] "`t" p[2] "`t" p[3] "`t" ((p.Length >= 4) ? p[4] : "")
+    try {
+        lines := ReadDeletedLines()
+        lines.Push(ln)
+        while (lines.Length > 50)
+            lines.RemoveAt(1)
+        SaveDeletedLines(lines)
+    }
+}
+
+; Remet le dernier stuff supprimé à sa place. Renvoie [nom, fichier, catégorie] ou "" s'il n'y a rien.
+UndoLast() {
+    lines := ReadDeletedLines()
+    if (lines.Length = 0)
+        return ""
+    last := lines.Pop()
+    SaveDeletedLines(lines)
+    p := StrSplit(last, "`t")
+    if (p.Length < 4 || !RegExMatch(p[1], "^[A-Za-z0-9_\-]+\.txt$"))
+        return ""
+    path := MapsDir "\" p[1]
+    if !FileExist(path)
+        FileAppend("# " RegExReplace(p[1], "\.txt$") "`n", path, "UTF-8-RAW")
+    taken := Map()
+    for x in ReadEntries(path)[2] {
+        if (x[1] = p[2])
+            taken[StrLower(x[2])] := 1
+    }
+    nm := p[3]
+    if taken.Has(StrLower(nm)) {
+        nm := p[3] " (restauré)"
+        k := 2
+        while taken.Has(StrLower(nm)) {
+            nm := p[3] " (restauré " k ")"
+            k += 1
+        }
+    }
+    AppendLine(path, BuildLine(p[2], nm, p[4], (p.Length >= 5) ? p[5] : ""))
+    return [nm, p[1], p[2]]
+}
+
+UndoPress() {
+    r := UndoLast()
+    if !IsObject(r) {
+        SetStatus("Rien à annuler")
+        return
+    }
+    ReloadKeep()
+    Render()
+    SetStatus("Stuff restauré : " r[1])
+}
+
+; =====================================================================
+;  Sauvegarde automatique des maps (une fois par jour)
+; =====================================================================
+; Copie maps\*.txt de chaque profil dans data\backup\auto\AAAA-MM-JJ\ et garde les BackupKeep dernières.
+SortNames(arr, desc := false) {
+    n := arr.Length
+    Loop n {
+        i := 1
+        while (i < n) {
+            a := arr[i]
+            b := arr[i + 1]
+            if (desc ? (StrCompare(a, b) < 0) : (StrCompare(a, b) > 0)) {
+                arr[i] := b
+                arr[i + 1] := a
+            }
+            i += 1
+        }
+    }
+    return arr
+}
+
+PruneBackups(root) {
+    names := []
+    Loop Files root "\*", "D" {
+        if RegExMatch(A_LoopFileName, "^\d{4}-\d{2}-\d{2}$")
+            names.Push(A_LoopFileName)
+    }
+    SortNames(names)
+    while (names.Length > BackupKeep) {
+        try DirDelete(root "\" names[1], true)
+        names.RemoveAt(1)
+    }
+}
+
+AutoBackup() {
+    if (BackupKeep <= 0)
+        return
+    stamp := FormatTime(, "yyyy-MM-dd")
+    for pn in ListProfiles() {
+        mdir := ProfMaps(pn)
+        if !DirExist(mdir)
+            continue
+        root := ProfData(pn) "\backup\auto"
+        dest := root "\" stamp
+        if DirExist(dest)
+            continue
+        has := false
+        Loop Files mdir "\*.txt" {
+            has := true
+            break
+        }
+        if !has
+            continue
+        ok := true
+        try {
+            DirCreate(dest)
+            Loop Files mdir "\*.txt"
+                FileCopy(A_LoopFileFullPath, dest "\" A_LoopFileName, 1)
+        } catch {
+            ok := false
+        }
+        if ok
+            PruneBackups(root)
+    }
+}
+
+ShowRestore(ownerHwnd) {
+    root := DataDir "\backup\auto"
+    names := []
+    Loop Files root "\*", "D"
+        names.Push(A_LoopFileName)
+    if (names.Length = 0) {
+        MsgBox("Aucune sauvegarde automatique pour le moment.`nElles sont créées une fois par jour, au lancement du script.", "Restaurer une sauvegarde", 0x40040)
+        return
+    }
+    SortNames(names, true)
+    d := Gui("+AlwaysOnTop +OwnDialogs", "Restaurer une sauvegarde")
+    d.SetFont("s10", "Segoe UI")
+    d.Add("Text", "x12 y12 w470", "Choisis la sauvegarde à restaurer pour le profil « " curProfile " ».`nTon état actuel est sauvegardé juste avant (dossier avant-restauration).")
+    lv := d.Add("ListView", "x12 y58 w470 r10 NoSort -Multi", ["Sauvegarde", "Maps"])
+    for nm in names {
+        cnt := 0
+        Loop Files root "\" nm "\*.txt"
+            cnt += 1
+        lv.Add("", nm, cnt)
+    }
+    lv.ModifyCol(1, 330)
+    lv.ModifyCol(2, 80)
+    btnOk := d.Add("Button", "x12 y+12 w200 Default", "Restaurer")
+    btnNo := d.Add("Button", "x+10 yp w120", "Annuler")
+
+    DoRestore(*) {
+        r := lv.GetNext(0)
+        if !r
+            return
+        sel := lv.GetText(r, 1)
+        ans := MsgBox("Remplacer les maps du profil « " curProfile " » par la sauvegarde « " sel " » ?`nTon état actuel sera sauvegardé avant.", "Restaurer", 0x40024)
+        if (ans != "Yes")
+            return
+        safe := root "\avant-restauration-" FormatTime(, "yyyy-MM-dd_HHmmss")
+        try {
+            DirCreate(safe)
+            Loop Files MapsDir "\*.txt"
+                FileCopy(A_LoopFileFullPath, safe "\" A_LoopFileName, 1)
+            Loop Files root "\" sel "\*.txt"
+                FileCopy(A_LoopFileFullPath, MapsDir "\" A_LoopFileName, 1)
+        } catch as err {
+            MsgBox("La restauration a échoué : " err.Message, "Restaurer", 0x40010)
+            return
+        }
+        d.Destroy()
+        MsgBox("Sauvegarde « " sel " » restaurée. Rouvre le menu pour voir les stuffs.", "Restaurer", 0x40040)
+    }
+
+    CancelRestore(*) {
+        d.Destroy()
+    }
+
+    btnOk.OnEvent("Click", DoRestore)
+    btnNo.OnEvent("Click", CancelRestore)
+    d.OnEvent("Close", CancelRestore)
+    d.OnEvent("Escape", CancelRestore)
+    d.Show("AutoSize Center")
+    hw := d.Hwnd
+    WinWaitClose("ahk_id " hw)
+    WinActivate("ahk_id " ownerHwnd)
 }
 
 ; =====================================================================
@@ -3078,7 +4315,7 @@ Check2() {
     }
     out.Push(["ok", "console.log présent", ""])
     ; même commande que la détection de map : si le jeu répond, l'envoi fonctionne
-    txt := RunAndReadLog("status", "main lump|hostname|Not connected|loopback|spawngroup")
+    txt := RunAndReadLog("status", "main lump")
     if !RegExMatch(txt, "i)main lump|hostname|Not connected|loopback|spawngroup") {
         out.Push(["fail", "Test d'envoi de commande : pas de réponse du jeu", "Entre dans une partie (map locale) sans ouvrir la console, puis clique sur Relancer la vérification. Si ça persiste, tape une fois exec " PracticeCfg " dans la console de CS2, puis relance la vérification"])
         return [out, false, true]
@@ -3094,7 +4331,13 @@ Check2() {
     else
         out.Push(["ok", "Cheats : le menu envoie sv_cheats 1 avec chaque commande", ""])
     LoadMaps()
-    mp := DetectMap()
+    mp := MapFromStatus(txt)
+    if (mp = "")
+        mp := DetectMap()
+    if (mp = "" && chkAttempts < 5) {
+        ; la réponse du jeu peut arriver en retard : on réessaie quelques fois avant de signaler
+        return [out, false, true]
+    }
     if (mp != "")
         out.Push(["ok", "Map détectée : " mp, ""])
     else
@@ -3192,8 +4435,7 @@ CheckTick() {
             for r in chkP2
                 bad += (r[1] != "ok") ? 1 : 0
             if (bad = 0) {
-                CheckRender("Tout est bon. Cette fenêtre se ferme toute seule.")
-                SetTimer(CheckClose, -5000)
+                CheckClose()
             } else {
                 CheckRender("Certains points demandent ton attention (voir ci-dessous).")
             }
@@ -3273,6 +4515,7 @@ InstallUpdate() {
         return
     }
     MsgBox("Mise à jour terminée. Le menu va redémarrer.", "Mise à jour du menu", 0x40040)
+    IniWrite(1, IniFile, "State", "SkipCheck")
     Reload()
 }
 
@@ -3289,7 +4532,6 @@ Hotkey(SaveKey, (*) => ShowSaveDialog())
 Hotkey(SettingsKey, (*) => ShowSettings())
 Hotkey(ExecKey, (*) => ForceExec())
 Hotkey(ManageKey, (*) => ShowManager())
-Hotkey(HudKey, (*) => HudToggle())
 Hotkey(ShareKey, (*) => ShowShare())
 
 HotIf(MenuActive)
@@ -3306,11 +4548,17 @@ Hotkey(FavKey, (*) => ToggleFav())
 Hotkey(LockKey, (*) => LockPress())
 Hotkey(DelKey, (*) => DelPress())
 Hotkey(AddKey, (*) => AddPress())
+Hotkey("^z", (*) => UndoPress())
 HotIf()
 
 if HudAtStart
     HudToggle()
-if AutoCheck
+if AutoBackupOn
+    SetTimer(AutoBackup, -2500)
+skipCheck := (IniRead(IniFile, "State", "SkipCheck", "0") = "1")
+if skipCheck
+    IniWrite(0, IniFile, "State", "SkipCheck")
+if (AutoCheck && !skipCheck)
     SetTimer(StartCheck, -1500)
 if AutoUpdate
     SetTimer(CheckUpdate, -4000)
