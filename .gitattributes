@@ -1,0 +1,5 @@
+* text=auto
+*.ahk text eol=crlf
+*.cfg text eol=lf
+*.txt text eol=lf
+*.ini text eol=crlf

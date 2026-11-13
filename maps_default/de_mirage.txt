@@ -1,0 +1,7 @@
+# MIRAGE
+# Format : Catégorie | Nom affiché | commande(s) console | info affichée dans le chat (optionnel)
+# Astuce : en jeu, tape "getpos" dans la console pour copier la position/l'angle.
+# Les lignes commençant par # sont ignorées. Exemples (à décommenter / modifier) :
+
+# Spawns CT | CT 1 | setpos 0 0 0; setang 0 0
+# Smokes T | Smoke exemple | setpos 0 0 0; setang 0 0; give weapon_smokegrenade | Jump throw - clic gauche - viser le coin du mur

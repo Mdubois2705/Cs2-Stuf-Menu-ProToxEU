@@ -1,0 +1,14 @@
+# Fichier d'exemple (ignoré par le menu : les fichiers commençant par _ ne sont pas des maps).
+# Copie ces lignes dans maps\de_<map>.txt et adapte-les.
+#
+# Format : Catégorie | Nom affiché | commande(s) console | info affichée dans le chat (optionnel)
+#
+# Smoke - Site A | Smoke CT depuis T spawn | setpos 0 0 0; setang 0 0; give weapon_smokegrenade | Jump throw - clic gauche - viser le coin du toit
+# Flash - Mid    | Flash pop                | setpos 0 0 0; setang 0 0; give weapon_flashbang
+# Spawns CT      | CT 1                     | setpos 0 0 0; setang 0 0
+#
+# Catégorie vide (créée depuis le menu avec F4) :
+# @cat | Retakes B
+#
+# Astuce : en jeu, tape "getpos" dans la console pour obtenir setpos/setang,
+# ou utilise F9 pour sauvegarder la position directement depuis le jeu.

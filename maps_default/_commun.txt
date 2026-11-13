@@ -1,0 +1,19 @@
+# Ces lignes apparaissent dans le menu de TOUTES les maps.
+# Format : Catégorie | Nom affiché | commande(s) console | info affichée dans le chat (optionnel)
+
+Utilitaires | Give kit complet | give weapon_ak47; give weapon_awp; give weapon_deagle; give weapon_hegrenade; give weapon_flashbang; give weapon_smokegrenade; give weapon_molotov
+Utilitaires | Noclip | noclip
+Utilitaires | God mode (activer/désactiver) | god | God mode basculé
+Utilitaires | Kill smokes | ent_fire smokegrenade_projectile kill; stopsound
+Utilitaires | Rethrow dernière grenade | sv_rethrow_last_grenade
+Utilitaires | Restart round | mp_restartgame 1
+Utilitaires | Bot - Ajouter un bot T | bot_add_t | Bot T ajouté - utilise "Placer le bot" pour le positionner
+Utilitaires | Bot - Ajouter un bot CT | bot_add_ct | Bot CT ajouté - utilise "Placer le bot" pour le positionner
+Utilitaires | Bot - Placer le bot (là où je vise) | bot_place
+Utilitaires | Bot - Accroupi | bot_crouch 1 | Bots accroupis
+Utilitaires | Bot - Debout | bot_crouch 0 | Bots debout
+Utilitaires | Bot - Immobile | bot_stop 1 | Bots immobiles
+Utilitaires | Bot - Libre de bouger | bot_stop 0 | Bots libres de bouger
+Utilitaires | Bot - Ne tire pas | bot_dont_shoot 1
+Utilitaires | Bot - Tire | bot_dont_shoot 0
+Utilitaires | Bot - Enlever tous les bots | bot_kick
