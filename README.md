@@ -14,7 +14,8 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 - **Sauvegarde d'un repère depuis le jeu** (position et angle capturés automatiquement)
 - **Ajout / suppression** de stuffs et de catégories depuis le menu
 - Utilitaires : bots (placer, accroupi, immobile…), God mode, noclip, kit d'armes
-- **Apparence réglable** : police, taille, position, opacité, couleur de fond
+- **Apparence réglable** : thèmes, police, taille, position, opacité, couleur de fond, liseré et coins arrondis
+- **Captures d'écran** des stuffs, **coordonnées en temps réel**, **profils** et **partage** de stuffs (export / import avec aperçu)
 
 ## Prérequis
 
@@ -24,12 +25,17 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 
 ## Installation
 
-1. Clone ou télécharge ce dépôt.
-2. `cs2_practice.cfg` est copié automatiquement dans le dossier cfg de CS2 au premier lancement du script (rien à faire). Si tu préfères le faire à la main : `...\Counter-Strike Global Offensive\game\csgo\cfg\`
-3. Dans Steam, ajoute `-condebug` aux options de lancement de CS2.
-4. Lance `stuff_menu.ahk` une première fois : il crée `config.ini` à partir de `config.example.ini`.
-5. Au premier lancement, le script trouve tout seul le dossier cfg de CS2 (via Steam). S'il ne le trouve pas, il te demande de le choisir, puis l'enregistre dans `config.ini` (`CfgPath`).
-6. Lance un entraînement local et tape `exec cs2_practice` dans la console **une seule fois** : cela crée la touche qui relie le jeu au menu. Ensuite, le script l'exécute tout seul (voir [Exec automatique](#exec-automatique)).
+1. Installe [AutoHotkey v2](https://www.autohotkey.com/).
+2. Télécharge ce dépôt (bouton vert **Code > Download ZIP**) et extrais-le où tu veux, ou clone-le.
+3. Dans Steam, clic droit sur Counter-Strike 2 > **Propriétés** > **Options de lancement**, et ajoute `-condebug`.
+4. Double-clique sur `stuff_menu.ahk`. Au premier lancement, **tout se configure tout seul** :
+   - `config.ini` est créé à partir de `config.example.ini` ;
+   - le dossier cfg de CS2 est trouvé automatiquement (Steam et ses bibliothèques). S'il n'est pas trouvé, une fenêtre te demande de le choisir : `...\Counter-Strike Global Offensive\game\csgo\cfg` ;
+   - `cs2_practice.cfg` est copié dans ce dossier cfg (un fichier existant n'est jamais écrasé).
+5. Lance CS2 et une **map d'entraînement locale**, ouvre la console et tape `exec cs2_practice` **une seule fois** : cela crée la touche qui relie le jeu au menu. Ensuite, le script l'exécute tout seul (voir [Exec automatique](#exec-automatique)).
+6. Appuie sur `F7` en jeu pour ouvrir le menu. Une fenêtre de vérification contrôle l'installation au lancement du script et se ferme toute seule si tout est bon.
+
+Le menu est vide au départ : sauvegarde tes stuffs avec `F9` (voir plus bas) ou importe ceux d'un ami avec `F1`.
 
 ## Raccourcis
 
