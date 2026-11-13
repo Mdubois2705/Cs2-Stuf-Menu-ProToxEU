@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.10.0
+
+- La catégorie « Utilitaires » (bots, God mode, noclip, kit d'armes…) passe dans le menu principal et n'apparaît plus dans la liste des catégories de chaque map. Elle reste modifiable dans la fenêtre de gestion (« Communs »).
+
+## v2.9.2
+
+- `F4` (menu des stuffs ouvert) : créer un nouveau stuff, avec la catégorie courante pré-remplie.
+
+## v2.9.1
+
+- Raccourci F4 (ajouter) supprimé : les stuffs s'ajoutent avec « Sauvegarder la position actuelle » du menu principal, les catégories dans la fenêtre de gestion.
+
+## v2.9.0
+
+- Une seule touche en jeu : `F1` ouvre un **menu principal** (Stuffs, Relancer le dernier stuff, Sauvegarder la position, Gestion, Profils et partage, Réglages, Relancer l'exec, Vérifier l'installation). Les raccourcis F6 à F11 sont supprimés.
+- Dans le menu des stuffs : `F2` favoris, `F3` cadenas, `F4` ajouter, `Ctrl+Z` annuler. Le raccourci de suppression est retiré (la suppression se fait dans la fenêtre de gestion).
+- Nouvelle clé `MenuKey` (défaut F1). Les touches sont migrées une seule fois dans config.ini.
+
+## v2.8.3
+
+- Correction : les captures importées depuis un fichier .stuffpack provoquaient « Can't create control » dans la fenêtre de modification (format d'image illisible). Elles sont maintenant enregistrées en BMP 24 bits, et les captures déjà importées sont réparées automatiquement à l'affichage.
+
 ## v2.8.2
 
 - cs2_practice.cfg est copié automatiquement dans le dossier cfg de CS2 au lancement s'il n'y est pas encore (un fichier existant n'est jamais écrasé).

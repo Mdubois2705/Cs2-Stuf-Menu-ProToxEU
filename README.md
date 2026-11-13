@@ -33,41 +33,45 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
    - le dossier cfg de CS2 est trouvé automatiquement (Steam et ses bibliothèques). S'il n'est pas trouvé, une fenêtre te demande de le choisir : `...\Counter-Strike Global Offensive\game\csgo\cfg` ;
    - `cs2_practice.cfg` est copié dans ce dossier cfg (un fichier existant n'est jamais écrasé).
 5. Lance CS2 et une **map d'entraînement locale**, ouvre la console et tape `exec cs2_practice` **une seule fois** : cela crée la touche qui relie le jeu au menu. Ensuite, le script l'exécute tout seul (voir [Exec automatique](#exec-automatique)).
-6. Appuie sur `F7` en jeu pour ouvrir le menu. Une fenêtre de vérification contrôle l'installation au lancement du script et se ferme toute seule si tout est bon.
+6. Appuie sur `F1` en jeu pour ouvrir le menu. Une fenêtre de vérification contrôle l'installation au lancement du script et se ferme toute seule si tout est bon.
 
-Le menu est vide au départ : sauvegarde tes stuffs avec `F9` (voir plus bas) ou importe ceux d'un ami avec `F1`.
+Le menu est vide au départ : sauvegarde tes stuffs avec « Sauvegarder la position actuelle » (voir plus bas) ou importe ceux d'un ami avec « Profils et partage de stuffs ».
 
 ## Raccourcis
 
-| Touche | Action |
-| --- | --- |
-| `F7` | Ouvrir / fermer le menu |
-| `F8` | Relancer le dernier stuff |
-| `F9` | Sauvegarder la position actuelle comme nouveau stuff |
-| `F10` | Réglages du menu (police, taille, position, opacité, fond) |
-| `F6` | Relancer l'exec du cfg d'entraînement |
-| `F11` | Gestion des stuffs et des catégories |
-| `F1` | Profils et partage de stuffs (export / import) |
+Une seule touche en jeu : **`F1`** ouvre le **menu principal**. Tout le reste s'y trouve (navigation aux flèches, `Entrée` pour choisir, `Échap` pour fermer) :
 
-Dans le menu :
+| Entrée du menu | Action |
+| --- | --- |
+| Stuffs (maps et catégories) | Le menu des stuffs : Map > Catégorie > Stuff, ouvert sur la map détectée |
+| Utilitaires | Bots (placer, accroupi, immobile…), God mode, noclip, kit d'armes, kill smokes… (catégorie `Utilitaires` de `maps\_commun.txt`) |
+| Relancer le dernier stuff | Relance le dernier stuff utilisé |
+| Sauvegarder la position actuelle | Enregistre ta position comme nouveau stuff |
+| Gérer les stuffs et les catégories | Fenêtre de gestion (déplacer, renommer, supprimer, modifier) |
+| Profils et partage de stuffs | Profils, export et import |
+| Réglages du menu | Thème, police, liseré, captures, coordonnées |
+| Relancer l'exec de cs2_practice | Relance le cfg d'entraînement |
+| Vérifier l'installation | Contrôle de l'installation |
+
+Dans le menu des stuffs :
 
 | Touche | Action |
 | --- | --- |
 | `Haut` / `Bas` | Naviguer |
 | `Droite` / `Entrée` | Valider |
-| `Gauche` / `Retour arrière` | Retour |
+| `Gauche` / `Retour arrière` | Retour (de la liste des maps, retour au menu principal) |
 | `Échap` | Fermer |
 | `Tab` | Recherche rapide |
 | `F2` | Ajouter / retirer des favoris |
-| `F4` | Ajouter une catégorie, ou un stuff dans la catégorie courante |
-| `F3` | Supprimer (2 appuis pour confirmer). Supprimer une catégorie **garde ses stuffs** : ils vont dans « Non classés » |
-| `F5` | Cadenas : verrouiller / déverrouiller la catégorie ou le stuff sélectionné |
+| `F3` | Cadenas : verrouiller / déverrouiller la catégorie ou le stuff sélectionné |
+| `F4` | Créer un nouveau stuff (fenêtre de sauvegarde, catégorie courante pré-remplie) |
+| `Ctrl+Z` | Annuler la dernière suppression de stuff |
 
-Toutes les touches se changent dans `config.ini`. Le script utilise aussi la touche `kp_multiply` (pavé numérique `*`) pour déclencher le cfg, ainsi que `K`, `N`, `L`, `P` dans `cs2_practice.cfg`.
+La suppression de stuffs et de catégories se fait depuis la fenêtre de gestion. Les touches se changent dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`). Le script utilise aussi la touche `kp_multiply` (pavé numérique `*`) pour déclencher le cfg, ainsi que `K`, `N`, `L`, `P` dans `cs2_practice.cfg`.
 
 ## Gestion des stuffs et des catégories
 
-`F11` ouvre une fenêtre de gestion, au centre de l'écran :
+L'entrée « Gérer les stuffs et les catégories » du menu ouvre une fenêtre de gestion, au centre de l'écran :
 
 - **Catégories** (à gauche) : créer, renommer, supprimer, verrouiller.
 - **Stuffs** (à droite) : renommer, modifier le message du chat, supprimer, verrouiller.
@@ -79,7 +83,7 @@ Toutes les touches se changent dans `config.ini`. Le script utilise aussi la tou
 
 ## Coordonnées en temps réel
 
-L'affichage s'active dans `F10`, onglet **Coordonnées** (pas de raccourci clavier). Une fois activé et enregistré, il reste actif à chaque lancement du script, jusqu'à ce que tu le désactives. Il se place par défaut dans le **coin inférieur gauche** de l'écran, ou où tu veux (position X / Y dans le même onglet). Il affiche la map, ta position (X, Y, Z) et ton angle de vue (pitch, yaw), mises à jour plusieurs fois par seconde. Le texte suit l'apparence réglée avec `F10`.
+L'affichage s'active dans « Réglages du menu », onglet **Coordonnées** (pas de raccourci clavier). Une fois activé et enregistré, il reste actif à chaque lancement du script, jusqu'à ce que tu le désactives. Il se place par défaut dans le **coin inférieur gauche** de l'écran, ou où tu veux (position X / Y dans le même onglet). Il affiche la map, ta position (X, Y, Z) et ton angle de vue (pitch, yaw), mises à jour plusieurs fois par seconde. Le texte suit l'apparence réglée avec `F10`.
 
 Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dans `console.log` (option `-condebug`). Il ne lit pas la mémoire du jeu.
 
@@ -89,7 +93,7 @@ Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dan
 
 ## Profils et partage
 
-`F1` ouvre la fenêtre **Profils et partage**.
+L'entrée « Profils et partage de stuffs » du menu ouvre la fenêtre **Profils et partage**.
 
 - **Profils** : chaque joueur peut avoir plusieurs profils (par exemple « Principal », « Stuffs de Léo », « Equipe »). Le profil Principal utilise les dossiers `maps\` et `data\` ; les autres sont dans `profiles\<nom>\`. « Activer » recharge le script avec le profil choisi. Chaque profil a ses propres stuffs, favoris, récents et cadenas.
 - **Exporter** : coche les stuffs à partager (un seul, plusieurs ou tout), puis « Exporter vers un fichier… » (fichier `.stuffpack`) ou « Copier le code » (texte à coller dans Discord, de préférence dans un bloc de code ; pour beaucoup de stuffs, envoie plutôt le fichier).
@@ -100,7 +104,7 @@ Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dan
 
 ## Cadenas
 
-Un cadenas apparaît à la fin des catégories et des stuffs verrouillés. Un élément verrouillé ne peut pas être supprimé depuis le menu : appuie sur `F5` pour le verrouiller ou le déverrouiller.
+Un cadenas apparaît à la fin des catégories et des stuffs verrouillés. Un élément verrouillé ne peut pas être supprimé depuis le menu : appuie sur `F3` pour le verrouiller ou le déverrouiller.
 
 - Un **cadenas de catégorie** protège la catégorie ; il porte sur le nom de la catégorie, donc sur toutes les maps qui l'utilisent.
 - Une catégorie qui contient un stuff verrouillé ne peut pas être supprimée non plus.
@@ -112,8 +116,8 @@ Un cadenas apparaît à la fin des catégories et des stuffs verrouillés. Un é
 
 Les réglages d'entraînement (`cs2_practice.cfg` : argent, munitions infinies, `sv_cheats`, touches K / N / L / P…) se remettent à zéro à chaque chargement de map. Le script les relance pour toi :
 
-- à l'ouverture du menu (`F7`), **une fois par map détectée** (la détection demande `-condebug`) ;
-- à la demande avec `F6`, par exemple après un redémarrage de la même map.
+- à l'ouverture du menu des stuffs (entrée « Stuffs »), **une fois par map détectée** (la détection demande `-condebug`) ;
+- à la demande avec l'entrée « Relancer l'exec » du menu, par exemple après un redémarrage de la même map.
 
 Chaque commande du menu envoie aussi `sv_cheats 1` d'abord, donc les stuffs, le God mode et les bots marchent même si l'exec n'a pas tourné.
 
@@ -123,22 +127,21 @@ Réglages dans `config.ini` :
 | --- | --- |
 | `AutoExec` | `1` = exec automatique, `0` = désactivé |
 | `PracticeCfg` | Nom du cfg à exécuter (par défaut `cs2_practice`) |
-| `ExecKey` | Touche pour relancer l'exec (par défaut `F6`) |
 | `ConsoleKey` | Optionnel : touche de la console (ex. `{sc029}`, la touche à gauche du 1) |
 
 Avec `ConsoleKey` vide, l'exec passe par la touche liée au menu, créée par ton premier `exec cs2_practice` manuel. Avec `ConsoleKey` renseignée, le script ouvre la console, tape la commande et la referme lui-même, sans exec manuel. Utilise-la seulement si la touche est la bonne : sinon les lettres tapées arrivent dans le jeu.
 
 ## Captures d'écran des stuffs
 
-Quand tu sauvegardes un stuff (F9, ou F4 depuis le menu), le script prend une petite capture de 100 x 100 px au centre du jeu (autour du réticule) et la propose dans la fenêtre. Si la case est cochée, elle est liée au stuff. Dans le menu, la capture du stuff sélectionné s'affiche dans le coin supérieur droit de l'écran (placement réglable). Pour la refaire : `F11`, modifier le stuff, bouton « Refaire la capture (en jeu) » (place-toi au point du stuff : les fenêtres se masquent et la capture se fait 3 secondes plus tard). Les captures sont dans `data\shots\`. Elles peuvent être jointes à un export vers un fichier `.stuffpack` (case « Inclure les captures » dans F1) : l'import les restaure. Le code copié ne les contient pas (trop lourd).
+Quand tu sauvegardes un stuff (entrée « Sauvegarder la position actuelle » du menu, ou `F4` dans le menu des stuffs), le script prend une petite capture de 100 x 100 px au centre du jeu (autour du réticule) et la propose dans la fenêtre. Si la case est cochée, elle est liée au stuff. Dans le menu, la capture du stuff sélectionné s'affiche dans le coin supérieur droit de l'écran (placement réglable). Pour la refaire : `F11`, modifier le stuff, bouton « Refaire la capture (en jeu) » (place-toi au point du stuff : les fenêtres se masquent et la capture se fait 3 secondes plus tard). Les captures sont dans `data\shots\`. Elles peuvent être jointes à un export vers un fichier `.stuffpack` (case « Inclure les captures » dans F1) : l'import les restaure. Le code copié ne les contient pas (trop lourd).
 
-Tout se règle dans F10, onglet « Captures » : activer, zone capturée, taille affichée, placement (coin supérieur droit par défaut, ou libre avec position X/Y), arrondi des coins (3 px par défaut). Le liseré de la capture reprend celui du menu et se dessine par-dessus l'image. Équivalents dans `config.ini` : `Shot`, `ShotSize`, `ShotZoom`, `ShotPos`, `ShotCorner`, `ShotX`, `ShotY`. Le jeu doit être en fenêtré ou en plein écran fenêtré.
+Tout se règle dans « Réglages du menu », onglet « Captures » : activer, zone capturée, taille affichée, placement (coin supérieur droit par défaut, ou libre avec position X/Y), arrondi des coins (3 px par défaut). Le liseré de la capture reprend celui du menu et se dessine par-dessus l'image. Équivalents dans `config.ini` : `Shot`, `ShotSize`, `ShotZoom`, `ShotPos`, `ShotCorner`, `ShotX`, `ShotY`. Le jeu doit être en fenêtré ou en plein écran fenêtré.
 
 ## Ajouter des stuffs
 
-**Depuis le jeu (F9)** : place-toi au bon endroit, vise, appuie sur `F9`, puis remplis la map, le type, la catégorie, le nom et le message du chat.
+**Depuis le jeu** : place-toi au bon endroit, vise, ouvre le menu (`F1`) et choisis « Sauvegarder la position actuelle », puis remplis la map, le type, la catégorie, le nom et le message du chat.
 
-Dans la fenêtre, la liste **Catégorie** propose toutes les catégories déjà créées pour la map (y compris celles créées avec `F4`). Choisis-en une, ou tape un nouveau nom : sans catégorie existante du même nom, il est rangé sous « Type - Nom » (par exemple `Smoke - Site A`).
+Dans la fenêtre, la liste **Catégorie** propose toutes les catégories déjà créées pour la map (y compris celles créées dans la fenêtre de gestion). Choisis-en une, ou tape un nouveau nom : sans catégorie existante du même nom, il est rangé sous « Type - Nom » (par exemple `Smoke - Site A`).
 
 **À la main** : édite `maps/de_<map>.txt`, une ligne par stuff :
 
@@ -169,7 +172,7 @@ data/                 favoris, récents, copies de sécurité (non versionné)
 
 ## Thèmes et police
 
-`F10` ouvre les réglages du menu. La liste **Thème** applique en un clic une palette complète (fond, titre, nom de map, textes) :
+« Réglages du menu » ouvre les réglages. La liste **Thème** applique en un clic une palette complète (fond, titre, nom de map, textes) :
 
 | Thème | Ambiance |
 | --- | --- |
@@ -182,14 +185,14 @@ data/                 favoris, récents, copies de sécurité (non versionné)
 
 La ligne sélectionnée du menu est mise en valeur par une barre de fond, dont la couleur est choisie par le thème (ou calculée à partir du fond en mode « Personnalisé »).
 
-Le menu a des coins arrondis et un fin liseré dont la couleur suit le thème. Dans F10, tu peux régler l'épaisseur et la couleur du liseré (liste ou code hexadécimal) ainsi que l'arrondi des coins. Réglage dans `config.ini`, section `[Overlay]` : `Corner=14` (rayon des coins, `0` = coins carrés) et `Border=2` (épaisseur du liseré, `0` = aucun).
+Le menu a des coins arrondis et un fin liseré dont la couleur suit le thème. Dans les réglages, tu peux régler l'épaisseur et la couleur du liseré (liste ou code hexadécimal) ainsi que l'arrondi des coins. Réglage dans `config.ini`, section `[Overlay]` : `Corner=14` (rayon des coins, `0` = coins carrés) et `Border=2` (épaisseur du liseré, `0` = aucun).
 
 Si tu modifies ensuite le fond (préréglage ou curseurs), le menu repasse en « Personnalisé » avec des couleurs de texte automatiques. La liste **Police** ne propose que les polices installées sur ton PC (Segoe UI, Bahnschrift, Cascadia, Consolas, Calibri, Georgia…). Le thème est enregistré dans `config.ini` (`Theme=`).
 
 ## Sauvegardes et annulation
 
 - **Sauvegarde automatique** : une fois par jour, au lancement du script, tes maps (de chaque profil) sont copiées dans `data\backup\auto\AAAA-MM-JJ\`. Les 14 dernières sont conservées (`BackupKeep` dans `config.ini`, `AutoBackup=0` pour désactiver). Pour restaurer : `F1` > « Restaurer une sauvegarde… ». Ton état actuel est sauvegardé juste avant dans un dossier `avant-restauration-...`.
-- **Annuler une suppression** : `Ctrl+Z` dans le menu, ou le bouton « Annuler la suppression » (et `Ctrl+Z`) dans la fenêtre de gestion `F11`. Le dernier stuff supprimé est remis dans sa catégorie ; les 50 derniers sont mémorisés dans `data\deleted.txt`. Le favori et le cadenas du stuff ne sont pas restaurés. La suppression d'une catégorie ne détruit pas ses stuffs (ils vont dans « Non classés »), donc elle n'a pas besoin d'être annulée.
+- **Annuler une suppression** : `Ctrl+Z` dans le menu, ou le bouton « Annuler la suppression » (et `Ctrl+Z`) dans la fenêtre de gestion. Le dernier stuff supprimé est remis dans sa catégorie ; les 50 derniers sont mémorisés dans `data\deleted.txt`. Le favori et le cadenas du stuff ne sont pas restaurés. La suppression d'une catégorie ne détruit pas ses stuffs (ils vont dans « Non classés »), donc elle n'a pas besoin d'être annulée.
 
 ## Vérification de l'installation
 
@@ -197,7 +200,7 @@ Au lancement, le script vérifie ce qui peut l'être sans CS2 : dossier cfg, `cs
 
 Lance ensuite CS2 et une map locale : dès que le jeu est au premier plan, le script teste l'envoi d'une commande (via `console.log`), les cheats et la détection de la map. S'il n'y a aucun problème, la fenêtre se ferme toute seule.
 
-- Pour relancer la vérification : bouton « Vérifier l'installation » dans les réglages `F10` (visible sous tous les onglets).
+- Pour relancer la vérification : bouton « Vérifier l'installation » dans les réglages du menu (visible sous tous les onglets).
 - Pour la désactiver : `AutoCheck=0` dans `config.ini`.
 - Le test d'envoi appuie sur la touche `*` du pavé numérique dans le jeu : ne laisse pas la console ni le chat ouverts pendant la vérification.
 
@@ -211,11 +214,11 @@ Dans tous les cas, `maps\`, `data\`, `profiles\` et `config.ini` ne sont jamais 
 
 ## Dépannage
 
-- **Le menu n'apparaît pas** : vérifie que le script tourne et que CS2 est en mode fenêtré (plein écran fenêtré). Tu peux aussi placer le menu sur un autre écran avec `F10` (réglages de position).
+- **Le menu n'apparaît pas** : vérifie que le script tourne et que CS2 est en mode fenêtré (plein écran fenêtré). Tu peux aussi placer le menu sur un autre écran dans les réglages du menu (réglages de position).
 - **La map n'est pas détectée** : vérifie `-condebug`, ou règle `AutoDetectMap=0` dans `config.ini`.
 - **TP, give, God mode ou bot ne marchent plus** : ces commandes exigent `sv_cheats 1`. Le script l'envoie avant chaque commande ; si ça ne marche toujours pas, vérifie que tu es bien dans une partie locale (pas en matchmaking). Test rapide : tape `setpos 0 0 0` dans la console.
 - **Rien ne se passe au choix d'un stuff** : vérifie `CfgPath` et que tu as lancé `exec cs2_practice` au moins une fois à la main (il relie la touche `kp_multiply` au fichier généré).
-- **L'exec automatique ne se déclenche pas** : vérifie `-condebug` (détection de map) ou appuie sur `F6`.
+- **L'exec automatique ne se déclenche pas** : vérifie `-condebug` (détection de map) ou utilise l'entrée « Relancer l'exec » du menu.
 - **Suppression par erreur** : récupère le fichier dans `data/backup/`.
 
 ## Contribuer

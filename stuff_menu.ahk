@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.8.2"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.10.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -25,25 +25,27 @@ LockFile := DataDir "\locks.txt"
 RecentFile := DataDir "\recents.txt"
 
 CfgPath := IniRead(IniFile, "Settings", "CfgPath", "")
-ToggleKey := IniRead(IniFile, "Settings", "ToggleKey", "F7")
-RepeatKey := IniRead(IniFile, "Settings", "RepeatKey", "F8")
-SaveKey := IniRead(IniFile, "Settings", "SaveKey", "F9")
+; Migration unique des touches (v2.9) : une seule touche globale (MenuKey), le reste est dans le menu
+if (IniRead(IniFile, "State", "KeysV", "") != "2") {
+    IniWrite("F1", IniFile, "Settings", "MenuKey")
+    IniWrite("F2", IniFile, "Settings", "FavKey")
+    IniWrite("F3", IniFile, "Settings", "LockKey")
+    IniWrite("2", IniFile, "State", "KeysV")
+}
+MenuKey := IniRead(IniFile, "Settings", "MenuKey", "F1")
 FavKey := IniRead(IniFile, "Settings", "FavKey", "F2")
-DelKey := IniRead(IniFile, "Settings", "DelKey", "F3")
+LockKey := IniRead(IniFile, "Settings", "LockKey", "F3")
 AddKey := IniRead(IniFile, "Settings", "AddKey", "F4")
+DelKey := ""
 CloseAfterRun := (IniRead(IniFile, "Settings", "CloseAfterRun", "1") = "1")
 AutoDetect := (IniRead(IniFile, "Settings", "AutoDetectMap", "1") = "1")
 ConsoleLog := IniRead(IniFile, "Settings", "ConsoleLog", "")
 LastMap := IniRead(IniFile, "State", "LastMap", "")
-SettingsKey := IniRead(IniFile, "Settings", "SettingsKey", "F10")
-LockKey := IniRead(IniFile, "Settings", "LockKey", "F5")
-ManageKey := IniRead(IniFile, "Settings", "ManageKey", "F11")
 TpZOffset := Number(IniRead(IniFile, "Settings", "TpZOffset", "-64"))
 AutoBackupOn := (IniRead(IniFile, "Settings", "AutoBackup", "1") = "1")
 BackupKeep := Max(0, ToInt(IniRead(IniFile, "Settings", "BackupKeep", "14"), 14))
 AutoCheck := (IniRead(IniFile, "Settings", "AutoCheck", "1") = "1")
 AutoUpdate := (IniRead(IniFile, "Settings", "AutoUpdate", "1") = "1")
-ShareKey := IniRead(IniFile, "Settings", "ShareKey", "F1")
 HudInterval := Max(100, ToInt(IniRead(IniFile, "Settings", "HudInterval", "300"), 300))
 HudAtStart := (IniRead(IniFile, "Settings", "HudAtStart", "0") = "1")
 HudAuto := (IniRead(IniFile, "Settings", "HudAuto", "1") = "1")      ; 1 = coin inférieur gauche, 0 = position libre
@@ -56,7 +58,6 @@ ShotPlace := Max(1, Min(2, ToInt(IniRead(IniFile, "Settings", "ShotPos", "1"), 1
 ShotCorner := Max(0, Min(30, ToInt(IniRead(IniFile, "Settings", "ShotCorner", "3"), 3)))   ; arrondi des coins de la capture (px)
 ShotX := ToInt(IniRead(IniFile, "Settings", "ShotX", "520"), 520)
 ShotY := ToInt(IniRead(IniFile, "Settings", "ShotY", "100"), 100)
-ExecKey := IniRead(IniFile, "Settings", "ExecKey", "F6")
 PracticeCfg := IniRead(IniFile, "Settings", "PracticeCfg", "cs2_practice")
 AutoExec := (IniRead(IniFile, "Settings", "AutoExec", "1") = "1")
 ConsoleKey := IniRead(IniFile, "Settings", "ConsoleKey", "")
@@ -143,6 +144,8 @@ THEMES := [
     ["ardoise", "Ardoise et Lavande", "171A27", "E7E8F3", "AEB1EE", "F2BD9E", "8B8FAB", "252A40"],
     ["papier", "Papier et Encre", "F4F1EA", "22262E", "3B5B7A", "9A6330", "6D7480", "E6E1D5"]
 ]
+UTIL_CAT := "Utilitaires"                ; catégorie commune, affichée dans le menu principal
+utilMode := false                        ; true = liste des utilitaires ouverte depuis le menu principal
 FALLBACK_CAT := "Non classés"            ; où vont les stuffs d'une catégorie supprimée
 NO_TYPE := "(aucun)"
 Types := ["Smoke", "Molotov", "Flash", "HE", "Position", "Autre", NO_TYPE]
@@ -152,7 +155,8 @@ NUM := "[-+\d.eE]+"
 ; ---------- État ----------
 menuOpen := false
 dlgOpen := false
-level := 0          ; 0 = maps, 1 = catégories, 2 = stuffs, 3 = recherche
+level := 0          ; 0 = maps, 1 = catégories, 2 = stuffs, 3 = recherche, 4 = menu principal
+mainIdx := 1
 prevLevel := 1
 mapIdx := 1
 catIdx := 1
@@ -185,6 +189,7 @@ chkBusy := false
 g := ""
 gb := ""            ; fenêtre derrière le menu qui forme le liseré coloré
 hudB := ""          ; liseré des coordonnées
+shotOk := Map()     ; captures vérifiées lisibles
 gs := ""            ; fenêtre qui affiche la capture du stuff sélectionné
 gsPic := ""
 gsTxt := ""
@@ -262,7 +267,38 @@ LoadMapStuff(idx) {
     loadedMap := mapNames[idx]
     ParseFile(mapFiles[idx], loadedMap)
     ParseFile(MapsDir "\_commun.txt", loadedMap)
+    ; « Utilitaires » vit dans le menu principal, pas dans la liste de chaque map
+    if items.Has(UTIL_CAT) {
+        items.Delete(UTIL_CAT)
+        i := cats.Length
+        while (i >= 1) {
+            if (cats[i] = UTIL_CAT)
+                cats.RemoveAt(i)
+            i -= 1
+        }
+    }
     BuildVirtual()
+}
+
+; Ouvre la liste des utilitaires (bots, god mode, noclip...) depuis le menu principal
+OpenUtil() {
+    global cats, items, level, itemIdx, catIdx, utilMode, loadedMap
+    cats := []
+    items := Map()
+    ParseFile(MapsDir "\_commun.txt", "_commun")
+    if (!items.Has(UTIL_CAT) || items[UTIL_CAT].Length = 0) {
+        SetStatus("Aucun utilitaire trouvé (catégorie Utilitaires de maps\_commun.txt)")
+        return
+    }
+    list := items[UTIL_CAT]
+    cats := [UTIL_CAT]
+    items := Map(UTIL_CAT, list)
+    loadedMap := ""
+    catIdx := 1
+    itemIdx := 1
+    utilMode := true
+    level := 2
+    Render()
 }
 
 ; Ajoute les catégories [Favoris] et [Récents] en tête (si non vides)
@@ -564,11 +600,13 @@ UpdateShot(preview := false) {
         cur := CurrentItem()
         if IsObject(cur)
             path := ShotPath(StrSplit(cur[5], "|")[1], cur[2])
-        if (path = "" || !FileExist(path)) {
+        if !ShotValid(path) {
             HideShot()
             return
         }
     }
+    if (preview && path != "" && !ShotValid(path))
+        path := ""
     bw := ovBorder
     if !IsObject(gs) {
         gs := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
@@ -585,9 +623,14 @@ UpdateShot(preview := false) {
         }
     }
     if (path != "") {
-        gsPic.Value := "*w" ShotZoom " *h" ShotZoom " " path
-        gsPic.Visible := true
-        gsTxt.Visible := false
+        try {
+            gsPic.Value := "*w" ShotZoom " *h" ShotZoom " " path
+            gsPic.Visible := true
+            gsTxt.Visible := false
+        } catch {
+            gsPic.Visible := false
+            gsTxt.Visible := true
+        }
     } else {
         gsPic.Visible := false
         gsTxt.Visible := true
@@ -619,6 +662,8 @@ UpdateShot(preview := false) {
 ;  Affichage
 ; =====================================================================
 Count() {
+    if (level = 4)
+        return MainLabels().Length
     if (level = 0)
         return mapNames.Length
     if (level = 1)
@@ -647,11 +692,51 @@ DispName(it, withCat) {
     return str
 }
 
+; Entrées du menu principal (ouvert par la touche MenuKey)
+MainLabels() {
+    return ["Stuffs (maps et catégories)", "Utilitaires (bots, god mode, noclip...)", "Relancer le dernier stuff", "Sauvegarder la position actuelle", "Gérer les stuffs et les catégories", "Profils et partage de stuffs", "Réglages du menu", "Relancer l'exec de " PracticeCfg, "Vérifier l'installation", "Fermer"]
+}
+
+MainSelect() {
+    global level
+    i := mainIdx
+    if (i = 1) {
+        OpenStuffs()
+        return
+    }
+    if (i = 2) {
+        OpenUtil()
+        return
+    }
+    CloseMenu()
+    if (i = 10)
+        return
+    Sleep(60)
+    if (i = 3)
+        RepeatLast()
+    else if (i = 4)
+        ShowSaveDialog()
+    else if (i = 5)
+        ShowManager()
+    else if (i = 6)
+        ShowShare()
+    else if (i = 7)
+        ShowSettings()
+    else if (i = 8)
+        ForceExec()
+    else if (i = 9)
+        SetTimer(StartCheck, -50)
+}
+
 Render() {
     names := []
     sel := 1
     title := ""
-    if (level = 0) {
+    if (level = 4) {
+        names := MainLabels()
+        sel := mainIdx
+        title := "MENU"
+    } else if (level = 0) {
         names := mapNames
         sel := mapIdx
         title := "MAPS"
@@ -666,7 +751,7 @@ Render() {
         for it in items[c]
             names.Push(DispName(it, virt))
         sel := itemIdx
-        title := loadedMap " > " c
+        title := utilMode ? "UTILITAIRES" : loadedMap " > " c
     } else {
         for it in results
             names.Push(DispName(it, true))
@@ -675,7 +760,7 @@ Render() {
     }
     n := names.Length
     if (n = 0) {
-        SetList([(level = 2) ? "(vide - " AddKey " pour ajouter un stuff)" : "(vide)"], 0)
+        SetList([(level = 2) ? "(vide - " AddKey " pour créer un stuff)" : "(vide)"], 0)
     } else {
         start := Max(1, Min(sel - 6, n - 12))
         vis := []
@@ -688,19 +773,21 @@ Render() {
     titleCtl.Text := title
     cur := CurrentItem()
     infoCtl.Text := (IsObject(cur) && cur[3] != "") ? "Info : " cur[3] : ""
-    hintCtl.Text := HintText() "`n" SaveKey " sauver · " ManageKey " gestion · " ShareKey " profils · Ctrl+Z annuler"
+    hintCtl.Text := HintText() "`nCtrl+Z : annuler la dernière suppression de stuff"
     ShowOverlay()
     UpdateShot()
 }
 
 HintText() {
+    if (level = 4)
+        return "Haut/Bas : naviguer   Entrée : choisir   Échap : fermer"
     if (level = 0)
         return "Droite/Entrée : choisir la map"
     if (level = 1)
-        return "Droite : ouvrir la catégorie   Tab : recherche   " LockKey " : cadenas`n" AddKey " : nouvelle catégorie   " DelKey " : supprimer la catégorie (2 appuis)"
+        return "Droite : ouvrir la catégorie   Tab : recherche   " LockKey " : cadenas   " AddKey " : nouveau stuff"
     if (level = 2)
-        return "Entrée : lancer le stuff   Tab : recherche   " FavKey " : favori   " LockKey " : cadenas`n" AddKey " : ajouter un stuff ici   " DelKey " : supprimer le stuff (2 appuis)"
-    return "Tape pour filtrer   Entrée : lancer   Échap : retour`n" FavKey " : favori   " LockKey " : cadenas   " AddKey " : ajouter un stuff   " DelKey " : supprimer (2 appuis)"
+        return "Entrée : lancer le stuff   Tab : recherche   " FavKey " : favori   " LockKey " : cadenas   " AddKey " : nouveau stuff"
+    return "Tape pour filtrer   Entrée : lancer   Échap : retour`n" FavKey " : favori   " LockKey " : cadenas   " AddKey " : nouveau stuff"
 }
 
 SetStatus(msg) {
@@ -715,12 +802,24 @@ ClearStatus() {
 ; =====================================================================
 ;  Navigation
 ; =====================================================================
+; Touche d'ouverture : affiche le menu principal
 Toggle() {
-    global menuOpen, level, mapIdx, catIdx, itemIdx, LastMap
+    global menuOpen, level, mainIdx, utilMode
     if menuOpen {
         CloseMenu()
         return
     }
+    utilMode := false
+    level := 4
+    mainIdx := 1
+    menuOpen := true
+    Render()
+}
+
+; Entrée « Stuffs » : détecte la map (et lance l'exec si besoin) puis ouvre le menu des stuffs
+OpenStuffs() {
+    global menuOpen, level, mapIdx, catIdx, itemIdx, LastMap, utilMode
+    utilMode := false
     LoadMaps()   ; relit le dossier maps\ à chaque ouverture
     if (mapNames.Length = 0) {
         MsgBox("Aucun fichier .txt dans " MapsDir)
@@ -775,11 +874,13 @@ CloseMenu() {
 }
 
 Move(d) {
-    global mapIdx, catIdx, itemIdx, resIdx
+    global mapIdx, catIdx, itemIdx, resIdx, mainIdx
     n := Count()
     if (n = 0)
         return
-    if (level = 0) {
+    if (level = 4) {
+        mainIdx := Mod(mainIdx - 1 + d + n, n) + 1
+    } else if (level = 0) {
         mapIdx := Mod(mapIdx - 1 + d + n, n) + 1
     } else if (level = 1) {
         catIdx := Mod(catIdx - 1 + d + n, n) + 1
@@ -793,6 +894,10 @@ Move(d) {
 
 Select() {
     global level, catIdx, itemIdx, LastMap
+    if (level = 4) {
+        MainSelect()
+        return
+    }
     if (Count() = 0)
         return
     if (level = 0) {
@@ -816,13 +921,24 @@ Select() {
 }
 
 Back() {
-    global level
+    global level, utilMode
     if (level = 3) {
         ExitSearch()
         return
     }
-    if (level = 0) {
+    if (level = 4) {
         CloseMenu()
+        return
+    }
+    if (level = 2 && utilMode) {
+        utilMode := false
+        level := 4
+        Render()
+        return
+    }
+    if (level = 0) {
+        level := 4
+        Render()
         return
     }
     level -= 1
@@ -916,6 +1032,8 @@ UpdateResults() {
 
 ; ---------- Favoris ----------
 ToggleFav() {
+    if (level = 4 || utilMode)
+        return
     it := CurrentItem()
     if !IsObject(it)
         return
@@ -1497,9 +1615,28 @@ AskText(title, prompt, defVal := "", back := "ahk_exe cs2.exe") {
     return res["v"]
 }
 
+; Touche AddKey : ouvre la fenêtre de création d'un nouveau stuff (catégorie courante pré-remplie)
+NewStuffPress() {
+    if (level = 4 || utilMode)
+        return
+    preset := ""
+    pmap := ""
+    if (level >= 1 && level <= 3 && loadedMap != "") {
+        pmap := loadedMap
+        cur := CurrentItem()
+        if (level = 1 && cats.Length > 0 && cats[catIdx] != FAV_CAT && cats[catIdx] != REC_CAT)
+            preset := cats[catIdx]
+        else if (level = 2 && cats[catIdx] != FAV_CAT && cats[catIdx] != REC_CAT)
+            preset := cats[catIdx]
+        else if IsObject(cur)
+            preset := cur[4]
+    }
+    ShowSaveDialog(preset, pmap)
+}
+
 AddPress() {
     global catIdx
-    if (level = 0)
+    if (level = 0 || level = 4)
         return
     mapFile := CurrentMapFile()
     if (mapFile = "") {
@@ -1749,7 +1886,7 @@ BuildOverlay() {
     g.SetFont("s" FS(10) " bold c" cHint, fText)
     hintCtl := g.Add("Text", "w" W " r3", "")
     g.SetFont("s" FS(9) " norm c" cFoot, fText)
-    g.Add("Text", "w" W, "Haut/Bas : naviguer   Droite/Entrée : valider   Gauche : retour   Échap : fermer`n" ToggleKey " : ouvrir/fermer   " RepeatKey " : relancer le dernier stuff   " SaveKey " : sauvegarder la position`n" SettingsKey " : réglages du menu (couleur, police, taille, position)`n" ExecKey " : relancer l'exec de " PracticeCfg "`n" ManageKey " : gérer les stuffs et les catégories (déplacer, renommer…)`n" ShareKey " : profils et partage de stuffs (export / import)`nCtrl+Z (menu ouvert) : annuler la dernière suppression de stuff")
+    g.Add("Text", "w" W, "Haut/Bas : naviguer   Droite/Entrée : valider   Gauche : retour   Échap : fermer`n" MenuKey " : ouvrir / fermer le menu`n" FavKey " : favori   " LockKey " : cadenas   " AddKey " : nouveau stuff (menu des stuffs)`nCtrl+Z : annuler la dernière suppression de stuff`nSauvegarde, réglages, gestion, profils, exec : tout est dans le menu.")
     if (ovBorder > 0) {
         gb := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
         gb.BackColor := BorderColor()
@@ -2323,7 +2460,7 @@ CatHasLockedItem(c) {
 }
 
 LockPress() {
-    if (level = 0)
+    if (level = 0 || level = 4 || utilMode)
         return
     key := ""
     label := ""
@@ -3012,10 +3149,16 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     curShot := shotFile
     shotRedone := false
     picSz := Min(ShotZoom, 160)
-    hasShot := (shotFile != "" && FileExist(shotFile))
-    picSrc := hasShot ? "*w" picSz " *h" picSz " " shotFile : ""
+    hasShot := ShotValid(shotFile)
     d.Add("Text", "xm y+10 w110", "Capture")
-    picShot := d.Add("Picture", "x130 yp-3 w" picSz " h" picSz, picSrc)
+    picShot := d.Add("Picture", "x130 yp-3 w" picSz " h" picSz, "")
+    if hasShot {
+        try {
+            picShot.Value := "*w" picSz " *h" picSz " " shotFile
+        } catch {
+            hasShot := false
+        }
+    }
     btnShotNew := d.Add("Button", "x+12 yp w210", "Refaire la capture (en jeu)")
     btnShotDel := d.Add("Button", "xp y+6 w210", "Supprimer la capture")
     btnShotDel.Enabled := hasShot
@@ -3170,7 +3313,8 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
         if ok {
             shotRedone := true
             curShot := sp
-            picShot.Value := "*w" picSz " *h" picSz " " sp
+            shotOk[sp] := 1
+            try picShot.Value := "*w" picSz " *h" picSz " " sp
             btnShotDel.Enabled := true
         } else {
             MsgBox("Capture impossible.", "Modifier", 0x40030)
@@ -3440,6 +3584,113 @@ ConvertImage(src, dest, fmt) {
     return (ok && FileExist(dest))
 }
 
+; Charge une image (tout format lisible par GDI+) et renvoie un HBITMAP (ou 0)
+LoadHBitmapGdip(path) {
+    DllCall("LoadLibrary", "Str", "gdiplus")
+    si := Buffer(24, 0)
+    NumPut("UInt", 1, si, 0)
+    token := 0
+    DllCall("gdiplus\GdiplusStartup", "Ptr*", &token, "Ptr", si, "Ptr", 0)
+    img := 0
+    hbm := 0
+    if (DllCall("gdiplus\GdipCreateBitmapFromFile", "WStr", path, "Ptr*", &img) = 0 && img) {
+        DllCall("gdiplus\GdipCreateHBITMAPFromBitmap", "Ptr", img, "Ptr*", &hbm, "UInt", 0xFF000000)
+        DllCall("gdiplus\GdipDisposeImage", "Ptr", img)
+    }
+    DllCall("gdiplus\GdiplusShutdown", "Ptr", token)
+    return hbm
+}
+
+; Écrit un HBITMAP en .bmp 24 bits classique (lisible partout, y compris par les contrôles Picture)
+SaveHBitmapBmp24(hbm, dest) {
+    bm := Buffer(32, 0)
+    DllCall("GetObject", "Ptr", hbm, "Int", 32, "Ptr", bm)
+    w := NumGet(bm, 4, "Int")
+    h := NumGet(bm, 8, "Int")
+    if (w < 1 || h < 1)
+        return false
+    stride := ((w * 3 + 3) // 4) * 4
+    imgSize := stride * h
+    bi := Buffer(40, 0)
+    NumPut("UInt", 40, bi, 0)
+    NumPut("Int", w, bi, 4)
+    NumPut("Int", h, bi, 8)
+    NumPut("UShort", 1, bi, 12)
+    NumPut("UShort", 24, bi, 14)
+    NumPut("UInt", imgSize, bi, 20)
+    hdcScr := DllCall("GetDC", "Ptr", 0, "Ptr")
+    hdcSrc := DllCall("CreateCompatibleDC", "Ptr", hdcScr, "Ptr")
+    hdcDst := DllCall("CreateCompatibleDC", "Ptr", hdcScr, "Ptr")
+    bits := 0
+    dib := DllCall("CreateDIBSection", "Ptr", hdcScr, "Ptr", bi, "UInt", 0, "Ptr*", &bits, "Ptr", 0, "UInt", 0, "Ptr")
+    ok := false
+    if (dib && bits) {
+        old1 := DllCall("SelectObject", "Ptr", hdcSrc, "Ptr", hbm, "Ptr")
+        old2 := DllCall("SelectObject", "Ptr", hdcDst, "Ptr", dib, "Ptr")
+        DllCall("BitBlt", "Ptr", hdcDst, "Int", 0, "Int", 0, "Int", w, "Int", h, "Ptr", hdcSrc, "Int", 0, "Int", 0, "UInt", 0x00CC0020)
+        try {
+            hdr := Buffer(54, 0)
+            NumPut("UShort", 0x4D42, hdr, 0)
+            NumPut("UInt", 54 + imgSize, hdr, 2)
+            NumPut("UInt", 54, hdr, 10)
+            Loop 40
+                NumPut("UChar", NumGet(bi, A_Index - 1, "UChar"), hdr, 14 + A_Index - 1)
+            f := FileOpen(dest, "w")
+            f.RawWrite(hdr, 54)
+            f.RawWrite(bits, imgSize)
+            f.Close()
+            ok := true
+        }
+        DllCall("SelectObject", "Ptr", hdcSrc, "Ptr", old1)
+        DllCall("SelectObject", "Ptr", hdcDst, "Ptr", old2)
+        DllCall("DeleteObject", "Ptr", dib)
+    }
+    DllCall("DeleteDC", "Ptr", hdcSrc)
+    DllCall("DeleteDC", "Ptr", hdcDst)
+    DllCall("ReleaseDC", "Ptr", 0, "Ptr", hdcScr)
+    return ok
+}
+
+; Convertit n'importe quelle image en .bmp 24 bits
+ImageToBmp24(src, dest) {
+    hbm := LoadHBitmapGdip(src)
+    if !hbm
+        return false
+    ok := SaveHBitmapBmp24(hbm, dest)
+    DllCall("DeleteObject", "Ptr", hbm)
+    return (ok && FileExist(dest)) ? true : false
+}
+
+; Vérifie qu'une capture est lisible ; sinon tente de la réparer (ancien format) ou renvoie false
+ShotValid(path) {
+    if (path = "" || !FileExist(path))
+        return false
+    if shotOk.Has(path)
+        return true
+    good := false
+    try {
+        h := LoadPicture(path)
+        if h {
+            DllCall("DeleteObject", "Ptr", h)
+            good := true
+        }
+    }
+    if !good {
+        tmp := path ".fix"
+        try FileDelete(tmp)
+        if ImageToBmp24(path, tmp) {
+            try {
+                FileMove(tmp, path, 1)
+                good := true
+            }
+        }
+        try FileDelete(tmp)
+    }
+    if good
+        shotOk[path] := 1
+    return good
+}
+
 ; Fichier -> texte base64 (une seule ligne)
 FileToB64(path) {
     try data := FileRead(path, "RAW")
@@ -3601,8 +3852,10 @@ SaveImportedShot(imgs, e, cmd, prof, overwrite, tmpImg, stats) {
     if !B64ToFile(imgs[key], tmpImg)
         return
     DirCreate(ShotDir(prof))
-    if ConvertImage(tmpImg, dest, "bmp")
+    if ImageToBmp24(tmpImg, dest) {
+        shotOk[dest] := 1
         stats["img"] += 1
+    }
 }
 
 ; policy : 1 = ignorer les doublons, 2 = garder les deux, 3 = remplacer
@@ -3768,8 +4021,12 @@ ShowImport(txt, ownerHwnd) {
         ik := e[1] "|" e[2] "|" e[3]
         tmpP := A_Temp "\stuffshot_preview.jpg"
         if (imgs.Has(ik) && B64ToFile(imgs[ik], tmpP)) {
-            picPrev.Value := "*w130 *h130 " tmpP
-            picPrev.Visible := true
+            try {
+                picPrev.Value := "*w130 *h130 " tmpP
+                picPrev.Visible := true
+            } catch {
+                picPrev.Visible := false
+            }
         } else {
             picPrev.Visible := false
         }
@@ -4116,6 +4373,10 @@ UndoLast() {
 }
 
 UndoPress() {
+    if (level = 4 || utilMode) {
+        SetStatus("Ouvre d'abord le menu des stuffs.")
+        return
+    }
     r := UndoLast()
     if !IsObject(r) {
         SetStatus("Rien à annuler")
@@ -4526,13 +4787,7 @@ InGame(*) => WinActive("ahk_exe cs2.exe")
 MenuActive(*) => menuOpen && WinActive("ahk_exe cs2.exe")
 
 HotIf(InGame)
-Hotkey(ToggleKey, (*) => Toggle())
-Hotkey(RepeatKey, (*) => RepeatLast())
-Hotkey(SaveKey, (*) => ShowSaveDialog())
-Hotkey(SettingsKey, (*) => ShowSettings())
-Hotkey(ExecKey, (*) => ForceExec())
-Hotkey(ManageKey, (*) => ShowManager())
-Hotkey(ShareKey, (*) => ShowShare())
+Hotkey(MenuKey, (*) => Toggle())
 
 HotIf(MenuActive)
 Hotkey("Up", (*) => Move(-1))
@@ -4546,8 +4801,7 @@ Hotkey("Esc", (*) => EscKey())
 Hotkey("Tab", (*) => TabKey())
 Hotkey(FavKey, (*) => ToggleFav())
 Hotkey(LockKey, (*) => LockPress())
-Hotkey(DelKey, (*) => DelPress())
-Hotkey(AddKey, (*) => AddPress())
+Hotkey(AddKey, (*) => NewStuffPress())
 Hotkey("^z", (*) => UndoPress())
 HotIf()
 
