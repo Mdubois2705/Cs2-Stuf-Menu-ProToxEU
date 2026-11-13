@@ -82,7 +82,6 @@ Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dan
 - La fréquence se règle avec `HudInterval` (en ms, 300 par défaut) ; `HudAtStart=1` l'affiche dès le lancement du script.
 - Pendant que l'affichage est actif, le script envoie une touche (`kp_multiply`) à chaque mise à jour : **désactive-le avant d'ouvrir la console ou le chat**, sinon le caractère `*` s'y écrit.
 - Il se met en pause quand le menu ou une fenêtre du script est ouverte, et quand CS2 n'est pas la fenêtre active.
-- Comme l'overlay, il peut être masqué par le plein écran exclusif.
 
 ## Profils et partage
 
@@ -125,14 +124,6 @@ Réglages dans `config.ini` :
 
 Avec `ConsoleKey` vide, l'exec passe par la touche liée au menu, créée par ton premier `exec cs2_practice` manuel. Avec `ConsoleKey` renseignée, le script ouvre la console, tape la commande et la referme lui-même, sans exec manuel. Utilise-la seulement si la touche est la bonne : sinon les lettres tapées arrivent dans le jeu.
 
-## Plein écran et 4:3 étiré
-
-Le plein écran fenêtré n'est pas obligatoire : les raccourcis et l'envoi des commandes fonctionnent dans tous les modes d'affichage. Seul l'**affichage de l'overlay** peut être masqué par le plein écran exclusif. Teste d'abord avec `F7` dans ton mode habituel. Si le menu n'apparaît pas :
-
-- **Mets le menu sur un deuxième écran** : `F10` > réglages de position X / Y, tu gardes ton plein écran.
-- **4:3 étiré en plein écran fenêtré** : crée une résolution 4:3 dans le panneau de ta carte graphique avec mise à l'échelle GPU en plein écran, mets Windows à cette résolution, puis choisis « Plein écran fenêtré » dans CS2.
-- **Sinon**, passe en plein écran fenêtré à la résolution du bureau.
-
 ## Ajouter des stuffs
 
 **Depuis le jeu (F9)** : place-toi au bon endroit, vise, appuie sur `F9`, puis remplis la map, le type, la catégorie, le nom et le message du chat.
@@ -168,7 +159,7 @@ data/                 favoris, récents, copies de sécurité (non versionné)
 
 ## Dépannage
 
-- **Le menu n'apparaît pas** : vérifie que le script tourne, puis essaie le plein écran fenêtré ou place le menu sur un autre écran (voir [Plein écran et 4:3 étiré](#plein-écran-et-43-étiré)).
+- **Le menu n'apparaît pas** : vérifie que le script tourne et que CS2 est en mode fenêtré (plein écran fenêtré). Tu peux aussi placer le menu sur un autre écran avec `F10` (réglages de position).
 - **La map n'est pas détectée** : vérifie `-condebug`, ou règle `AutoDetectMap=0` dans `config.ini`.
 - **TP, give, God mode ou bot ne marchent plus** : ces commandes exigent `sv_cheats 1`. Le script l'envoie avant chaque commande ; si ça ne marche toujours pas, vérifie que tu es bien dans une partie locale (pas en matchmaking). Test rapide : tape `setpos 0 0 0` dans la console.
 - **Rien ne se passe au choix d'un stuff** : vérifie `CfgPath` et que tu as lancé `exec cs2_practice` au moins une fois à la main (il relie la touche `kp_multiply` au fichier généré).
