@@ -157,6 +157,14 @@ maps/                 un fichier .txt par map + _commun.txt
 data/                 favoris, récents, copies de sécurité (non versionné)
 ```
 
+## Mise à jour
+
+- **Automatique** : au lancement, le script regarde s'il existe une version plus récente sur GitHub. Si oui, il te propose de l'installer ; accepte et il redémarre tout seul. Pour désactiver la vérification : `AutoUpdate=0` dans `config.ini`.
+- **Sans le script** : ferme le script, puis double-clique sur `update.bat`. Il télécharge la dernière version et remplace les fichiers du programme.
+- **Avec Git** : `git pull` dans le dossier.
+
+Dans tous les cas, `maps\`, `data\`, `profiles\` et `config.ini` ne sont jamais modifiés : tes stuffs, favoris, profils et réglages restent en place. L'ancien script est copié dans `data\backup\stuff_menu.ahk.bak`. Si `cs2_practice.cfg` change (voir le CHANGELOG), recopie-le dans le dossier cfg de CS2.
+
 ## Dépannage
 
 - **Le menu n'apparaît pas** : vérifie que le script tourne et que CS2 est en mode fenêtré (plein écran fenêtré). Tu peux aussi placer le menu sur un autre écran avec `F10` (réglages de position).

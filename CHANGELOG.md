@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.2.0
+
+- Les maps vides sont fournies dans maps_default\ ; maps\ (tes stuffs) est exclu de git.
+- Profils et partage : plusieurs profils, export (fichier .stuffpack ou code) et import sans écraser (touche F1).
+- Correction de la hauteur de téléportation (TpZOffset).
+- Modification complète d'un stuff depuis la gestion : type, catégorie, nom, coordonnées, commandes, info (double-clic).
+- Coordonnées en temps réel dans le coin inférieur gauche (touche Insert).
+- Mise à jour automatique au lancement (option `AutoUpdate`) et `update.bat` pour mettre à jour en double-clic.
+
 ## v2.1.0
 
 - Exec automatique du cfg d'entraînement à l'ouverture du menu (une fois par map détectée), et `F6` pour le relancer.
@@ -7,11 +16,6 @@
 - Titre du menu configurable (`Title` dans `config.ini`).
 - Option `ConsoleKey` pour que le script tape l'exec dans la console.
 - Fenêtre de sauvegarde : la liste des catégories propose toutes les catégories existantes de la map.
-- Les maps vides sont fournies dans maps_default\ ; maps\ (tes stuffs) est exclu de git.
-- Profils et partage : plusieurs profils, export (fichier .stuffpack ou code) et import sans écraser (touche F1).
-- Correction de la hauteur de téléportation (TpZOffset).
-- Modification complète d'un stuff depuis la gestion : type, catégorie, nom, coordonnées, commandes, info (double-clic).
-- Coordonnées en temps réel dans le coin inférieur gauche (touche Insert).
 - Fenêtre de gestion (F11) : déplacer des stuffs entre catégories, renommer, modifier l'info, supprimer, verrouiller.
 - Supprimer une catégorie ne supprime plus ses stuffs : ils sont déplacés dans « Non classés ».
 - Cadenas (F5) sur les catégories et les stuffs : un élément verrouillé ne peut pas être supprimé depuis le menu. « Utilitaires » est verrouillée par défaut.

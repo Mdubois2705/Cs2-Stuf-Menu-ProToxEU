@@ -36,6 +36,7 @@ SettingsKey := IniRead(IniFile, "Settings", "SettingsKey", "F10")
 LockKey := IniRead(IniFile, "Settings", "LockKey", "F5")
 ManageKey := IniRead(IniFile, "Settings", "ManageKey", "F11")
 TpZOffset := Number(IniRead(IniFile, "Settings", "TpZOffset", "-64"))
+AutoUpdate := (IniRead(IniFile, "Settings", "AutoUpdate", "1") = "1")
 ShareKey := IniRead(IniFile, "Settings", "ShareKey", "F1")
 HudKey := IniRead(IniFile, "Settings", "HudKey", "Insert")
 HudInterval := Max(100, ToInt(IniRead(IniFile, "Settings", "HudInterval", "300"), 300))
@@ -77,6 +78,8 @@ if (curProfile = DEFAULT_PROFILE && DirExist(A_ScriptDir "\maps_default")) {
 }
 
 ; ---------- Constantes ----------
+APP_VERSION := "2.2.0"   ; à garder identique au fichier VERSION du dépôt
+UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 FAV_CAT := "[Favoris]"
 REC_CAT := "[Récents]"
 LOCK_ICON := "🔒"   ; si le cadenas s'affiche comme un carré, remplace par "[L]"
@@ -3000,6 +3003,77 @@ ShowShare() {
 }
 
 ; =====================================================================
+;  Mise à jour automatique (depuis GitHub)
+; =====================================================================
+; Compare le fichier VERSION du dépôt avec APP_VERSION. Si une version plus récente existe et que
+; tu acceptes, télécharge l'archive et remplace seulement les fichiers du programme.
+; maps\, data\, profiles\ et config.ini ne sont jamais touchés.
+CheckUpdate() {
+    tmp := A_Temp "\cs2stuff_version.txt"
+    try FileDelete(tmp)
+    try {
+        Download("https://raw.githubusercontent.com/" UPDATE_REPO "/main/VERSION", tmp)
+        remote := Trim(FileRead(tmp), " `t`r`n")
+    } catch {
+        return
+    }
+    if !RegExMatch(remote, "^\d+(\.\d+)*$")
+        return
+    if (VerCompare(remote, APP_VERSION) <= 0)
+        return
+    msg := "Une nouvelle version est disponible : " remote " (tu as la " APP_VERSION ").`n`n"
+    msg .= "Mettre à jour maintenant ?`nTes stuffs, favoris, profils et réglages ne sont pas touchés."
+    ans := MsgBox(msg, "Mise à jour du menu", 0x40024)
+    if (ans = "Yes")
+        InstallUpdate()
+}
+
+InstallUpdate() {
+    base := A_Temp "\cs2stuff_update"
+    try DirDelete(base, true)
+    DirCreate(base)
+    zip := base "\u.zip"
+    q := "'"
+    dq := Chr(34)
+    try {
+        Download("https://github.com/" UPDATE_REPO "/archive/refs/heads/main.zip", zip)
+        cmd := "powershell -NoProfile -ExecutionPolicy Bypass -Command " dq "Expand-Archive -LiteralPath " q zip q " -DestinationPath " q base "\x" q " -Force" dq
+        RunWait(cmd, , "Hide")
+    } catch as err {
+        MsgBox("Téléchargement impossible : " err.Message "`n`nRien n'a été modifié.", "Mise à jour du menu", 0x40010)
+        return
+    }
+    src := ""
+    Loop Files base "\x\*", "D" {
+        src := A_LoopFileFullPath
+        break
+    }
+    if (src = "" || !FileExist(src "\stuff_menu.ahk") || !FileExist(src "\VERSION")) {
+        MsgBox("L'archive téléchargée est invalide.`n`nRien n'a été modifié.", "Mise à jour du menu", 0x40010)
+        return
+    }
+    DirCreate(DataDir "\backup")
+    try FileCopy(A_ScriptFullPath, DataDir "\backup\stuff_menu.ahk.bak", 1)
+    try {
+        for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1"] {
+            if FileExist(src "\" fn)
+                FileCopy(src "\" fn, A_ScriptDir "\" fn, 1)
+        }
+        if DirExist(src "\maps_default") {
+            DirCreate(A_ScriptDir "\maps_default")
+            Loop Files src "\maps_default\*.txt"
+                FileCopy(A_LoopFileFullPath, A_ScriptDir "\maps_default\" A_LoopFileName, 1)
+        }
+    } catch as err {
+        try FileCopy(DataDir "\backup\stuff_menu.ahk.bak", A_ScriptDir "\stuff_menu.ahk", 1)
+        MsgBox("La mise à jour a échoué : " err.Message "`n`nL'ancien script a été restauré.", "Mise à jour du menu", 0x40010)
+        return
+    }
+    MsgBox("Mise à jour terminée. Le menu va redémarrer.", "Mise à jour du menu", 0x40040)
+    Reload()
+}
+
+; =====================================================================
 ;  Raccourcis (actifs uniquement dans CS2)
 ; =====================================================================
 InGame(*) => WinActive("ahk_exe cs2.exe")
@@ -3033,3 +3107,5 @@ HotIf()
 
 if HudAtStart
     HudToggle()
+if AutoUpdate
+    SetTimer(CheckUpdate, -4000)
