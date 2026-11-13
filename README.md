@@ -88,7 +88,7 @@ L'affichage s'active dans « Réglages du menu », onglet **Coordonnées** (pas 
 Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dans `console.log` (option `-condebug`). Il ne lit pas la mémoire du jeu.
 
 - La fréquence se règle avec `HudInterval` (en ms, 300 par défaut) . `HudAtStart` (0 ou 1) est géré par la case des réglages.
-- Pendant que l'affichage est actif, le script envoie une touche (`kp_multiply`) à chaque mise à jour : **désactive-le avant d'ouvrir la console ou le chat**, sinon le caractère `*` s'y écrit.
+- Pendant que l'affichage est actif, le script envoie une touche (`kp_slash`, le `/` du pavé numérique) à chaque mise à jour, avec son propre fichier `hud_pos.cfg` : il n'utilise pas la touche ni le fichier des stuffs et fait une pause de 2 secondes après chaque stuff lancé. **Désactive-le quand même avant d'ouvrir la console ou le chat**, sinon le caractère `/` s'y écrit.
 - Il se met en pause quand le menu ou une fenêtre du script est ouverte, et quand CS2 n'est pas la fenêtre active.
 
 ## Profils et partage

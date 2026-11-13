@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.10.1
+
+- Coordonnées en temps réel : elles ont leur propre fichier (`hud_pos.cfg`) et leur propre touche (`kp_slash`) et ne réécrivent plus `stuff_run.cfg` en boucle. Pause de 2 secondes après chaque commande du menu. Corrige un stuff (avec `give`) rejoué en boucle quand les coordonnées étaient actives. La liaison de la touche se fait toute seule à l'activation, sans refaire `exec cs2_practice`.
+
 ## v2.10.0
 
 - La catégorie « Utilitaires » (bots, God mode, noclip, kit d'armes…) passe dans le menu principal et n'apparaît plus dans la liste des catégories de chaque map. Elle reste modifiable dans la fenêtre de gestion (« Communs »).

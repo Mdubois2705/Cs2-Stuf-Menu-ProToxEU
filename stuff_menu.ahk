@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.10.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.10.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -178,6 +178,8 @@ hudTxt := ""
 hudLast := ""
 hudPos := 0         ; position de lecture dans console.log
 cmdBusy := 0        ; > 0 pendant l'envoi d'une commande au jeu
+lastCmdTick := 0    ; moment du dernier envoi de commande (pause des coordonnées après un stuff)
+hudBound := false   ; la touche des coordonnées est liée dans le jeu
 chkGui := ""        ; fenêtre de vérification de l'installation
 chkHead := ""
 chkTxt := ""
@@ -403,6 +405,8 @@ WriteAndExec(cmd) {
 }
 
 WriteAndExecRaw(cmd) {
+    global lastCmdTick
+    lastCmdTick := A_TickCount
     cmd := "sv_cheats 1; " cmd   ; setpos, give, god, bot_place... exigent sv_cheats 1
     try FileDelete(CfgPath)
     FileAppend(cmd "`n", CfgPath, "UTF-8-RAW")
@@ -2137,7 +2141,7 @@ ShowSettings() {
     txHudY := d.Add("Text", "x406 y" ty " w70", "")
     y += 46
     d.SetFont("s9 c8A8F96")
-    d.Add("Text", "x22 y" y " w460 r8", "Affiche la map, ta position (X, Y, Z) et ton angle de vue dans le coin inférieur gauche de l'écran.`n`nSi tu l'actives puis cliques sur Enregistrer, il reste activé à chaque lancement du script, jusqu'à ce que tu le désactives ici.`n`nAttention : le script envoie une touche (kp_multiply) à chaque mise à jour. Désactive l'affichage avant d'ouvrir la console ou le chat, sinon le caractère * s'y écrit.")
+    d.Add("Text", "x22 y" y " w460 r8", "Affiche la map, ta position (X, Y, Z) et ton angle de vue dans le coin inférieur gauche de l'écran.`n`nSi tu l'actives puis cliques sur Enregistrer, il reste activé à chaque lancement du script, jusqu'à ce que tu le désactives ici.`n`nAttention : le script envoie une touche (kp_slash, le / du pavé numérique) à chaque mise à jour, avec son propre fichier : il ne gêne plus les stuffs. Désactive quand même l'affichage avant d'ouvrir la console ou le chat, sinon le caractère / s'y écrit.")
     d.SetFont("s10 cDefault")
     y += 150
     yEnd3 := y
@@ -3449,7 +3453,36 @@ HudTick() {
     ; 2) demander la position suivante (pas pendant un menu ou une fenêtre)
     if (menuOpen || dlgOpen || mgrOpen || setOpen)
         return
-    WriteAndExec("getpos")
+    ; pause de 2 s après chaque commande du menu (stuff, utilitaire...) pour ne jamais la gêner
+    if (A_TickCount - lastCmdTick < 2000)
+        return
+    HudPing()
+}
+
+; Les coordonnées ont leur propre fichier (hud_pos.cfg) et leur propre touche (kp_slash, / du pavé numérique) :
+; elles ne touchent jamais à stuff_run.cfg ni à la touche des stuffs.
+HudPing() {
+    global hudBound
+    if !hudBound {
+        WriteAndExec('bind "kp_slash" "exec hud_pos"')
+        hudBound := true
+        return
+    }
+    Send("{NumpadDiv down}")
+    Sleep(40)
+    Send("{NumpadDiv up}")
+}
+
+; Crée hud_pos.cfg (contenu fixe) dans le dossier cfg de CS2
+HudWriteCfg() {
+    f := cfgDir "\hud_pos.cfg"
+    want := "sv_cheats 1; getpos`n"
+    try {
+        if (!FileExist(f) || FileRead(f) != want) {
+            try FileDelete(f)
+            FileAppend(want, f, "UTF-8-RAW")
+        }
+    }
 }
 
 ; Affiche (true) ou masque (false) les coordonnées
@@ -3461,9 +3494,11 @@ HudSet(on) {
 }
 
 HudToggle() {
-    global hudOn, hudPos, hudLast
+    global hudOn, hudPos, hudLast, hudBound
     hudOn := !hudOn
     if hudOn {
+        hudBound := false
+        HudWriteCfg()
         hudPos := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : 0
         hudLast := FileExist(ConsoleLog) ? "En attente de la position..." : "console.log introuvable (-condebug ?)"
         BuildHud()
