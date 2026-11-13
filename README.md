@@ -182,3 +182,7 @@ Les lineups des maps sont dans `maps/` : les pull requests avec de nouveaux rep�
 ## Licence
 
 [MIT](LICENSE)
+
+## Où sont mes stuffs ?
+
+Le dépôt ne contient aucun stuff : il fournit des maps vides dans `maps_default\`. Au premier lancement, le script les copie dans `maps\`, ton dossier personnel. Le dossier `maps\` (comme `data\` et `profiles\`) est exclu de git : tes stuffs ne sont jamais envoyés sur GitHub, même avec `git add .`, et une mise à jour du script ne les écrase pas.

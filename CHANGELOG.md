@@ -7,6 +7,7 @@
 - Titre du menu configurable (`Title` dans `config.ini`).
 - Option `ConsoleKey` pour que le script tape l'exec dans la console.
 - Fenêtre de sauvegarde : la liste des catégories propose toutes les catégories existantes de la map.
+- Les maps vides sont fournies dans maps_default\ ; maps\ (tes stuffs) est exclu de git.
 - Profils et partage : plusieurs profils, export (fichier .stuffpack ou code) et import sans écraser (touche F1).
 - Correction de la hauteur de téléportation (TpZOffset).
 - Modification complète d'un stuff depuis la gestion : type, catégorie, nom, coordonnées, commandes, info (double-clic).

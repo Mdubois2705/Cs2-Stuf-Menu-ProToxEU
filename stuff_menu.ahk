@@ -68,6 +68,13 @@ if (ConsoleLog = "") {
 }
 DirCreate(DataDir)
 DirCreate(MapsDir)
+; Premier lancement : copie les maps vides de maps_default\ (sans jamais écraser tes fichiers)
+if (curProfile = DEFAULT_PROFILE && DirExist(A_ScriptDir "\maps_default")) {
+    Loop Files A_ScriptDir "\maps_default\*.txt" {
+        if !FileExist(MapsDir "\" A_LoopFileName)
+            FileCopy(A_LoopFileFullPath, MapsDir "\" A_LoopFileName)
+    }
+}
 
 ; ---------- Constantes ----------
 FAV_CAT := "[Favoris]"
@@ -2418,7 +2425,9 @@ BuildHud() {
 
 ShowHud() {
     MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
-    hudGui.Show("NA AutoSize x" (ml + 12) " y" (mt + 12))
+    hx := ml + 12
+    hy := mt + 12
+    hudGui.Show("NA AutoSize x" hx " y" hy)
     hudGui.GetPos(, , , &hh)
     hudGui.Move(ml + 12, mb - hh - 12)
     WinSetTransparent(ovOpacity, hudGui)
@@ -2716,7 +2725,7 @@ ShowImport(txt, ownerHwnd) {
     lv.ModifyCol(3, 250)
     lv.ModifyCol(4, 140)
     d.SetFont("s9 c8A8F96")
-    note := "Pour un nouveau profil, écris simplement son nom dans la case. Tes autres stuffs ne sont jamais supprimés ; une copie de sécurité est faite avant l'import."
+    note := "Pour un nouveau profil, écris simplement son nom dans la case. Tes autres stuffs ne sont jamais supprimés, et une copie de sécurité est faite avant l'import."
     if (zdelta != 0)
         note .= "`nHauteur : les coordonnées sont ajustées de " zdelta " pour correspondre à ton réglage TpZOffset."
     d.Add("Text", "x12 y+8 w720 r3", note)
@@ -2831,17 +2840,21 @@ ShowShare() {
     lvEx.ModifyCol(4, 190)
     lvEx.GetPos(&lx, &ly, &lw, &lh)
     r1 := ly + lh + 8
+    yImpT := r1 + 48
+    yImpB := r1 + 74
+    yStat := r1 + 118
+    yClose := r1 + 148
     btnAll := d.Add("Button", "x12 y" r1 " w120", "Tout cocher")
     btnNone := d.Add("Button", "x+8 yp w120", "Tout décocher")
     btnFile := d.Add("Button", "x+8 yp w200", "Exporter vers un fichier…")
     btnCode := d.Add("Button", "x+8 yp w200", "Copier le code")
-    d.Add("Text", "x12 y" (r1 + 48) " w740", "Importer : reçu d'un ami ?")
-    btnImpF := d.Add("Button", "x12 y" (r1 + 74) " w240", "Importer un fichier .stuffpack…")
+    d.Add("Text", "x12 y" yImpT " w740", "Importer : reçu d'un ami ?")
+    btnImpF := d.Add("Button", "x12 y" yImpB " w240", "Importer un fichier .stuffpack…")
     btnImpC := d.Add("Button", "x+8 yp w300", "Importer depuis le presse-papiers (code)")
     d.SetFont("s10 c1B6E1B")
-    stT := d.Add("Text", "x12 y" (r1 + 118) " w740", "")
+    stT := d.Add("Text", "x12 y" yStat " w740", "")
     d.SetFont("s10 cDefault")
-    btnClose := d.Add("Button", "x12 y" (r1 + 148) " w120", "Fermer")
+    btnClose := d.Add("Button", "x12 y" yClose " w120", "Fermer")
 
     pick := 1
     for k, pn in ListProfiles() {
@@ -2855,7 +2868,8 @@ ShowShare() {
     }
 
     Fill() {
-        rows := []
+        while (rows.Length > 0)
+            rows.Pop()
         lvEx.Delete()
         for k, mn in mapNames {
             for ent in ReadEntries(mapFiles[k])[2] {
