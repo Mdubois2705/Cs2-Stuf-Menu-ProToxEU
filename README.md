@@ -19,7 +19,7 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 ## Prérequis
 
 - Windows et [AutoHotkey v2](https://www.autohotkey.com/)
-- Counter-Strike 2 en **plein écran fenêtré** recommandé, mais **pas obligatoire** (voir [Plein écran et 4:3 étiré](#plein-écran-et-43-étiré))
+- Counter-Strike 2
 - L'option de lancement Steam `-condebug` (détection de la map et capture de position)
 
 ## Installation
