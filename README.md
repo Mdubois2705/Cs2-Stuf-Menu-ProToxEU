@@ -157,6 +157,16 @@ maps/                 un fichier .txt par map + _commun.txt
 data/                 favoris, récents, copies de sécurité (non versionné)
 ```
 
+## Vérification de l'installation
+
+Au lancement, le script vérifie ce qui peut l'être sans CS2 : dossier cfg, `cs2_practice.cfg`, tes maps, droits d'écriture, présence de `console.log`. Une petite fenêtre affiche le résultat avec ✔, ⚠ ou ✘ et la solution de chaque problème.
+
+Lance ensuite CS2 et une map locale : dès que le jeu est au premier plan, le script teste l'envoi d'une commande (via `console.log`), les cheats et la détection de la map. S'il n'y a aucun problème, la fenêtre se ferme toute seule.
+
+- Pour relancer la vérification : bouton « Vérifier l'installation » dans la fenêtre `F1`.
+- Pour la désactiver : `AutoCheck=0` dans `config.ini`.
+- Le test d'envoi appuie sur la touche `*` du pavé numérique dans le jeu : ne laisse pas la console ni le chat ouverts pendant la vérification.
+
 ## Mise à jour
 
 - **Automatique** : au lancement, le script regarde s'il existe une version plus récente sur GitHub. Si oui, il te propose de l'installer ; accepte et il redémarre tout seul. Pour désactiver la vérification : `AutoUpdate=0` dans `config.ini`.

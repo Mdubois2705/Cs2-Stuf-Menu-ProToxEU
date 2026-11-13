@@ -7,6 +7,9 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
+APP_VERSION := "2.2.0"   ; à garder identique au fichier VERSION du dépôt
+UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
+
 ; ---------- Configuration ----------
 IniFile := A_ScriptDir "\config.ini"
 if (!FileExist(IniFile) && FileExist(A_ScriptDir "\config.example.ini"))
@@ -36,6 +39,7 @@ SettingsKey := IniRead(IniFile, "Settings", "SettingsKey", "F10")
 LockKey := IniRead(IniFile, "Settings", "LockKey", "F5")
 ManageKey := IniRead(IniFile, "Settings", "ManageKey", "F11")
 TpZOffset := Number(IniRead(IniFile, "Settings", "TpZOffset", "-64"))
+AutoCheck := (IniRead(IniFile, "Settings", "AutoCheck", "1") = "1")
 AutoUpdate := (IniRead(IniFile, "Settings", "AutoUpdate", "1") = "1")
 ShareKey := IniRead(IniFile, "Settings", "ShareKey", "F1")
 HudKey := IniRead(IniFile, "Settings", "HudKey", "Insert")
@@ -54,7 +58,10 @@ ovX := ToInt(IniRead(IniFile, "Overlay", "X", "30"), 30)
 ovY := ToInt(IniRead(IniFile, "Overlay", "Y", "100"), 100)
 ovOpacity := Max(80, Min(255, ToInt(IniRead(IniFile, "Overlay", "Opacity", "225"), 225)))
 ovBg := IniRead(IniFile, "Overlay", "Bg", "14181D")
-ovTitle := Trim(RegExReplace(IniRead(IniFile, "Overlay", "Title", "Menu Stuf V.2 ProToxEU"), "[`r`n`t]+", " "))
+ovTitle := Trim(RegExReplace(IniRead(IniFile, "Overlay", "Title", "Menu Stuf V.{version} ProToxEU"), "[`r`n`t]+", " "))
+if (ovTitle = "Menu Stuf V.2 ProToxEU")   ; ancien titre par défaut : suit maintenant la version
+    ovTitle := "Menu Stuf V.{version} ProToxEU"
+ovTitle := StrReplace(ovTitle, "{version}", APP_VERSION)
 if !RegExMatch(ovBg, "^[0-9A-Fa-f]{6}$")
     ovBg := "14181D"
 
@@ -78,8 +85,6 @@ if (curProfile = DEFAULT_PROFILE && DirExist(A_ScriptDir "\maps_default")) {
 }
 
 ; ---------- Constantes ----------
-APP_VERSION := "2.2.0"   ; à garder identique au fichier VERSION du dépôt
-UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 FAV_CAT := "[Favoris]"
 REC_CAT := "[Récents]"
 LOCK_ICON := "🔒"   ; si le cadenas s'affiche comme un carré, remplace par "[L]"
@@ -115,6 +120,14 @@ hudTxt := ""
 hudLast := ""
 hudPos := 0         ; position de lecture dans console.log
 cmdBusy := 0        ; > 0 pendant l'envoi d'une commande au jeu
+chkGui := ""        ; fenêtre de vérification de l'installation
+chkHead := ""
+chkTxt := ""
+chkP1 := []
+chkP2 := []
+chkAttempts := 0
+chkTicks := 0
+chkBusy := false
 g := ""
 titleCtl := ""
 listCtl := ""
@@ -2858,6 +2871,7 @@ ShowShare() {
     stT := d.Add("Text", "x12 y" yStat " w740", "")
     d.SetFont("s10 cDefault")
     btnClose := d.Add("Button", "x12 y" yClose " w120", "Fermer")
+    btnChk := d.Add("Button", "x+8 yp w220", "Vérifier l'installation")
 
     pick := 1
     for k, pn in ListProfiles() {
@@ -2996,10 +3010,199 @@ ShowShare() {
     btnNew.OnEvent("Click", NewProf)
     btnDelP.OnEvent("Click", DelProf)
     btnClose.OnEvent("Click", Finish)
+    btnChk.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
     d.OnEvent("Close", Finish)
     d.OnEvent("Escape", Finish)
     Fill()
     d.Show("AutoSize Center")
+}
+
+; =====================================================================
+;  Vérification de l'installation (au lancement, puis une fois CS2 lancé)
+; =====================================================================
+; Phase 1 : tout ce qui se vérifie sans CS2 (dossiers, fichiers).
+; Phase 2 : dès que CS2 est au premier plan, test réel d'envoi de commande via console.log.
+Check1() {
+    out := []
+    tf := cfgDir "\stuff_write_test.tmp"
+    okw := false
+    try {
+        FileAppend("test", tf)
+        FileDelete(tf)
+        okw := true
+    }
+    if okw
+        out.Push(["ok", "Dossier cfg de CS2 trouvé et accessible en écriture", ""])
+    else
+        out.Push(["fail", "Impossible d'écrire dans le dossier cfg de CS2", "Vérifie CfgPath dans config.ini (actuellement : " cfgDir ")"])
+
+    pc := cfgDir "\" PracticeCfg ".cfg"
+    if FileExist(pc)
+        out.Push(["ok", PracticeCfg ".cfg présent dans le dossier cfg", ""])
+    else
+        out.Push(["fail", PracticeCfg ".cfg introuvable dans le dossier cfg", "Copie cs2_practice.cfg (fourni avec le menu) dans " cfgDir])
+
+    nmaps := 0
+    Loop Files MapsDir "\de_*.txt"
+        nmaps += 1
+    if (nmaps > 0)
+        out.Push(["ok", "Profil « " curProfile " » : " nmaps " fichier(s) de map trouvé(s)", ""])
+    else
+        out.Push(["fail", "Aucun fichier de map dans " MapsDir, "Relance le script avec le dossier maps_default à côté de stuff_menu.ahk"])
+
+    okd := false
+    try {
+        DirCreate(DataDir)
+        FileAppend("test", DataDir "\write_test.tmp")
+        FileDelete(DataDir "\write_test.tmp")
+        okd := true
+    }
+    if okd
+        out.Push(["ok", "Dossier data accessible en écriture (favoris, cadenas, sauvegardes)", ""])
+    else
+        out.Push(["fail", "Impossible d'écrire dans le dossier data", "Déplace le menu dans un dossier où tu peux écrire (Bureau, Documents)"])
+
+    if FileExist(ConsoleLog)
+        out.Push(["ok", "console.log trouvé", ""])
+    else
+        out.Push(["warn", "console.log pas encore créé", "Normal si CS2 n'a jamais tourné avec -condebug : ajoute -condebug dans les options de lancement de CS2 (Steam), puis lance le jeu"])
+    return out
+}
+
+; Renvoie [liste, envoiOk, peutReessayer]
+Check2() {
+    out := []
+    if !FileExist(ConsoleLog) {
+        out.Push(["fail", "console.log introuvable alors que CS2 est lancé", "Ajoute -condebug dans les options de lancement de CS2 (Steam), puis relance le jeu"])
+        return [out, false, false]
+    }
+    out.Push(["ok", "console.log présent", ""])
+    ; même commande que la détection de map : si le jeu répond, l'envoi fonctionne
+    txt := RunAndReadLog("status", "main lump|hostname|Not connected|loopback|spawngroup")
+    if !RegExMatch(txt, "i)main lump|hostname|Not connected|loopback|spawngroup") {
+        out.Push(["fail", "Test d'envoi de commande : pas de réponse du jeu", "Entre dans une partie (map locale) sans ouvrir la console, puis clique sur Relancer la vérification. Si ça persiste, tape une fois exec " PracticeCfg " dans la console de CS2, puis relance la vérification"])
+        return [out, false, true]
+    }
+    out.Push(["ok", "Envoi de commandes vers CS2 : fonctionne", ""])
+    ; lit toute la réponse du jeu (le motif ne correspond jamais : on récupère tout le texte reçu)
+    ct := RunAndReadLog("sv_cheats", "MOTIF_JAMAIS_TROUVE")
+    cv := ""
+    if RegExMatch(ct, "i)sv_cheats`"?\s*[=:]\s*`"?(\w+)", &cm)
+        cv := StrLower(cm[1])
+    if (cv = "0" || cv = "false")
+        out.Push(["warn", "sv_cheats est désactivé", "Lance une map locale (pas de serveur ni de matchmaking)"])
+    else
+        out.Push(["ok", "Cheats : le menu envoie sv_cheats 1 avec chaque commande", ""])
+    LoadMaps()
+    mp := DetectMap()
+    if (mp != "")
+        out.Push(["ok", "Map détectée : " mp, ""])
+    else
+        out.Push(["warn", "Map non détectée (normal dans le menu principal)", "Entre dans une map locale pour que le menu s'ouvre sur la bonne map"])
+    return [out, true, false]
+}
+
+CheckLine(r) {
+    icon := (r[1] = "ok") ? "✔" : (r[1] = "warn") ? "⚠" : "✘"
+    ln := icon "  " r[2] "`n"
+    if (r[1] != "ok" && r[3] != "")
+        ln .= "      → " r[3] "`n"
+    return ln
+}
+
+CheckRender(head) {
+    if !IsObject(chkGui)
+        return
+    chkHead.Text := head
+    out := ""
+    for r in chkP1
+        out .= CheckLine(r)
+    for r in chkP2
+        out .= CheckLine(r)
+    chkTxt.Text := out
+}
+
+CheckClose(*) {
+    global chkGui
+    SetTimer(CheckTick, 0)
+    SetTimer(CheckClose, 0)
+    if IsObject(chkGui) {
+        try chkGui.Destroy()
+    }
+    chkGui := ""
+}
+
+StartCheck(*) {
+    global chkGui, chkHead, chkTxt, chkP1, chkP2, chkAttempts, chkTicks, chkBusy
+    CheckClose()
+    chkP1 := Check1()
+    chkP2 := []
+    chkAttempts := 0
+    chkTicks := 0
+    chkBusy := false
+    chkGui := Gui("+AlwaysOnTop", "Vérification de l'installation")
+    chkGui.SetFont("s10", "Segoe UI")
+    chkHead := chkGui.Add("Text", "x12 y12 w620 r2", "")
+    chkTxt := chkGui.Add("Text", "x12 y+10 w620 r16", "")
+    btnRe := chkGui.Add("Button", "x12 y+12 w220", "Relancer la vérification")
+    btnX := chkGui.Add("Button", "x+10 yp w120", "Fermer")
+    btnRe.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
+    btnX.OnEvent("Click", CheckClose)
+    chkGui.OnEvent("Close", CheckClose)
+    chkGui.OnEvent("Escape", CheckClose)
+    CheckRender("Vérification en cours...")
+    chkGui.Show("AutoSize NoActivate")
+    SetTimer(CheckTick, 2000)
+    CheckTick()
+}
+
+CheckTick() {
+    global chkAttempts, chkTicks, chkP2, chkBusy
+    if !IsObject(chkGui) {
+        SetTimer(CheckTick, 0)
+        return
+    }
+    if chkBusy
+        return
+    if !ProcessExist("cs2.exe") {
+        CheckRender("Étape 1 terminée. Lance maintenant CS2 puis une map d'entraînement locale.`nLa suite de la vérification se fera toute seule.")
+        return
+    }
+    if (!WinActive("ahk_exe cs2.exe") || menuOpen || dlgOpen) {
+        CheckRender("CS2 détecté. Clique dans le jeu et reste dans la partie pour finir la vérification.")
+        return
+    }
+    chkTicks += 1
+    if (chkTicks < 2) {
+        CheckRender("CS2 détecté. Vérification dans un instant...")
+        return
+    }
+    if (chkAttempts > 0 && Mod(chkTicks, 3) != 0)
+        return
+    chkBusy := true
+    try {
+        chkAttempts += 1
+        res := Check2()
+        chkP2 := res[1]
+        if (res[2] || !res[3] || chkAttempts >= 30) {
+            SetTimer(CheckTick, 0)
+            bad := 0
+            for r in chkP1
+                bad += (r[1] != "ok") ? 1 : 0
+            for r in chkP2
+                bad += (r[1] != "ok") ? 1 : 0
+            if (bad = 0) {
+                CheckRender("Tout est bon. Cette fenêtre se ferme toute seule.")
+                SetTimer(CheckClose, -5000)
+            } else {
+                CheckRender("Certains points demandent ton attention (voir ci-dessous).")
+            }
+        } else {
+            CheckRender("Attente de la partie... (essai " chkAttempts "/30)")
+        }
+    } finally {
+        chkBusy := false
+    }
 }
 
 ; =====================================================================
@@ -3107,5 +3310,7 @@ HotIf()
 
 if HudAtStart
     HudToggle()
+if AutoCheck
+    SetTimer(StartCheck, -1500)
 if AutoUpdate
     SetTimer(CheckUpdate, -4000)

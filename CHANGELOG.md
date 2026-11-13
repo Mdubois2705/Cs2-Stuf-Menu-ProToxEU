@@ -7,6 +7,7 @@
 - Correction de la hauteur de téléportation (TpZOffset).
 - Modification complète d'un stuff depuis la gestion : type, catégorie, nom, coordonnées, commandes, info (double-clic).
 - Coordonnées en temps réel dans le coin inférieur gauche (touche Insert).
+- Vérification de l'installation au lancement, puis test d'envoi de commandes une fois CS2 lancé (option `AutoCheck`).
 - Mise à jour automatique au lancement (option `AutoUpdate`) et `update.bat` pour mettre à jour en double-clic.
 
 ## v2.1.0
