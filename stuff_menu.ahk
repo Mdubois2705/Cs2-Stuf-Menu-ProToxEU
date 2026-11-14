@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.16.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.17.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -50,6 +50,12 @@ HudAtStart := (IniRead(IniFile, "Settings", "HudAtStart", "0") = "1")
 HudAuto := (IniRead(IniFile, "Settings", "HudAuto", "1") = "1")      ; 1 = coin inférieur gauche, 0 = position libre
 HudX := ToInt(IniRead(IniFile, "Settings", "HudX", "12"), 12)
 HudY := ToInt(IniRead(IniFile, "Settings", "HudY", "900"), 900)
+; Chronomètre de grenade (temps entre le lâcher et l'explosion)
+TimerOn := (IniRead(IniFile, "Settings", "TimerOn", "1") = "1")
+TimerAuto := (IniRead(IniFile, "Settings", "TimerAuto", "1") = "1")   ; 1 = au-dessus des coordonnées, 0 = position libre
+TimerX := ToInt(IniRead(IniFile, "Settings", "TimerX", "12"), 12)
+TimerY := ToInt(IniRead(IniFile, "Settings", "TimerY", "820"), 820)
+TimerDur := Max(2, Min(20, ToInt(IniRead(IniFile, "Settings", "TimerDur", "6"), 6)))   ; secondes d'affichage du résultat
 ShotOn := (IniRead(IniFile, "Settings", "Shot", "1") = "1")                         ; captures d'écran des stuffs
 ShotSize := Max(40, Min(300, ToInt(IniRead(IniFile, "Settings", "ShotSize", "100"), 100)))   ; zone capturée (px)
 ShotZoom := Max(60, Min(500, ToInt(IniRead(IniFile, "Settings", "ShotZoom", "160"), 160)))   ; taille d'affichage (px)
@@ -191,6 +197,15 @@ chkBusy := false
 g := ""
 gb := ""            ; fenêtre derrière le menu qui forme le liseré coloré
 hudB := ""          ; liseré des coordonnées
+tmGui := ""         ; fenêtre du chronomètre de grenade
+tmB := ""           ; liseré du chronomètre
+tmText := ""        ; dernier texte affiché
+tmVisible := false
+tmRunning := false  ; lecture de console.log active
+tmPos := 0          ; position de lecture dans console.log
+tmClicks := []      ; moments où le clic gauche a été relâché
+tmThrowTick := 0    ; moment de la dernière relance (sv_throw_...)
+tmSentSock := 0     ; connexion pour laquelle « log on » a été envoyé
 shotOk := Map()     ; captures vérifiées lisibles
 gs := ""            ; fenêtre qui affiche la capture du stuff sélectionné
 gsPic := ""
@@ -2183,6 +2198,8 @@ ApplyStyle() {
         BuildHud()
         ShowHud()
     }
+    if tmVisible
+        TmShow(tmText)
     if menuOpen
         Render()
     else if setOpen
@@ -2194,7 +2211,7 @@ ShowSettings() {
     if setOpen
         return
     setOpen := true
-    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY)
+    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY, "Tm", TimerOn, "TmAuto", TimerAuto, "TmX", TimerX, "TmY", TimerY, "TmDur", TimerDur)
     vl := SysGet(76)
     vt := SysGet(77)
     vw := SysGet(78)
@@ -2248,7 +2265,7 @@ ShowSettings() {
 
     d := Gui("+AlwaysOnTop", "Réglages du menu")
     d.SetFont("s10", "Segoe UI")
-    tabs := d.Add("Tab3", "x6 y6 w500 h700", ["Menu", "Captures", "Coordonnées"])
+    tabs := d.Add("Tab3", "x6 y6 w500 h700", ["Menu", "Captures", "Coordonnées", "Chronomètre"])
     tabs.UseTab(1)
     y := 44
     ty := y + 4
@@ -2386,8 +2403,40 @@ ShowSettings() {
     d.SetFont("s10 cDefault")
     y += 150
     yEnd3 := y
+
+    ; ----- Onglet Chronomètre -----
+    tabs.UseTab(4)
+    y := 44
+    chkTm := d.Add("CheckBox", "x22 y" y " w460" (TimerOn ? " Checked" : ""), "Afficher le chronomètre après chaque grenade")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Placement")
+    ddTmPos := d.Add("DropDownList", "x140 y" y " w260 Choose" (TimerAuto ? 1 : 2), ["Au-dessus des coordonnées (par défaut)", "Libre (où je veux sur l'écran)"])
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Position X")
+    slTmX := d.Add("Slider", "x140 y" y " w260 Range0-" xr " ToolTip", Max(0, Min(TimerX - vl, xr)))
+    txTmX := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Position Y")
+    slTmY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", Max(0, Min(TimerY - vt, yr)))
+    txTmY := d.Add("Text", "x406 y" ty " w70", "")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Affichage")
+    slTmDur := d.Add("Slider", "x140 y" y " w260 Range2-20 ToolTip", TimerDur)
+    txTmDur := d.Add("Text", "x406 y" ty " w70", "")
+    y += 44
+    btnTmTest := d.Add("Button", "x22 y" y " w220", "Tester l'affichage")
+    y += 50
+    d.SetFont("s9 c8A8F96")
+    d.Add("Text", "x22 y" y " w460 r9", "Mesure le temps entre le moment où tu lâches la grenade (clic gauche relâché, ou relance avec la touche de sv_rethrow_last_grenade) et son explosion, lue dans console.log. Le menu active tout seul le journal du serveur (log on, mp_logdetail 3).`n`nFonctionne pour la smoke, la flash, la HE, le molotov, l'incendiaire et le leurre. Le résultat reste affiché le nombre de secondes choisi ci-dessus. La police, les couleurs, le liseré, les coins et l'opacité suivent le menu. Si tu tires avec une arme pendant que la grenade vole, le temps affiché peut être faux.")
+    d.SetFont("s10 cDefault")
+    y += 170
+    yEnd4 := y
     tabs.UseTab(0)
-    tabH := Max(yEnd1, yEnd2, yEnd3) + 6
+    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4) + 6
     tabs.Move(6, 6, 500, tabH)
     y := tabH + 18
     btnSave := d.Add("Button", "x12 y" y " w150 Default", "Enregistrer")
@@ -2396,7 +2445,7 @@ ShowSettings() {
     btnChkS := d.Add("Button", "x12 y+10 w466", "Vérifier l'installation")
 
     Sync(*) {
-        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY
+        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur
         ovFont := (ddFont.Value = 1) ? "" : ddFont.Text
         ovScale := slScale.Value
         ovX := vl + slX.Value
@@ -2433,6 +2482,17 @@ ShowSettings() {
         txHudY.Text := HudY
         slHudX.Enabled := !HudAuto
         slHudY.Enabled := !HudAuto
+        TimerOn := chkTm.Value
+        TimerAuto := (ddTmPos.Value = 1)
+        TimerX := vl + slTmX.Value
+        TimerY := vt + slTmY.Value
+        TimerDur := slTmDur.Value
+        txTmX.Text := TimerX
+        txTmY.Text := TimerY
+        txTmDur.Text := TimerDur " s"
+        slTmX.Enabled := !TimerAuto
+        slTmY.Enabled := !TimerAuto
+        TmApply()
         HudSet(chkHud.Value)
         SetTimer(ApplyStyle, -40)
     }
@@ -2522,6 +2582,11 @@ ShowSettings() {
         ddHudPos.Choose(1)
         slHudX.Value := Max(0, Min(12 - vl, xr))
         slHudY.Value := Max(0, Min(900 - vt, yr))
+        chkTm.Value := 1
+        ddTmPos.Choose(1)
+        slTmX.Value := Max(0, Min(12 - vl, xr))
+        slTmY.Value := Max(0, Min(820 - vt, yr))
+        slTmDur.Value := 6
         chkShotOn.Value := 1
         slShotSz.Value := 100
         slShotZm.Value := 160
@@ -2533,7 +2598,7 @@ ShowSettings() {
     }
 
     Finish(save, *) {
-        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY
+        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur
         if save {
             IniWrite(ovTheme, IniFile, "Overlay", "Theme")
             IniWrite(ovFont, IniFile, "Overlay", "Font")
@@ -2556,6 +2621,11 @@ ShowSettings() {
             IniWrite(HudAuto ? 1 : 0, IniFile, "Settings", "HudAuto")
             IniWrite(HudX, IniFile, "Settings", "HudX")
             IniWrite(HudY, IniFile, "Settings", "HudY")
+            IniWrite(TimerOn ? 1 : 0, IniFile, "Settings", "TimerOn")
+            IniWrite(TimerAuto ? 1 : 0, IniFile, "Settings", "TimerAuto")
+            IniWrite(TimerX, IniFile, "Settings", "TimerX")
+            IniWrite(TimerY, IniFile, "Settings", "TimerY")
+            IniWrite(TimerDur, IniFile, "Settings", "TimerDur")
         } else {
             ovFont := old["Font"]
             ovScale := old["Scale"]
@@ -2577,6 +2647,12 @@ ShowSettings() {
             HudAuto := old["HudAuto"]
             HudX := old["HudX"]
             HudY := old["HudY"]
+            TimerOn := old["Tm"]
+            TimerAuto := old["TmAuto"]
+            TimerX := old["TmX"]
+            TimerY := old["TmY"]
+            TimerDur := old["TmDur"]
+            TmApply()
             HudSet(old["Hud"])
             if hudOn {
                 BuildHud()
@@ -2607,6 +2683,12 @@ ShowSettings() {
     ddHudPos.OnEvent("Change", Sync)
     slHudX.OnEvent("Change", Sync)
     slHudY.OnEvent("Change", Sync)
+    chkTm.OnEvent("Click", Sync)
+    ddTmPos.OnEvent("Change", Sync)
+    slTmX.OnEvent("Change", Sync)
+    slTmY.OnEvent("Change", Sync)
+    slTmDur.OnEvent("Change", Sync)
+    btnTmTest.OnEvent("Click", (*) => TmShow("Smoke : 2,9 s"))
     slShotSz.OnEvent("Change", Sync)
     slShotZm.OnEvent("Change", Sync)
     slShotCr.OnEvent("Change", Sync)
@@ -2631,7 +2713,9 @@ ShowSettings() {
 ; =====================================================================
 ; Exécute cs2_practice dans le jeu (par la connexion directe).
 RunPractice() {
+    global tmSentSock
     WriteAndExec("exec " PracticeCfg)
+    tmSentSock := 0   ; le journal du serveur est réactivé au prochain passage du chronomètre
     Sleep(400)
 }
 
@@ -3782,6 +3866,184 @@ HudToggle() {
         if IsObject(hudB)
             hudB.Hide()
     }
+}
+
+; =====================================================================
+;  Chronomètre de grenade
+; =====================================================================
+; Mesure le temps entre le lâcher (clic gauche relâché, ou relance sv_throw_...) et l'explosion.
+; L'explosion est lue dans console.log : le journal du serveur (log on, mp_logdetail 3) y écrit
+; « threw smokegrenade [x y z] » quand la grenade a explosé.
+TmClick() {
+    global tmClicks
+    if !TimerOn
+        return
+    tmClicks.Push(A_TickCount)
+    if (tmClicks.Length > 30)
+        tmClicks.RemoveAt(1)
+}
+
+; Active ou arrête la lecture du journal selon le réglage
+TmApply() {
+    global tmRunning, tmPos, tmSentSock
+    if (TimerOn && !tmRunning) {
+        tmRunning := true
+        tmSentSock := 0
+        tmPos := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : 0
+        SetTimer(TmTick, 50)
+    } else if (!TimerOn && tmRunning) {
+        tmRunning := false
+        SetTimer(TmTick, 0)
+        TmHide()
+    }
+}
+
+TmTick() {
+    global tmPos, tmSentSock, tmThrowTick
+    if (!TimerOn || !FileExist(ConsoleLog))
+        return
+    sz := FileGetSize(ConsoleLog)
+    if (sz < tmPos)
+        tmPos := 0
+    if !WinActive("ahk_exe cs2.exe") {
+        tmPos := sz   ; hors du jeu : on ignore ce qui s'écrit, pour ne pas afficher de vieux résultats
+        return
+    }
+    if (netSock != -1 && netSock != tmSentSock) {
+        tmSentSock := netSock
+        NetSend("log on; mp_logdetail 3")
+    }
+    if (sz <= tmPos)
+        return
+    txt := ReadFrom(ConsoleLog, tmPos)
+    now := A_TickCount
+    ; on ne consomme que les lignes complètes
+    nl := InStr(txt, "`n", , -1)
+    if (nl = 0) {
+        if (StrLen(txt) > 4000)
+            tmPos := sz
+        return
+    }
+    tail := SubStr(txt, nl + 1)
+    tmPos := sz - (StrPut(tail, "UTF-8") - 1)
+    txt := SubStr(txt, 1, nl)
+    pos := 1
+    while (pos := RegExMatch(txt, "i)sv_throw_\w+|threw\s+(smokegrenade|flashbang|hegrenade|molotov|incgrenade|decoy)", &m, pos)) {
+        pos += StrLen(m[0])
+        if (m[1] = "")
+            tmThrowTick := now
+        else
+            TmFinish(m[1], now)
+    }
+}
+
+TmFinish(kind, now) {
+    global tmThrowTick
+    start := 0
+    if (tmThrowTick != 0 && now - tmThrowTick < 12000) {
+        start := tmThrowTick
+        tmThrowTick := 0
+    } else {
+        i := tmClicks.Length
+        while (i >= 1) {
+            if (now - tmClicks[i] < 12000) {
+                start := tmClicks[i]
+                break
+            }
+            i -= 1
+        }
+    }
+    if (start = 0)
+        return
+    secs := (now - start) / 1000
+    if (secs < 0.2)
+        return
+    names := Map("smokegrenade", "Smoke", "flashbang", "Flash", "hegrenade", "HE", "molotov", "Molotov", "incgrenade", "Incendiaire", "decoy", "Leurre")
+    label := names.Has(StrLower(kind)) ? names[StrLower(kind)] : kind
+    TmShow(label " : " StrReplace(Format("{:.1f}", secs), ".", ",") " s")
+}
+
+TmHide() {
+    global tmVisible
+    SetTimer(TmHide, 0)
+    tmVisible := false
+    try tmGui.Hide()
+    try tmB.Hide()
+}
+
+; Affiche le texte avec le même style que les coordonnées (police, couleurs, liseré, coins, opacité)
+TmShow(txt) {
+    global tmGui, tmB, tmText, tmVisible
+    tmText := txt
+    if IsObject(tmGui)
+        try tmGui.Destroy()
+    if IsObject(tmB) {
+        try tmB.Destroy()
+        tmB := ""
+    }
+    if (ovBorder > 0) {
+        tmB := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+        tmB.BackColor := BorderColor()
+    }
+    dark := (Lum(ovBg) < 140)
+    cTxt := dark ? "FFFFFF" : "111111"
+    thh := ThemeById(ovTheme)
+    if IsObject(thh)
+        cTxt := thh[4]
+    fnt := (ovFont = "") ? "Consolas" : ovFont
+    tmGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+    tmGui.BackColor := ovBg
+    tmGui.MarginX := 12 + ovCorner // 3
+    tmGui.MarginY := 6 + ovCorner // 4
+    tmGui.SetFont("s" FS(16) " bold c" cTxt, fnt)
+    tmGui.Add("Text", "Center w" Round(200 * ovScale / 100), txt)
+    tmGui.Show("NA AutoSize x0 y0")
+    tmGui.GetPos(, , &w, &h)
+    vl := SysGet(76)
+    vt := SysGet(77)
+    vw := SysGet(78)
+    vh := SysGet(79)
+    if TimerAuto {
+        ; juste au-dessus des coordonnées
+        MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+        if (hudOn && IsObject(hudGui)) {
+            hudGui.GetPos(&cx, &cy)
+        } else if HudAuto {
+            estH := Round(5.2 * FS(11)) + 2 * (6 + ovCorner // 4)
+            cx := ml + 12 + ovBorder
+            cy := mb - estH - 12 - ovBorder
+        } else {
+            cx := HudX
+            cy := HudY
+        }
+        x := cx
+        y := cy - 2 * ovBorder - 8 - h
+    } else {
+        x := TimerX
+        y := TimerY
+    }
+    x := Max(vl, Min(x, vl + vw - w))
+    y := Max(vt, Min(y, vt + vh - h))
+    tmGui.Move(x, y)
+    tmGui.GetPos(&px, &py, &pw, &ph)
+    dia := 2 * Min(ovCorner, ph // 2)
+    if (ovCorner > 0)
+        WinSetRegion("0-0 W" pw " H" ph " R" dia "-" dia, tmGui)
+    WinSetTransparent(ovOpacity, tmGui)
+    if IsObject(tmB) {
+        b := ovBorder
+        bw := pw + 2 * b
+        bh := ph + 2 * b
+        tmB.Show("NA x" (px - b) " y" (py - b) " w" bw " h" bh)
+        if (ovCorner > 0) {
+            bd := dia + 2 * b
+            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, tmB)
+        }
+        WinSetTransparent(ovOpacity, tmB)
+        DllCall("SetWindowPos", "Ptr", tmGui.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
+    }
+    tmVisible := true
+    SetTimer(TmHide, -TimerDur * 1000)
 }
 
 ; =====================================================================
@@ -5117,6 +5379,7 @@ SafeHotkey(key, fn) {
 
 HotIf(InGame)
 SafeHotkey(MenuKey, (*) => Toggle())
+Hotkey("~LButton Up", (*) => TmClick())   ; chronomètre : moment où la grenade est lâchée
 
 HotIf(MenuActive)
 Hotkey("Up", (*) => Move(-1))
@@ -5159,6 +5422,7 @@ if (IniRead(IniFile, "State", "SkipCheck", "0") != "1") {
 CleanLegacy()
 if HudAtStart
     HudToggle()
+TmApply()
 if AutoBackupOn
     SetTimer(AutoBackup, -2500)
 skipCheck := (IniRead(IniFile, "State", "SkipCheck", "0") = "1")

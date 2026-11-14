@@ -15,6 +15,7 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 - **Ajout / suppression** de stuffs et de catégories depuis le menu
 - Utilitaires : bots (placer, accroupi, immobile…), God mode, noclip, kit d'armes
 - **Apparence réglable** : thèmes, police, taille, position, opacité, couleur de fond, liseré et coins arrondis
+- **Chronomètre de grenade** : temps entre le lâcher et l'explosion
 - **Captures d'écran** des stuffs, **coordonnées en temps réel**, **profils** et **partage** de stuffs (export / import avec aperçu)
 
 ## Prérequis
@@ -104,6 +105,18 @@ Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dan
 - La fréquence se règle avec `HudInterval` (en ms, 300 par défaut) . `HudAtStart` (0 ou 1) est géré par la case des réglages.
 - Les coordonnées sont demandées par la connexion directe, sans aucune touche : elles ne gênent ni la console ni le chat. Le script fait une pause de 2 secondes après chaque stuff lancé.
 - Il se met en pause quand le menu ou une fenêtre du script est ouverte, et quand CS2 n'est pas la fenêtre active.
+
+## Chronomètre de grenade
+
+Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu affiche le temps écoulé entre le moment où tu la **lâches** et celui où elle **explose**, par exemple `Smoke : 2,9 s`. Le résultat reste à l'écran le nombre de secondes choisi, puis disparaît.
+
+- **Départ du chrono** : le relâchement du clic gauche, ou la relance d'une grenade avec `sv_rethrow_last_grenade` (touche `K` du cfg d'entraînement).
+- **Fin du chrono** : la ligne `threw smokegrenade [x y z]` que le jeu écrit dans `console.log` quand la grenade explose. Le menu active tout seul le journal du serveur (`log on` et `mp_logdetail 3`) ; la mesure demande donc `-condebug`, comme le reste du menu.
+- **Précision** : de l'ordre d'un dixième de seconde (le menu lit le fichier toutes les 50 ms).
+- **Limite** : le menu ne sait pas quelle arme tu tiens. Si tu tires avec une arme pendant que la grenade vole, le temps affiché peut être faux.
+- **Réglages** : « Réglages du menu », onglet **Chronomètre** : activer, placement (par défaut **juste au-dessus des coordonnées**, ou libre avec position X / Y), durée d'affichage, et bouton « Tester l'affichage ». La police, les couleurs, le liseré, les coins arrondis et l'opacité suivent ceux du menu et des coordonnées. Équivalents dans `config.ini` : `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
+
+Le journal du serveur crée aussi des fichiers dans `game\csgo\logs\`. Pour ne pas l'activer, désactive le chronomètre.
 
 ## Profils et partage
 

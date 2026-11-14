@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.17.0
+
+- **Chronomètre de grenade** : affiche le temps entre le lâcher (clic gauche relâché, ou relance `sv_throw_...`) et l'explosion lue dans `console.log` (`threw smokegrenade [...]`), pour la smoke, la flash, la HE, le molotov, l'incendiaire et le leurre.
+- Nouvel onglet **Chronomètre** dans les réglages : activer, placement (par défaut juste au-dessus des coordonnées, ou libre), durée d'affichage, bouton de test. Même style que les coordonnées (police, couleurs, liseré, coins, opacité).
+- Le menu active le journal du serveur (`log on`, `mp_logdetail 3`) quand le chronomètre est activé.
+- Nouvelles clés `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur` dans `config.ini`.
+
 ## v2.16.0
 
 - **Connexion directe obligatoire** : le menu n'utilise plus de touches ni de fichier `stuff_run.cfg` pour parler à CS2. Fini le sélecteur de touches, le bouton « Touches du script », `ExecKey`, `HudKey` et `ConsoleKey`.
