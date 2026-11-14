@@ -9,7 +9,7 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 ## Fonctionnalités
 
 - Menu à 3 niveaux : **Map > Catégorie > Stuff**, ouvert directement sur la map détectée
-- **Recherche rapide**, **favoris**, **récents**, relance du dernier stuff
+- **Recherche rapide** (nom, catégorie, info et tags), **favoris**, **récents**, **tags**, relance du dernier stuff
 - Infos du stuff affichées dans l'overlay et dans le **chat** au lancement
 - **Sauvegarde d'un repère depuis le jeu** (position et angle capturés automatiquement)
 - **Ajout / suppression** de stuffs et de catégories depuis le menu
@@ -162,12 +162,14 @@ Tout se règle dans « Réglages du menu », onglet « Captures » : activer, zo
 
 **Depuis le jeu** : place-toi au bon endroit, vise, ouvre le menu (`F1`) et choisis « Sauvegarder la position actuelle », puis remplis la map, le type, la catégorie, le nom et le message du chat.
 
-Dans la fenêtre, la liste **Catégorie** propose toutes les catégories déjà créées pour la map (y compris celles créées dans la fenêtre de gestion). Choisis-en une, ou tape un nouveau nom : sans catégorie existante du même nom, il est rangé sous « Type - Nom » (par exemple `Smoke - Site A`).
+Dans la fenêtre, la liste **Catégorie** propose toutes les catégories déjà créées pour la map (y compris celles créées dans la fenêtre de gestion). Choisis-en une, ou tape un nouveau nom : sans catégorie existante du même nom, il est rangé sous « Type - Nom » (par exemple `Smoke - Site A`). Le bouton **+** à côté de la liste crée une nouvelle catégorie vide dans la map choisie, avec exactement le nom que tu tapes (le type n'est pas ajouté devant), et la sélectionne.
+
+**Tags** : la liste **Tags** (entre le nom et l'info du chat) propose les tags déjà créés. Choisis-en un ou tape-en un nouveau, puis clique sur **+** pour l'ajouter au stuff (un tag nouveau est créé et gardé dans `data\tags.txt`). Le bouton **-** retire le tag tapé, ou le dernier ajouté si la liste est vide. Le bouton **→ Info** recopie le nom des tags dans le message d'info du chat. Un stuff peut avoir plusieurs tags. Ils s'affichent sous le message d'info dans le menu, se retrouvent dans la recherche rapide (tape `#facile` ou `facile`), et se modifient dans la fenêtre « Modifier le stuff ». Ils sont inclus dans l'export et l'import.
 
 **À la main** : édite `maps/de_<map>.txt`, une ligne par stuff :
 
 ```
-Catégorie | Nom affiché | commande(s) console | info affichée dans le chat (optionnel)
+Catégorie | Nom affiché | commande(s) console | info affichée dans le chat (optionnel) | tags séparés par des virgules (optionnel)
 ```
 
 Exemple :
@@ -176,6 +178,7 @@ Exemple :
 Smoke - Site A | Smoke CT depuis T spawn | setpos -456 -2288 -163; setang -39 57; give weapon_smokegrenade | Jump throw - clic gauche
 ```
 
+- Les tags sont le 5e champ (`... | info | facile, site-a`). Sans info, laisse le 4e champ vide : `... | commandes |  | facile`.
 - Une catégorie est le premier champ des lignes. Une catégorie vide se déclare avec `@cat | Nom`.
 - Évite le caractère `;` dans l'info du chat (il est remplacé par une virgule).
 - Les lignes commençant par `#` sont ignorées. Voir `maps_default/_exemple.txt`.

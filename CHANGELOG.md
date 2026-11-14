@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.14.1
+
+- Bouton **+** de la catégorie : la catégorie est créée avec exactement le nom tapé, sans préfixe de type, et le type choisi ne change plus.
+- Tags : nouveau bouton **→ Info** qui recopie le nom des tags dans le message d'info du chat (fenêtres de sauvegarde et de modification).
+- Fenêtre de sauvegarde : « Donner la grenade du type choisi (give) » est décoché par défaut et placé sous la capture (il passait sur l'image). Même correction pour les boutons de la fenêtre de modification.
+
+## v2.14.0
+
+- Fenêtre de sauvegarde et de modification d'un stuff : liste **Tags** entre le nom et l'info du chat. On choisit un tag existant ou on en tape un nouveau, puis **+** l'ajoute au stuff (**-** le retire). Les tags créés sont gardés dans `data\tags.txt`.
+- Les tags s'affichent sous l'info dans le menu, sont pris en compte par la recherche rapide, et sont exportés et importés avec les stuffs. Ils sont enregistrés comme 5e champ de la ligne (`Catégorie | Nom | commandes | info | tags`) ; les stuffs existants restent valables.
+- Fenêtre de sauvegarde : bouton **+** à côté de la liste Catégorie pour créer une nouvelle catégorie dans la map choisie.
+
 ## v2.13.1
 
 - La connexion directe exige l'option de lancement `-insecure` en plus de `-netconport 2121` (sans elle, CS2 n'ouvre pas le port). README, `config.example.ini` et la vérification de l'installation l'indiquent, avec l'avertissement : `-insecure` désactive VAC, à retirer pour jouer en ligne.

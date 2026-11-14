@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.13.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.14.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -280,8 +280,14 @@ ParseFile(path, mapName) {
             items[c] := []
             cats.Push(c)
         }
-        info := (p.Length >= 4) ? p[4] : ""
-        items[c].Push([p[2], p[3], info, c, mapName "|" c "|" p[2], path])
+        info := ""
+        tags := ""
+        if (p.Length >= 4) {
+            sp := SplitInfo(p[4])
+            info := sp[1]
+            tags := sp[2]
+        }
+        items[c].Push([p[2], p[3], info, c, mapName "|" c "|" p[2], path, tags])
     }
 }
 
@@ -896,7 +902,16 @@ Render() {
     }
     titleCtl.Text := title
     cur := CurrentItem()
-    infoCtl.Text := (IsObject(cur) && cur[3] != "") ? "Info : " cur[3] : ""
+    infoTxt := ""
+    if IsObject(cur) {
+        if (cur[3] != "")
+            infoTxt := "Info : " cur[3]
+        if (cur.Length >= 7 && cur[7] != "") {
+            nl := (infoTxt != "") ? "`n" : ""
+            infoTxt .= nl "Tags : " TagsDisp(cur[7])
+        }
+    }
+    infoCtl.Text := infoTxt
     hintCtl.Text := HintText() "`nCtrl+Z : annuler la dernière suppression de stuff"
     ShowOverlay()
     UpdateShot()
@@ -1142,7 +1157,8 @@ UpdateResults() {
         if (c = FAV_CAT || c = REC_CAT)
             continue
         for it in items[c] {
-            hay := it[4] " " it[1] " " it[3]
+            tg := (it.Length >= 7) ? TagsDisp(it[7]) : ""
+            hay := it[4] " " it[1] " " it[3] " " tg
             ok := true
             for w in words {
                 if (w != "" && !InStr(hay, w))
@@ -1225,6 +1241,122 @@ CleanInfo(s) {
     return StrReplace(CleanField(s), ";", ",")
 }
 
+; Les tags sont rangés dans le même champ que l'info : "info | tag1, tag2" (info vide : "| tag1, tag2")
+SplitInfo(raw) {
+    pos := InStr(raw, "|")
+    if !pos
+        return [Trim(raw), ""]
+    return [Trim(SubStr(raw, 1, pos - 1)), Trim(SubStr(raw, pos + 1))]
+}
+
+JoinInfo(info, tags) {
+    if (tags = "")
+        return info
+    return info " | " tags
+}
+
+; Nom de tag valide : pas de virgule, de point-virgule, de # ni de |
+CleanTag(s) {
+    s := RegExReplace(CleanField(s), "[,;#]", "")
+    return Trim(s)
+}
+
+TagList(tags) {
+    out := []
+    for t in StrSplit(tags, ",") {
+        t := CleanTag(t)
+        if (t != "")
+            out.Push(t)
+    }
+    return out
+}
+
+TagsToStr(arr) {
+    out := ""
+    for t in arr {
+        sep := (out != "") ? ", " : ""
+        out .= sep t
+    }
+    return out
+}
+
+; "#facile  #site-a" pour l'affichage
+TagsDisp(tags) {
+    out := ""
+    for t in TagList(tags) {
+        sep := (out != "") ? "  " : ""
+        out .= sep "#" t
+    }
+    return out
+}
+
+; Info suivie des tags, pour les listes
+InfoDisp(raw) {
+    sp := SplitInfo(raw)
+    tg := TagsDisp(sp[2])
+    if (tg = "")
+        return sp[1]
+    return (sp[1] != "") ? sp[1] "  " tg : tg
+}
+
+; Tags connus : ceux créés (data\tags.txt) et ceux déjà utilisés dans les maps du profil
+AllTags() {
+    seen := Map()
+    out := []
+    AddTag(t) {
+        t := CleanTag(t)
+        if (t != "" && !seen.Has(StrLower(t))) {
+            seen[StrLower(t)] := 1
+            out.Push(t)
+        }
+    }
+    f := DataDir "\tags.txt"
+    if FileExist(f) {
+        try {
+            for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r")
+                AddTag(ln)
+        }
+    }
+    Loop Files MapsDir "\*.txt" {
+        try {
+            for e in ReadEntries(A_LoopFileFullPath)[2] {
+                for t in TagList(SplitInfo(e[4])[2])
+                    AddTag(t)
+            }
+        }
+    }
+    ; tri alphabétique simple
+    i := 2
+    while (i <= out.Length) {
+        v := out[i]
+        j := i - 1
+        while (j >= 1 && StrCompare(out[j], v) > 0) {
+            out[j + 1] := out[j]
+            j -= 1
+        }
+        out[j + 1] := v
+        i += 1
+    }
+    return out
+}
+
+; Ajoute le tag à la liste des tags connus (data\tags.txt) s'il n'y est pas déjà
+SaveTag(t) {
+    t := CleanTag(t)
+    if (t = "")
+        return
+    f := DataDir "\tags.txt"
+    try {
+        if FileExist(f) {
+            for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
+                if (StrLower(CleanTag(ln)) = StrLower(t))
+                    return
+            }
+        }
+        AppendLine(f, t)
+    }
+}
+
 AllCategories(path) {
     out := []
     seen := Map()
@@ -1302,22 +1434,35 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     d.Add("Text", "xm y+14 w95", "Type")
     ddType := d.Add("DropDownList", "x110 yp-3 w340 Choose1", Types)
     d.Add("Text", "xm y+14 w95", "Catégorie")
-    cbCat := d.Add("ComboBox", "x110 yp-3 w340", [])
+    cbCat := d.Add("ComboBox", "x110 yp-3 w296", [])
+    btnCatAdd := d.Add("Button", "x+6 yp w38", "+")
     d.Add("Text", "xm y+14 w95", "Nom")
     edName := d.Add("Edit", "x110 yp-3 w340")
-    d.Add("Text", "xm y+14 w95", "Info chat")
+    d.Add("Text", "xm y+14 w95", "Tags")
+    cbTag := d.Add("ComboBox", "x110 yp-3 w166", [])
+    btnTagAdd := d.Add("Button", "x+6 yp w36", "+")
+    btnTagDel := d.Add("Button", "x+6 yp w36", "-")
+    btnTagInfo := d.Add("Button", "x+6 yp w84", "→ Info")
+    d.SetFont("s9 c8A8F96")
+    txTags := d.Add("Text", "x110 y+4 w340 r2", "")
+    d.SetFont("s10 cDefault")
+    d.Add("Text", "xm y+10 w95", "Info chat")
     edInfo := d.Add("Edit", "x110 yp-3 w340 r3")
     d.Add("Text", "xm y+14 w95", "Position")
     edPos := d.Add("Edit", "x110 yp-3 w340 r2", posCaptured)
     if (posCaptured = "")
         d.Add("Text", "xm y+8 w450 cC0392B", "Position non capturée : lance le jeu avec -condebug, ou colle ici la sortie de getpos.")
+    giveY := "y+14"
     if shotPending {
         d.Add("Text", "xm y+14 w95", "Capture")
-        d.Add("Picture", "x110 yp-3 w" ShotSize " h" ShotSize, tmpShot)
+        picShot := d.Add("Picture", "x110 yp-3 w" ShotSize " h" ShotSize, tmpShot)
         chkDy := ShotSize // 2 - 10
         chkShot := d.Add("CheckBox", "x+14 yp+" chkDy " Checked", "Joindre cette capture au stuff")
+        picShot.GetPos(, &picY, , &picH)
+        giveTop := picY + picH + 16
+        giveY := "y" giveTop   ; sous l'image, jamais dessus
     }
-    chkGive := d.Add("CheckBox", "xm y+14 Checked", "Donner la grenade du type choisi (give)")
+    chkGive := d.Add("CheckBox", "xm " giveY, "Donner la grenade du type choisi (give)")
     chkFav := d.Add("CheckBox", "xm y+6", "Ajouter aux favoris")
     btnSave := d.Add("Button", "xm y+14 w170", "Enregistrer")
     btnCancel := d.Add("Button", "x+10 yp w170", "Annuler")
@@ -1330,6 +1475,54 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
             cbCat.Add(fcLst)
         cbCat.Text := fcTxt
     }
+
+    ; Tags du stuff en cours de création
+    tagSel := []
+    ShowTags() {
+        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur +" : "Tags : " TagsDisp(TagsToStr(tagSel))
+    }
+    FillTags() {
+        ftTxt := cbTag.Text
+        cbTag.Delete()
+        ftLst := AllTags()
+        if (ftLst.Length > 0)
+            cbTag.Add(ftLst)
+        cbTag.Text := ftTxt
+    }
+    TagAddClick(*) {
+        taT := CleanTag(cbTag.Text)
+        if (taT = "")
+            return
+        taHave := false
+        for taX in tagSel {
+            if (StrLower(taX) = StrLower(taT))
+                taHave := true
+        }
+        if !taHave {
+            tagSel.Push(taT)
+            SaveTag(taT)
+        }
+        FillTags()
+        cbTag.Text := ""
+        ShowTags()
+    }
+    TagDelClick(*) {
+        tdT := CleanTag(cbTag.Text)
+        tdI := 0
+        if (tdT != "") {
+            for tdK, tdX in tagSel {
+                if (StrLower(tdX) = StrLower(tdT))
+                    tdI := tdK
+            }
+        } else if (tagSel.Length > 0) {
+            tdI := tagSel.Length
+        }
+        if (tdI > 0)
+            tagSel.RemoveAt(tdI)
+        cbTag.Text := ""
+        ShowTags()
+    }
+
 
     ; Quand une catégorie existante est choisie, le type suit (ou "(aucun)" s'il n'y en a pas)
     CatSync(*) {
@@ -1349,6 +1542,45 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
 
     CatChange(*) {
         SetTimer(CatSync, -30)
+    }
+
+    ; Recopie le nom des tags dans le message d'info du chat (le tag reste aussi enregistré comme tag)
+    TagInfoClick(*) {
+        tiTxt := TagsToStr(tagSel)
+        if (tiTxt = "") {
+            MsgBox("Ajoute d'abord un tag avec le bouton +.", "Tags", 0x40030)
+            return
+        }
+        tiCur := Trim(edInfo.Value)
+        if (tiCur = "")
+            edInfo.Value := tiTxt
+        else if !InStr(tiCur, tiTxt)
+            edInfo.Value := tiCur " - " tiTxt
+    }
+
+    ; « + » : crée une catégorie vide (nom tel quel, sans préfixe de type) dans la map choisie et la sélectionne
+    CatAddClick(*) {
+        caName := CleanField(AskText("Nouvelle catégorie", "Nom de la nouvelle catégorie :", "", "ahk_id " d.Hwnd))
+        if (caName = "")
+            return
+        caC1 := SubStr(caName, 1, 1)
+        if (caC1 = "[" || caC1 = "@") {
+            MsgBox("Le nom ne peut pas commencer par [ ou @.", "Nouvelle catégorie", 0x40030)
+            return
+        }
+        caFull := caName
+        caFile := mapFiles[ddMap.Value]
+        caHave := false
+        for caC in AllCategories(caFile) {
+            if (StrLower(caC) = StrLower(caFull)) {
+                caFull := caC
+                caHave := true
+            }
+        }
+        if !caHave
+            EnsureCatDeclared(caFile, caFull)
+        FillCats()
+        cbCat.Text := caFull
     }
 
     CloseDlg(*) {
@@ -1395,7 +1627,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
             if (gv != "")
                 cmdFull .= "; give " gv
         }
-        inf := CleanInfo(edInfo.Value)
+        inf := JoinInfo(CleanInfo(edInfo.Value), TagsToStr(tagSel))
         line := catFull " | " nm " | " cmdFull
         if (inf != "")
             line .= " | " inf
@@ -1426,8 +1658,14 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
         FillCats()
         cbCat.Text := presetCat
     }
+    FillTags()
+    ShowTags()
     ddMap.OnEvent("Change", FillCats)
     cbCat.OnEvent("Change", CatChange)
+    btnCatAdd.OnEvent("Click", CatAddClick)
+    btnTagAdd.OnEvent("Click", TagAddClick)
+    btnTagDel.OnEvent("Click", TagDelClick)
+    btnTagInfo.OnEvent("Click", TagInfoClick)
     btnSave.OnEvent("Click", SaveClick)
     btnCancel.OnEvent("Click", CloseDlg)
     d.OnEvent("Close", CloseDlg)
@@ -2760,8 +2998,10 @@ RenameStuffInFile(path, cat, oldName, newName) {
 
 SetInfoInFile(path, cat, name, info) {
     Fn(p, line) {
-        if (p[1] != "@cat" && p.Length >= 3 && p[1] = cat && p[2] = name)
-            return BuildLine(cat, name, p[3], info)
+        if (p[1] != "@cat" && p.Length >= 3 && p[1] = cat && p[2] = name) {
+            old := (p.Length >= 4) ? p[4] : ""
+            return BuildLine(cat, name, p[3], JoinInfo(info, SplitInfo(old)[2]))
+        }
         return line
     }
     return TransformFile(path, Fn)
@@ -2921,7 +3161,7 @@ ShowManager() {
             return
         for ent in ReadEntries(MapPath())[2] {
             if (ent[1] = cc)
-                lvSt.Add("", ent[2], locks.Has("it|" StuffKey(cc, ent[2])) ? LOCK_ICON : "", ent[4])
+                lvSt.Add("", ent[2], locks.Has("it|" StuffKey(cc, ent[2])) ? LOCK_ICON : "", InfoDisp(ent[4]))
         }
     }
 
@@ -3096,7 +3336,7 @@ ShowManager() {
         cur := ""
         for ent in ReadEntries(MapPath())[2] {
             if (ent[1] = sc && ent[2] = names[1])
-                cur := ent[4]
+                cur := SplitInfo(ent[4])[1]
         }
         inf := AskText("Info du chat", "Message affiché dans le chat pour « " names[1] " » :", cur, "ahk_id " d.Hwnd)
         if (inf == "" && cur == "")
@@ -3299,8 +3539,16 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     cbCat := d.Add("ComboBox", "x130 yp-3 w380", [])
     d.Add("Text", "xm y+14 w110", "Nom")
     edName := d.Add("Edit", "x130 yp-3 w380", oldName)
-    d.Add("Text", "xm y+14 w110", "Info chat")
-    edInfo := d.Add("Edit", "x130 yp-3 w380 r3", ent[4])
+    d.Add("Text", "xm y+14 w110", "Tags")
+    cbTag := d.Add("ComboBox", "x130 yp-3 w206", [])
+    btnTagAdd := d.Add("Button", "x+6 yp w36", "+")
+    btnTagDel := d.Add("Button", "x+6 yp w36", "-")
+    btnTagInfo := d.Add("Button", "x+6 yp w84", "→ Info")
+    d.SetFont("s9 c8A8F96")
+    txTags := d.Add("Text", "x130 y+4 w380 r2", "")
+    d.SetFont("s10 cDefault")
+    d.Add("Text", "xm y+10 w110", "Info chat")
+    edInfo := d.Add("Edit", "x130 yp-3 w380 r3", SplitInfo(ent[4])[1])
     d.Add("Text", "xm y+14 w110", "Position")
     edPos := d.Add("Edit", "x130 yp-3 w380 r2", posTxt)
     btnRecap := d.Add("Button", "x130 y+6 w380", "Recapturer ma position actuelle (en jeu)")
@@ -3326,13 +3574,81 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     btnShotNew := d.Add("Button", "x+12 yp w210", "Refaire la capture (en jeu)")
     btnShotDel := d.Add("Button", "xp y+6 w210", "Supprimer la capture")
     btnShotDel.Enabled := hasShot
-    btnSave := d.Add("Button", "xm y+14 w180 Default", "Enregistrer")
+    picShot.GetPos(, &pY0, , &pH0)
+    btnShotDel.GetPos(, &bY0, , &bH0)
+    saveTop := Max(pY0 + pH0, bY0 + bH0) + 16
+    btnSave := d.Add("Button", "xm y" saveTop " w180 Default", "Enregistrer")
     btnCancel := d.Add("Button", "x+10 yp w180", "Annuler")
 
     for ec in AllCategories(path)
         cbCat.Add([ec])
     ddType.Choose(typeSel)
     cbCat.Text := oldCat
+
+    ; Tags du stuff (déjà présents + ceux qu'on ajoute ici)
+    tagSel := TagList(SplitInfo(ent[4])[2])
+    ShowTags() {
+        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur +" : "Tags : " TagsDisp(TagsToStr(tagSel))
+    }
+    FillTags() {
+        ftTxt := cbTag.Text
+        cbTag.Delete()
+        ftLst := AllTags()
+        if (ftLst.Length > 0)
+            cbTag.Add(ftLst)
+        cbTag.Text := ftTxt
+    }
+    TagAddClick(*) {
+        taT := CleanTag(cbTag.Text)
+        if (taT = "")
+            return
+        taHave := false
+        for taX in tagSel {
+            if (StrLower(taX) = StrLower(taT))
+                taHave := true
+        }
+        if !taHave {
+            tagSel.Push(taT)
+            SaveTag(taT)
+        }
+        FillTags()
+        cbTag.Text := ""
+        ShowTags()
+    }
+    TagDelClick(*) {
+        tdT := CleanTag(cbTag.Text)
+        tdI := 0
+        if (tdT != "") {
+            for tdK, tdX in tagSel {
+                if (StrLower(tdX) = StrLower(tdT))
+                    tdI := tdK
+            }
+        } else if (tagSel.Length > 0) {
+            tdI := tagSel.Length
+        }
+        if (tdI > 0)
+            tagSel.RemoveAt(tdI)
+        cbTag.Text := ""
+        ShowTags()
+    }
+    ; Recopie le nom des tags dans le message d'info du chat (le tag reste aussi enregistré comme tag)
+    TagInfoClick(*) {
+        tiTxt := TagsToStr(tagSel)
+        if (tiTxt = "") {
+            MsgBox("Ajoute d'abord un tag avec le bouton +.", "Tags", 0x40030)
+            return
+        }
+        tiCur := Trim(edInfo.Value)
+        if (tiCur = "")
+            edInfo.Value := tiTxt
+        else if !InStr(tiCur, tiTxt)
+            edInfo.Value := tiCur " - " tiTxt
+    }
+    FillTags()
+    ShowTags()
+    btnTagAdd.OnEvent("Click", TagAddClick)
+    btnTagDel.OnEvent("Click", TagDelClick)
+    btnTagInfo.OnEvent("Click", TagInfoClick)
 
     CatSync(*) {
         tx2 := Trim(cbCat.Text)
@@ -3420,7 +3736,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             MsgBox(LOCK_ICON " Stuff verrouillé : son nom et sa catégorie ne peuvent pas changer.", "Modifier", 0x40030)
             return
         }
-        ReplaceStuffInFile(path, oldCat, oldName, nCat, nName, nCmd, CleanInfo(edInfo.Value))
+        ReplaceStuffInFile(path, oldCat, oldName, nCat, nName, nCmd, JoinInfo(CleanInfo(edInfo.Value), TagsToStr(tagSel)))
         newShot := ShotPath(keyMap, nCmd)
         if (!shotRedone && shotFile != "" && newShot != "" && newShot != shotFile && FileExist(shotFile))
             try FileMove(shotFile, newShot, 1)
@@ -3993,7 +4309,12 @@ ParsePack(txt) {
         c1 := SubStr(cat, 1, 1)
         if (cat = "" || nm = "" || c1 = "[" || c1 = "@" || p[4] = "")
             continue
-        ents.Push([p[1], cat, nm, p[4], (p.Length >= 5) ? p[5] : ""])
+        raw5 := (p.Length >= 5) ? p[5] : ""
+        if InStr(raw5, "|") {
+            sp5 := SplitInfo(raw5)
+            raw5 := JoinInfo(sp5[1], TagsToStr(TagList(sp5[2])))
+        }
+        ents.Push([p[1], cat, nm, p[4], raw5])
     }
     return Map("z", zoff, "from", from, "ents", ents, "imgs", imgs)
 }
@@ -4202,7 +4523,7 @@ ShowImport(txt, ownerHwnd) {
         cmdNew := ShiftZ(e[4], zdelta)
         t := e[1] "  >  " e[2] "  >  " e[3] "`r`n"
         if (e[5] != "")
-            t .= "Info : " e[5] "`r`n"
+            t .= "Info : " InfoDisp(e[5]) "`r`n"
         b := BlockedCmd(e[4])
         if (b != "")
             t .= "REFUSÉ : commande dangereuse (" b ")`r`n"
@@ -4212,7 +4533,7 @@ ShowImport(txt, ownerHwnd) {
         if IsObject(old) {
             t .= "`r`n`r`nTon stuff actuel du même nom :`r`n" PrettyCmd(old[3])
             if (old[4] != "")
-                t .= "`r`nInfo : " old[4]
+                t .= "`r`nInfo : " InfoDisp(old[4])
         }
         edPrev.Value := t
         ik := e[1] "|" e[2] "|" e[3]
@@ -4362,7 +4683,7 @@ ShowShare() {
         for k, mn in mapNames {
             for ent in ReadEntries(mapFiles[k])[2] {
                 rows.Push([mn, ent[1], ent[2], ent[3], ent[4]])
-                lvEx.Add("", mn, ent[1], ent[2], ent[4])
+                lvEx.Add("", mn, ent[1], ent[2], InfoDisp(ent[4]))
             }
         }
     }
