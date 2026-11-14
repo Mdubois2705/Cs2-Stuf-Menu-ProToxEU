@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.12.0
+
+- Choix des touches du script : au premier lancement de cette version, une fenêtre propose 2 touches (lancer les stuffs, coordonnées) parmi une liste. Le script lit ta configuration CS2 (touches enregistrées et fichiers cfg) et signale celles qui sont déjà utilisées ; les touches libres sont proposées en premier. Évite qu'une touche déjà utilisée (arme, Discord, logiciel de clavier) déclenche autre chose en jeu.
+- Nouveau bouton « Touches du script » dans les réglages (F10) pour les changer plus tard ; clés `ExecKey` et `HudKey` dans `config.ini`.
+- `cs2_practice.cfg` (dossier cfg de CS2) est réécrit automatiquement avec les touches choisies. Si CS2 tourne, il est relancé tout de suite avec l'ancienne touche ; sinon tape `exec cs2_practice` une fois dans la console.
+
 ## v2.11.1
 
 - Retour au contenu de la v2.10.1 : le choix des touches du script (v2.11.0) est retiré. Pour les utilisateurs de la v2.11.0, cette version remet les touches par défaut (`*` et `/` du pavé numérique).
