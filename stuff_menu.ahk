@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.12.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.12.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -36,7 +36,6 @@ MenuKey := IniRead(IniFile, "Settings", "MenuKey", "F1")
 FavKey := IniRead(IniFile, "Settings", "FavKey", "F2")
 LockKey := IniRead(IniFile, "Settings", "LockKey", "F3")
 AddKey := IniRead(IniFile, "Settings", "AddKey", "F4")
-DelKey := ""
 CloseAfterRun := (IniRead(IniFile, "Settings", "CloseAfterRun", "1") = "1")
 AutoDetect := (IniRead(IniFile, "Settings", "AutoDetectMap", "1") = "1")
 ConsoleLog := IniRead(IniFile, "Settings", "ConsoleLog", "")
@@ -189,7 +188,6 @@ mapFiles := []
 loadedMap := ""
 cats := []
 items := Map()      ; catégorie -> tableau de stuffs [nom, commande, info, catégorie, clé, fichier source]
-pendingKey := ""    ; suppression en attente de confirmation
 setOpen := false    ; fenêtre de réglages ouverte
 mgrOpen := false    ; fenêtre de gestion ouverte
 hudOn := false      ; affichage des coordonnées en temps réel
@@ -1150,23 +1148,6 @@ AllCategories(path) {
     return out
 }
 
-; Sous-catégories d'un type : "Smoke - Site A" -> "Site A"
-SubCategories(path, typ) {
-    subs := []
-    seen := Map()
-    pre := typ " - "
-    for c in AllCategories(path) {
-        if (InStr(c, pre) = 1) {
-            sub := Trim(SubStr(c, StrLen(pre) + 1))
-            if (sub != "" && !seen.Has(sub)) {
-                seen[sub] := 1
-                subs.Push(sub)
-            }
-        }
-    }
-    return subs
-}
-
 AppendLine(path, line) {
     txt := FileExist(path) ? FileRead(path, "UTF-8") : ""
     prefix := (txt != "" && SubStr(txt, -1) != "`n") ? "`n" : ""
@@ -1356,26 +1337,6 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
 ; =====================================================================
 ;  Gestion depuis le menu : ajouter / supprimer stuffs et catégories
 ; =====================================================================
-CurrentMapFile() {
-    for i, n in mapNames {
-        if (n = loadedMap)
-            return mapFiles[i]
-    }
-    return ""
-}
-
-FindReal(key) {
-    for c in cats {
-        if (c = FAV_CAT || c = REC_CAT)
-            continue
-        for it in items[c] {
-            if (it[5] = key)
-                return it
-        }
-    }
-    return ""
-}
-
 ReadLines(path) {
     lines := StrSplit(FileRead(path, "UTF-8"), "`n", "`r")
     if (lines.Length > 0 && lines[lines.Length] = "")
@@ -1423,35 +1384,6 @@ DeleteLineFrom(path, cat, name) {
         LogDeleted(path, gone)
     }
     return removed
-}
-
-DeleteCategoryFrom(path, cat) {
-    if (path = "" || !FileExist(path))
-        return 0
-    keep := []
-    n := 0
-    for line in ReadLines(path) {
-        t := Trim(line)
-        if IsDataLine(t) {
-            p := StrSplit(t, "|", " `t", 4)
-            if ((p[1] = "@cat" && p.Length >= 2 && p[2] = cat) || (p.Length >= 3 && p[1] = cat)) {
-                n += 1
-                continue
-            }
-        }
-        keep.Push(line)
-    }
-    if (n > 0)
-        RewriteFile(path, keep)
-    return n
-}
-
-CatInFile(path, cat) {
-    for c in AllCategories(path) {
-        if (c = cat)
-            return true
-    }
-    return false
 }
 
 PurgeKey(key) {
@@ -1510,109 +1442,6 @@ ReloadKeep() {
     }
 }
 
-ClearPending() {
-    global pendingKey
-    pendingKey := ""
-}
-
-DelPress() {
-    global pendingKey
-    if (level = 0)
-        return
-    key := ""
-    label := ""
-    if (level = 1) {
-        if (cats.Length = 0)
-            return
-        c := cats[catIdx]
-        if (c = FAV_CAT || c = REC_CAT) {
-            SetStatus("Catégorie automatique : rien à supprimer")
-            return
-        }
-        if locks.Has("cat|" c) {
-            SetStatus(LOCK_ICON " Catégorie verrouillée : appuie sur " LockKey " pour la déverrouiller")
-            return
-        }
-        if CatHasLockedItem(c) {
-            SetStatus(LOCK_ICON " Contient un stuff verrouillé : déverrouille-le d'abord")
-            return
-        }
-        key := "cat|" c
-        if (c = FALLBACK_CAT && items[c].Length > 0) {
-            SetStatus("Déplace d'abord les stuffs de " c " vers une autre catégorie")
-            return
-        }
-        label := "la catégorie " c " (ses stuffs iront dans " FALLBACK_CAT ")"
-        if CatInFile(MapsDir "\_commun.txt", c)
-            label .= " (commune à toutes les maps)"
-    } else {
-        cur := CurrentItem()
-        if !IsObject(cur)
-            return
-        if locks.Has("it|" cur[5]) {
-            SetStatus(LOCK_ICON " Stuff verrouillé : appuie sur " LockKey " pour le déverrouiller")
-            return
-        }
-        key := "it|" cur[5]
-        label := cur[1]
-        if (cur.Length >= 6 && InStr(cur[6], "_commun.txt"))
-            label .= " (commun à toutes les maps)"
-    }
-    if (pendingKey = key) {
-        pendingKey := ""
-        if (level = 1)
-            DoDeleteCategory(cats[catIdx])
-        else
-            DoDeleteStuff(CurrentItem())
-        return
-    }
-    pendingKey := key
-    SetStatus("Rappuie sur " DelKey " pour supprimer : " label)
-    SetTimer(ClearPending, -3000)
-}
-
-DoDeleteStuff(it) {
-    if locks.Has("it|" it[5])
-        return
-    real := FindReal(it[5])
-    if !IsObject(real) {
-        PurgeKey(it[5])
-        ReloadKeep()
-        Render()
-        SetStatus("Entrée obsolète retirée")
-        return
-    }
-    if !DeleteLineFrom(real[6], real[4], real[1]) {
-        SetStatus("Ligne introuvable dans le fichier")
-        return
-    }
-    PurgeKey(real[5])
-    ReloadKeep()
-    Render()
-    SetStatus("Stuff supprimé : " real[1])
-}
-
-DoDeleteCategory(c) {
-    if (locks.Has("cat|" c) || CatHasLockedItem(c))
-        return
-    moved := 0
-    for file in [CurrentMapFile(), MapsDir "\_commun.txt"] {
-        if (file = "" || !FileExist(file))
-            continue
-        for ent in ReadEntries(file)[2] {
-            if (ent[1] = c)
-                Rekey(loadedMap "|" c "|" ent[2], loadedMap "|" FALLBACK_CAT "|" ent[2])
-        }
-        moved += DeleteCatKeepStuffs(file, c, FALLBACK_CAT)
-    }
-    ReloadKeep()
-    Render()
-    if (moved > 0)
-        SetStatus("Catégorie supprimée : " moved " stuff(s) déplacé(s) dans " FALLBACK_CAT)
-    else
-        SetStatus("Catégorie supprimée : " c)
-}
-
 ; Petite fenêtre de saisie (reste au-dessus du jeu)
 AskText(title, prompt, defVal := "", back := "ahk_exe cs2.exe") {
     res := Map("v", "")
@@ -1656,49 +1485,6 @@ NewStuffPress() {
             preset := cur[4]
     }
     ShowSaveDialog(preset, pmap)
-}
-
-AddPress() {
-    global catIdx
-    if (level = 0 || level = 4)
-        return
-    mapFile := CurrentMapFile()
-    if (mapFile = "") {
-        SetStatus("Map introuvable")
-        return
-    }
-    if (level = 1) {
-        name := CleanField(AskText("Ajouter une catégorie", "Nom de la nouvelle catégorie :"))
-        if (name = "")
-            return
-        if (SubStr(name, 1, 1) = "[" || SubStr(name, 1, 1) = "@") {
-            SetStatus("Le nom ne peut pas commencer par [ ou @")
-            return
-        }
-        for c in cats {
-            if (c = name) {
-                SetStatus("Cette catégorie existe déjà")
-                return
-            }
-        }
-        AppendLine(mapFile, "@cat | " name)
-        ReloadKeep()
-        for i, c in cats {
-            if (c = name)
-                catIdx := i
-        }
-        Render()
-        SetStatus("Catégorie ajoutée : " name)
-        return
-    }
-    ; niveau 2 ou 3 : ajouter un stuff dans la catégorie courante
-    preset := ""
-    cur := CurrentItem()
-    if (level = 2 && cats[catIdx] != FAV_CAT && cats[catIdx] != REC_CAT)
-        preset := cats[catIdx]
-    else if IsObject(cur)
-        preset := cur[4]
-    ShowSaveDialog(preset, loadedMap)
 }
 
 ; =====================================================================
@@ -1771,14 +1557,6 @@ KeyBind(ahk) {
             return e[2]
     }
     return StrLower(ahk)
-}
-
-KeyLabel(ahk) {
-    for e in KEYTAB {
-        if (StrLower(e[1]) = StrLower(ahk))
-            return e[3]
-    }
-    return ahk
 }
 
 AddUsed(used, ours, key, cmd) {
@@ -1893,9 +1671,18 @@ WritePracticeBinds(execBind, hudBind, ours) {
         for b in blk
             res.Push(b)
     }
+    ; pas de lignes vides en double (sinon le fichier grossirait à chaque réécriture)
     joined := ""
-    for ln in res
+    prevBlank := false
+    for ln in res {
+        blank := (Trim(ln) = "")
+        if (blank && prevBlank)
+            continue
         joined .= ln "`n"
+        prevBlank := blank
+    }
+    if (StrReplace(txt, "`r`n", "`n") = joined)
+        return
     try FileDelete(f)
     FileAppend(joined, f, "UTF-8-RAW")
 }
@@ -2057,12 +1844,6 @@ MixHex(a, b, pct) {
     gg := Round(Integer("0x" SubStr(a, 3, 2)) + (Integer("0x" SubStr(b, 3, 2)) - Integer("0x" SubStr(a, 3, 2))) * pct / 100)
     bb := Round(Integer("0x" SubStr(a, 5, 2)) + (Integer("0x" SubStr(b, 5, 2)) - Integer("0x" SubStr(a, 5, 2))) * pct / 100)
     return Format("{:02X}{:02X}{:02X}", r, gg, bb)
-}
-
-; Affiche jusqu'à 13 lignes ; selIdx = numéro de la ligne mise en valeur (0 = aucune)
-SetZ(ctl, pos) {
-    ; pos : 0 = devant les autres contrôles, 1 = derrière
-    DllCall("SetWindowPos", "Ptr", ctl.Hwnd, "Ptr", pos, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
 }
 
 SetList(lines, selIdx) {
@@ -2738,16 +2519,6 @@ SaveLocks() {
         txt .= k "`n"
     try FileDelete(LockFile)
     FileAppend(txt, LockFile, "UTF-8-RAW")
-}
-
-CatHasLockedItem(c) {
-    if !items.Has(c)
-        return false
-    for it in items[c] {
-        if locks.Has("it|" it[5])
-            return true
-    }
-    return false
 }
 
 LockPress() {
@@ -5108,8 +4879,17 @@ InstallUpdate() {
 InGame(*) => WinActive("ahk_exe cs2.exe")
 MenuActive(*) => menuOpen && WinActive("ahk_exe cs2.exe")
 
+; Une touche invalide dans config.ini ne doit pas empêcher le script de démarrer
+SafeHotkey(key, fn) {
+    try {
+        Hotkey(key, fn)
+    } catch {
+        MsgBox("La touche « " key " » de config.ini n'est pas valide : elle est ignorée.`n`nCorrige-la dans config.ini (syntaxe AutoHotkey : F1, Insert, XButton1...) puis relance le script.", "Menu Stuf", 0x40030)
+    }
+}
+
 HotIf(InGame)
-Hotkey(MenuKey, (*) => Toggle())
+SafeHotkey(MenuKey, (*) => Toggle())
 
 HotIf(MenuActive)
 Hotkey("Up", (*) => Move(-1))
@@ -5121,15 +4901,17 @@ Hotkey("Left", (*) => Back())
 Hotkey("Backspace", (*) => BackspaceKey())
 Hotkey("Esc", (*) => EscKey())
 Hotkey("Tab", (*) => TabKey())
-Hotkey(FavKey, (*) => ToggleFav())
-Hotkey(LockKey, (*) => LockPress())
-Hotkey(AddKey, (*) => NewStuffPress())
+SafeHotkey(FavKey, (*) => ToggleFav())
+SafeHotkey(LockKey, (*) => LockPress())
+SafeHotkey(AddKey, (*) => NewStuffPress())
 Hotkey("^z", (*) => UndoPress())
 HotIf()
 
 ; Choix des touches du script (une fois, ou tant que l'utilisateur répond « Plus tard »)
 if (IniRead(IniFile, "State", "BindsV", "") != "1")
     ShowKeyPicker(true)
+else
+    WritePracticeBinds(KeyBind(ExecKey), KeyBind(HudKey), Map())   ; remet les liaisons si cs2_practice.cfg a été recopié
 if HudAtStart
     HudToggle()
 if AutoBackupOn

@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.12.1
+
+- Nettoyage du code : suppression de fonctions et de variables qui n'étaient plus utilisées (anciens raccourcis de suppression et d'ajout, aides inutilisées). Aucun changement de fonctionnement.
+- Une touche invalide dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`) n'empêche plus le script de démarrer : un message l'indique.
+- `cs2_practice.cfg` : les liaisons des 2 touches du script sont remises à jour à chaque lancement si le fichier a été recopié, et ne sont réécrites que si nécessaire.
+- README : sections réorganisées (touches du script, « Où sont mes stuffs ? », structure du dépôt, dépannage) et rappels périmés corrigés.
+
 ## v2.12.0
 
 - Choix des touches du script : au premier lancement de cette version, une fenêtre propose 2 touches (lancer les stuffs, coordonnées) parmi une liste. Le script lit ta configuration CS2 (touches enregistrées et fichiers cfg) et signale celles qui sont déjà utilisées ; les touches libres sont proposées en premier. Évite qu'une touche déjà utilisée (arme, Discord, logiciel de clavier) déclenche autre chose en jeu.

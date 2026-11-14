@@ -67,7 +67,15 @@ Dans le menu des stuffs :
 | `F4` | Créer un nouveau stuff (fenêtre de sauvegarde, catégorie courante pré-remplie) |
 | `Ctrl+Z` | Annuler la dernière suppression de stuff |
 
-La suppression de stuffs et de catégories se fait depuis la fenêtre de gestion. Les touches se changent dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`). Le script appuie lui-même sur 2 touches pour parler à CS2 (lancer les stuffs, lire les coordonnées) : au premier lancement d'une version qui en a besoin, une fenêtre te propose de les choisir parmi des touches libres (le script lit ta config CS2 pour repérer celles qui sont déjà utilisées). Tu peux les changer à tout moment dans les réglages du menu (bouton « Touches du script ») ou avec `ExecKey` et `HudKey` dans `config.ini`. `cs2_practice.cfg` contient aussi les touches `K`, `N`, `L`, `P`.
+La suppression de stuffs et de catégories se fait depuis la fenêtre de gestion. Les touches du menu se changent dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`).
+
+### Les 2 touches que le script appuie lui-même
+
+Pour parler à CS2, le script appuie sur 2 touches du clavier : une pour lancer les stuffs et les utilitaires (`ExecKey`), une pour les coordonnées (`HudKey`). Au premier lancement, une fenêtre te propose de les choisir parmi des touches libres : le script lit ta config CS2 pour repérer celles qui sont déjà utilisées. Choisis des touches que tu n'utilises jamais, ni dans CS2, ni dans un autre logiciel (Discord, logiciel de clavier ou de souris).
+
+- Tu peux les changer à tout moment : réglages du menu, bouton « Touches du script », ou `ExecKey` et `HudKey` dans `config.ini`.
+- Après un changement, tape `exec cs2_practice` une fois dans la console de CS2 : le script a réécrit les liaisons dans `cs2_practice.cfg`.
+- `cs2_practice.cfg` contient aussi les touches `K`, `N`, `L`, `P` (rejouer une grenade, noclip, supprimer les smokes, kit d'armes).
 
 ## Gestion des stuffs et des catégories
 
@@ -157,17 +165,24 @@ Smoke - Site A | Smoke CT depuis T spawn | setpos -456 -2288 -163; setang -39 57
 
 - Une catégorie est le premier champ des lignes. Une catégorie vide se déclare avec `@cat | Nom`.
 - Évite le caractère `;` dans l'info du chat (il est remplacé par une virgule).
-- Les lignes commençant par `#` sont ignorées. Voir `maps/_exemple.txt`.
+- Les lignes commençant par `#` sont ignorées. Voir `maps_default/_exemple.txt`.
 - `maps/_commun.txt` s'affiche dans toutes les maps.
+
+## Où sont mes stuffs ?
+
+Le dépôt ne contient aucun stuff : il fournit des maps vides dans `maps_default\`. Au premier lancement, le script les copie dans `maps\`, ton dossier personnel. Le dossier `maps\` (comme `data\` et `profiles\`) est exclu de git : tes stuffs ne sont jamais envoyés sur GitHub, même avec `git add .`, et une mise à jour du script ne les écrase pas.
 
 ## Structure
 
 ```
 stuff_menu.ahk        script principal
-cs2_practice.cfg      réglages d'entraînement (à copier dans le cfg de CS2)
+cs2_practice.cfg      réglages d'entraînement (copié dans le cfg de CS2 au premier lancement)
 config.example.ini    modèle de configuration (copié en config.ini)
-maps/                 un fichier .txt par map + _commun.txt
-data/                 favoris, récents, copies de sécurité (non versionné)
+maps_default/         modèles de maps vides (copiés dans maps/ au premier lancement)
+maps/                 tes stuffs : un fichier .txt par map + _commun.txt (non versionné)
+data/                 favoris, récents, captures, copies de sécurité (non versionné)
+profiles/             autres profils de stuffs (non versionné)
+update.bat            mise à jour sans lancer le script
 ```
 
 ## Thèmes et police
@@ -191,7 +206,7 @@ Si tu modifies ensuite le fond (préréglage ou curseurs), le menu repasse en «
 
 ## Sauvegardes et annulation
 
-- **Sauvegarde automatique** : une fois par jour, au lancement du script, tes maps (de chaque profil) sont copiées dans `data\backup\auto\AAAA-MM-JJ\`. Les 14 dernières sont conservées (`BackupKeep` dans `config.ini`, `AutoBackup=0` pour désactiver). Pour restaurer : `F1` > « Restaurer une sauvegarde… ». Ton état actuel est sauvegardé juste avant dans un dossier `avant-restauration-...`.
+- **Sauvegarde automatique** : une fois par jour, au lancement du script, tes maps (de chaque profil) sont copiées dans `data\backup\auto\AAAA-MM-JJ\`. Les 14 dernières sont conservées (`BackupKeep` dans `config.ini`, `AutoBackup=0` pour désactiver). Pour restaurer : entrée « Profils et partage de stuffs » du menu, puis bouton « Restaurer une sauvegarde… ». Ton état actuel est sauvegardé juste avant dans un dossier `avant-restauration-...`.
 - **Annuler une suppression** : `Ctrl+Z` dans le menu, ou le bouton « Annuler la suppression » (et `Ctrl+Z`) dans la fenêtre de gestion. Le dernier stuff supprimé est remis dans sa catégorie ; les 50 derniers sont mémorisés dans `data\deleted.txt`. Le favori et le cadenas du stuff ne sont pas restaurés. La suppression d'une catégorie ne détruit pas ses stuffs (ils vont dans « Non classés »), donc elle n'a pas besoin d'être annulée.
 
 ## Vérification de l'installation
@@ -210,14 +225,15 @@ Lance ensuite CS2 et une map locale : dès que le jeu est au premier plan, le sc
 - **Sans le script** : ferme le script, puis double-clique sur `update.bat`. Il télécharge la dernière version et remplace les fichiers du programme.
 - **Avec Git** : `git pull` dans le dossier.
 
-Dans tous les cas, `maps\`, `data\`, `profiles\` et `config.ini` ne sont jamais modifiés : tes stuffs, favoris, profils et réglages restent en place. L'ancien script est copié dans `data\backup\stuff_menu.ahk.bak`. Si `cs2_practice.cfg` change (voir le CHANGELOG), recopie-le dans le dossier cfg de CS2.
+Dans tous les cas, `maps\`, `data\`, `profiles\` et `config.ini` ne sont jamais modifiés : tes stuffs, favoris, profils et réglages restent en place. L'ancien script est copié dans `data\backup\stuff_menu.ahk.bak`. Si `cs2_practice.cfg` change (voir le CHANGELOG), supprime l'ancienne copie du dossier cfg de CS2 : le script en recopie une neuve au lancement.
 
 ## Dépannage
 
 - **Le menu n'apparaît pas** : vérifie que le script tourne et que CS2 est en mode fenêtré (plein écran fenêtré). Tu peux aussi placer le menu sur un autre écran dans les réglages du menu (réglages de position).
 - **La map n'est pas détectée** : vérifie `-condebug`, ou règle `AutoDetectMap=0` dans `config.ini`.
 - **TP, give, God mode ou bot ne marchent plus** : ces commandes exigent `sv_cheats 1`. Le script l'envoie avant chaque commande ; si ça ne marche toujours pas, vérifie que tu es bien dans une partie locale (pas en matchmaking). Test rapide : tape `setpos 0 0 0` dans la console.
-- **Rien ne se passe au choix d'un stuff** : vérifie `CfgPath` et que tu as lancé `exec cs2_practice` au moins une fois à la main (il relie la touche `kp_multiply` au fichier généré).
+- **Rien ne se passe au choix d'un stuff** : vérifie que tu es dans une partie locale et que tu as tapé `exec cs2_practice` dans la console depuis le lancement de CS2 (il relie la touche du script au fichier généré). Le bouton « Vérifier l'installation » des réglages indique où ça bloque.
+- **Des armes changent toutes seules, ou une touche fait autre chose** : une des 2 touches du script est aussi utilisée ailleurs (CS2, Discord, logiciel de clavier). Change-la dans les réglages du menu, bouton « Touches du script », puis retape `exec cs2_practice`.
 - **L'exec automatique ne se déclenche pas** : vérifie `-condebug` (détection de map) ou utilise l'entrée « Relancer l'exec » du menu.
 - **Suppression par erreur** : récupère le fichier dans `data/backup/`.
 
@@ -228,7 +244,3 @@ Les lineups des maps sont dans `maps/` : les pull requests avec de nouveaux rep�
 ## Licence
 
 [MIT](LICENSE)
-
-## Où sont mes stuffs ?
-
-Le dépôt ne contient aucun stuff : il fournit des maps vides dans `maps_default\`. Au premier lancement, le script les copie dans `maps\`, ton dossier personnel. Le dossier `maps\` (comme `data\` et `profiles\`) est exclu de git : tes stuffs ne sont jamais envoyés sur GitHub, même avec `git add .`, et une mise à jour du script ne les écrase pas.
