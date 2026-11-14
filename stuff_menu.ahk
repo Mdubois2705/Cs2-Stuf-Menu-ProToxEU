@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.14.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.14.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -179,6 +179,7 @@ NUM := "[-+\d.eE]+"
 ; ---------- État ----------
 menuOpen := false
 dlgOpen := false
+dlgHwnd := 0        ; fenêtre de sauvegarde ouverte (retrouve un indicateur resté bloqué)
 level := 0          ; 0 = maps, 1 = catégories, 2 = stuffs, 3 = recherche, 4 = menu principal
 mainIdx := 1
 prevLevel := 1
@@ -1389,9 +1390,15 @@ AppendLine(path, line) {
 }
 
 ShowSaveDialog(presetCat := "", presetMap := "") {
-    global dlgOpen
-    if dlgOpen
-        return
+    global dlgOpen, dlgHwnd
+    if dlgOpen {
+        ; déjà ouverte : on la remet devant. Si elle n'existe plus, l'indicateur était resté bloqué : on le remet à zéro
+        if (dlgHwnd != 0 && WinExist("ahk_id " dlgHwnd)) {
+            WinActivate("ahk_id " dlgHwnd)
+            return
+        }
+        dlgOpen := false
+    }
     if menuOpen {
         CloseMenu()
         Sleep(120)
@@ -1428,6 +1435,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
 
     dlgOpen := true
     d := Gui("+AlwaysOnTop", "Sauvegarder un repère")
+    dlgHwnd := d.Hwnd
     d.SetFont("s10", "Segoe UI")
     d.Add("Text", "xm w95", "Map")
     ddMap := d.Add("DropDownList", "x110 yp-3 w340 Choose" mapSel, mapNames)
@@ -1534,14 +1542,49 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
                     if (ccT != NO_TYPE && (InStr(ccC, ccT " - ") = 1 || ccC = ccT))
                         ccType := ccT
                 }
-                ddType.Choose(ccType)
+                if (ccType != NO_TYPE)
+                    ddType.Choose(ccType)
                 return
             }
         }
     }
 
+    ; Taper dans la liste filtre les catégories existantes (recherche) : rien n'est créé
+    catBusy := Map("v", false)
+    CatFilter() {
+        if catBusy["v"]
+            return
+        catBusy["v"] := true
+        try {
+            cfTxt := cbCat.Text
+            cfExact := false
+            cfAll := AllCategories(mapFiles[ddMap.Value])
+            cfLst := []
+            for cfC in cfAll {
+                if (StrLower(cfC) = StrLower(cfTxt))
+                    cfExact := true
+                if (cfTxt = "" || InStr(cfC, cfTxt))
+                    cfLst.Push(cfC)
+            }
+            ; catégorie reconnue ou champ vide : toute la liste ; sinon seulement celles qui contiennent le texte tapé
+            cfShow := (cfExact || cfTxt = "") ? cfAll : cfLst
+            cbCat.Delete()
+            if (cfShow.Length > 0)
+                cbCat.Add(cfShow)
+            cbCat.Text := cfTxt
+            cfN := StrLen(cfTxt)
+            SendMessage(0x142, 0, (cfN << 16) | cfN, cbCat)   ; curseur à la fin du texte tapé
+            if (!cfExact && cfTxt != "" && cfLst.Length > 0)
+                SendMessage(0x14F, 1, 0, cbCat)               ; ouvre la liste filtrée
+        }
+        catBusy["v"] := false
+        CatSync()
+    }
+
     CatChange(*) {
-        SetTimer(CatSync, -30)
+        if catBusy["v"]
+            return
+        SetTimer(CatFilter, -200)
     }
 
     ; Recopie le nom des tags dans le message d'info du chat (le tag reste aussi enregistré comme tag)
@@ -1604,22 +1647,22 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
         }
         typ := ddType.Text
         sub := CleanField(cbCat.Text)
-        if (sub = "") {
-            if (typ = NO_TYPE) {
-                MsgBox("Choisis ou tape une catégorie.", "Sauvegarde", 0x40030)
-                return
+        catFull := ""
+        for scC in AllCategories(mapFiles[ddMap.Value]) {
+            if (sub != "" && StrLower(scC) = StrLower(sub)) {
+                catFull := scC
+                break
             }
-            catFull := typ
-        } else {
-            catFull := ""
-            for scC in AllCategories(mapFiles[ddMap.Value]) {
-                if (scC = sub) {
-                    catFull := scC
-                    break
-                }
-            }
-            if (catFull = "")
-                catFull := (typ = NO_TYPE) ? sub : typ " - " sub
+            ; aucune catégorie choisie : on prend celle qui porte le nom du type si elle existe déjà
+            if (sub = "" && typ != NO_TYPE && StrLower(scC) = StrLower(typ))
+                catFull := scC
+        }
+        if (catFull = "") {
+            if (sub = "")
+                MsgBox("Choisis une catégorie dans la liste, ou crée-la avec le bouton +.", "Sauvegarde", 0x40030)
+            else
+                MsgBox("La catégorie « " sub " » n'existe pas.`n`nChoisis une catégorie dans la liste (tu peux taper pour la chercher), ou crée-la avec le bouton +.", "Sauvegarde", 0x40030)
+            return
         }
         cmdFull := pnorm
         if chkGive.Value {
@@ -1810,11 +1853,9 @@ AskText(title, prompt, defVal := "", back := "ahk_exe cs2.exe") {
 
 ; Touche AddKey : ouvre la fenêtre de création d'un nouveau stuff (catégorie courante pré-remplie)
 NewStuffPress() {
-    if (level = 4 || utilMode)
-        return
     preset := ""
     pmap := ""
-    if (level >= 1 && level <= 3 && loadedMap != "") {
+    if (level >= 1 && level <= 3 && !utilMode && loadedMap != "") {
         pmap := loadedMap
         cur := CurrentItem()
         if (level = 1 && cats.Length > 0 && cats[catIdx] != FAV_CAT && cats[catIdx] != REC_CAT)

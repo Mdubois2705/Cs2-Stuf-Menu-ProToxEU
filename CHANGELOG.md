@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.14.2
+
+- Fenêtre de sauvegarde : la liste **Catégorie** est maintenant une liste de **recherche** (taper filtre les catégories existantes). Elle ne crée plus jamais de catégorie : un nom inconnu est refusé, les catégories se créent avec le bouton **+**. Sans catégorie choisie, la catégorie portant le nom du type est utilisée si elle existe déjà, sinon un message demande d'en choisir une.
+- Le type choisi ne change plus quand on sélectionne une catégorie sans préfixe de type.
+- `F4` : ouvre aussi la fenêtre de sauvegarde depuis le menu principal et la liste des utilitaires (il ne faisait rien). Si la fenêtre est déjà ouverte, elle repasse devant. Un indicateur « fenêtre ouverte » resté bloqué est remis à zéro, ce qui pouvait empêcher la fenêtre de s'ouvrir de nouveau.
+
 ## v2.14.1
 
 - Bouton **+** de la catégorie : la catégorie est créée avec exactement le nom tapé, sans préfixe de type, et le type choisi ne change plus.

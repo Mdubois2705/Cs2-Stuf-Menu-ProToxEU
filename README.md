@@ -65,7 +65,7 @@ Dans le menu des stuffs :
 | `Tab` | Recherche rapide |
 | `F2` | Ajouter / retirer des favoris |
 | `F3` | Cadenas : verrouiller / déverrouiller la catégorie ou le stuff sélectionné |
-| `F4` | Créer un nouveau stuff (fenêtre de sauvegarde, catégorie courante pré-remplie) |
+| `F4` | Créer un nouveau stuff (fenêtre de sauvegarde, catégorie courante pré-remplie dans le menu des stuffs). Fonctionne aussi depuis le menu principal |
 | `Ctrl+Z` | Annuler la dernière suppression de stuff |
 
 La suppression de stuffs et de catégories se fait depuis la fenêtre de gestion. Les touches du menu se changent dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`).
@@ -162,7 +162,7 @@ Tout se règle dans « Réglages du menu », onglet « Captures » : activer, zo
 
 **Depuis le jeu** : place-toi au bon endroit, vise, ouvre le menu (`F1`) et choisis « Sauvegarder la position actuelle », puis remplis la map, le type, la catégorie, le nom et le message du chat.
 
-Dans la fenêtre, la liste **Catégorie** propose toutes les catégories déjà créées pour la map (y compris celles créées dans la fenêtre de gestion). Choisis-en une, ou tape un nouveau nom : sans catégorie existante du même nom, il est rangé sous « Type - Nom » (par exemple `Smoke - Site A`). Le bouton **+** à côté de la liste crée une nouvelle catégorie vide dans la map choisie, avec exactement le nom que tu tapes (le type n'est pas ajouté devant), et la sélectionne.
+Dans la fenêtre, la liste **Catégorie** propose toutes les catégories déjà créées pour la map (y compris celles créées dans la fenêtre de gestion). Tape quelques lettres pour **chercher** une catégorie : la liste se filtre. Taper un nom qui n'existe pas ne crée rien, et l'enregistrement est refusé tant qu'aucune catégorie existante n'est choisie. Pour en créer une, utilise le bouton **+** à côté de la liste : la catégorie est créée dans la map choisie avec exactement le nom que tu tapes (le type n'est pas ajouté devant) et elle est sélectionnée.
 
 **Tags** : la liste **Tags** (entre le nom et l'info du chat) propose les tags déjà créés. Choisis-en un ou tape-en un nouveau, puis clique sur **+** pour l'ajouter au stuff (un tag nouveau est créé et gardé dans `data\tags.txt`). Le bouton **-** retire le tag tapé, ou le dernier ajouté si la liste est vide. Le bouton **→ Info** recopie le nom des tags dans le message d'info du chat. Un stuff peut avoir plusieurs tags. Ils s'affichent sous le message d'info dans le menu, se retrouvent dans la recherche rapide (tape `#facile` ou `facile`), et se modifient dans la fenêtre « Modifier le stuff ». Ils sont inclus dans l'export et l'import.
 
