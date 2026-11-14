@@ -1,5 +1,60 @@
 # Changelog
 
+## v2.21.0
+
+- **Changer de map** : nouvelle entrée « Changer de map » dans le menu principal. Liste de tes maps et des maps de compétition, ou nom saisi à la main ; le menu envoie `map <nom>` au jeu et l'exec du cfg d'entraînement se relance tout seul sur la nouvelle map.
+
+## v2.20.0
+
+- **Bip du chrono** : un court bip retentit 0,5 s avant l'explosion prévue quand le temps de vol du stuff est connu, sinon à l'explosion. Réglable dans l'onglet Chronomètre (`TimerBeep`). Le compteur en direct démarre aussi avec la touche de relance.
+- **Sauvegarde avant mise à jour** : maps, temps de vol, favoris et cadenas de chaque profil sont copiés dans `data\backup\auto\avant-maj-...` avant chaque mise à jour (5 gardées) et se restaurent avec « Restaurer une sauvegarde… ».
+- **Voyant de connexion** : en bas de « Réglages du menu », un voyant vert ou rouge indique si CS2 est connecté, mis à jour en direct.
+- **Profil complet en un fichier** : « Exporter le profil… » et « Importer un profil… » dans « Profils et partage » (stuffs, temps, favoris, cadenas, captures et réglages dans un `.zip`), pour changer de PC. Les commandes interdites sont ignorées à l'import.
+
+## v2.19.1
+
+- Chrono : correction du temps faux avec la touche de relance (`K`). Chaque grenade en vol a maintenant son propre départ : spammer `K` ou avoir plusieurs grenades en l'air n'additionne plus les temps, et la répétition automatique de la touche maintenue est ignorée.
+- Nouveau réglage `TimerDebug=1` (dans `config.ini`) : écrit les événements du chrono dans `data\timer_debug.txt` (et dans le diagnostic) pour comprendre un temps incorrect.
+
+## v2.19.0
+
+- Nouveau : une fenêtre « Nouveautés » s'ouvre au démarrage après chaque mise à jour et liste les modifications des versions que tu n'avais pas encore vues.
+- Tu peux la désactiver (case dans la fenêtre, ou `ShowChangelog=0`) et la rouvrir avec l'entrée « Nouveautés » du menu principal.
+
+## v2.18.5
+
+- Chrono : la touche de relance (`RethrowKey`, `k` par défaut) fait partir le chrono, car le jeu n'écrit pas toujours de ligne au lancer d'une relance. Le départ retenu est le plus récent entre cette touche, la ligne `sv_throw_...` du journal et le dernier clic relâché.
+- Chrono : les noms de grenade sont reconnus plus largement (une flash n'est plus affichée « Grenade »).
+- Quiz : le nom et la catégorie du stuff s'affichent dans un bandeau en haut de l'écran, jusqu'à « Quiz : voir la réponse » ou un nouveau quiz (l'infobulle de 7 secondes disparaissait trop vite).
+
+## v2.18.4
+
+- Correction : le script ne démarrait plus (« This Func cannot be used as an output variable : TmLiveStart ») à cause d'une variable du chrono en direct qui portait le même nom qu'une fonction. Si tu es sur une version 2.18.0 à 2.18.3, remplace `stuff_menu.ahk` à la main : l'ancien fichier ne peut pas lancer la mise à jour.
+
+## v2.18.3
+
+- **Noms uniques** : un nom de stuff ne peut exister qu'une fois par map (toutes catégories, « communs » compris) et un nom de catégorie qu'une fois, sans tenir compte des majuscules. Contrôle à la création, à la modification, au renommage, au déplacement et à l'import (un stuff importé qui porte le nom d'un stuff d'une autre catégorie est renommé « Nom (2) » ou ignoré selon le choix).
+- Correction : l'aperçu de l'import ne repérait jamais les doublons (statut toujours « Nouveau »).
+
+## v2.18.2
+
+- Le temps de vol reste facultatif : case « Proposer de mesurer le temps de vol après la création d'un stuff » (onglet Chronomètre, clé `FlightAsk`), et bouton « Supprimer » pour retirer le temps d'un stuff dans « Modifier le stuff ».
+- Import : case « Importer les temps de vol » dans la fenêtre d'import (cochée par défaut).
+
+## v2.18.1
+
+- Les temps de vol sont inclus dans les exports de stuffs (lignes `@TIME` du fichier ou du code) et repris à l'import, dans le profil de destination. Les anciennes versions ignorent ces lignes.
+
+## v2.18.0
+
+- **Temps de vol par stuff** : après la création d'un stuff de grenade, le menu propose de mesurer son temps de vol (téléportation au repère, lancer, mesure). Le joueur valide le temps (Oui / refaire / abandonner). Le bouton « Mesurer le temps de vol... » de la fenêtre « Modifier le stuff » le fait aussi pour les stuffs existants. Le temps s'affiche dans le menu (`Temps de vol : 2,9 s`) et est gardé dans `data\times.txt`.
+- **Chrono en direct** : pour une relance (`sv_rethrow_last_grenade`), le compteur tourne jusqu'à l'explosion.
+- **Quiz** : entrées « Quiz : stuff au hasard » (téléportation sans visée ni info du chat) et « Quiz : voir la réponse » dans le menu principal.
+- **Diagnostic** : bouton « Copier le diagnostic » en bas des réglages.
+- **console.log** : vidé au lancement du menu s'il dépasse `LogMaxMB` (10 Mo), quand CS2 est fermé.
+- **Nettoyage** : bouton « Nettoyer les captures et temps orphelins » (onglet Captures).
+- Menu principal : les entrées sont désormais gérées par identifiant (plus de numéros).
+
 ## v2.17.0
 
 - **Chronomètre de grenade** : affiche le temps entre le lâcher (clic gauche relâché, ou relance `sv_throw_...`) et l'explosion lue dans `console.log` (`threw smokegrenade [...]`), pour la smoke, la flash, la HE, le molotov, l'incendiaire et le leurre.

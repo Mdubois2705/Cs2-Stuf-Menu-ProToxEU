@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.17.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.21.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -22,6 +22,7 @@ MapsDir := ProfMaps(curProfile)
 DataDir := ProfData(curProfile)
 FavFile := DataDir "\favorites.txt"
 LockFile := DataDir "\locks.txt"
+TimesFile := DataDir "\times.txt"   ; temps de vol des stuffs
 RecentFile := DataDir "\recents.txt"
 
 CfgPath := IniRead(IniFile, "Settings", "CfgPath", "")
@@ -56,6 +57,11 @@ TimerAuto := (IniRead(IniFile, "Settings", "TimerAuto", "1") = "1")   ; 1 = au-d
 TimerX := ToInt(IniRead(IniFile, "Settings", "TimerX", "12"), 12)
 TimerY := ToInt(IniRead(IniFile, "Settings", "TimerY", "820"), 820)
 TimerDur := Max(2, Min(20, ToInt(IniRead(IniFile, "Settings", "TimerDur", "6"), 6)))   ; secondes d'affichage du résultat
+ShowChangelogOn := (IniRead(IniFile, "Settings", "ShowChangelog", "1") = "1")   ; fenêtre « Nouveautés » après chaque mise à jour
+TimerBeep := (IniRead(IniFile, "Settings", "TimerBeep", "1") = "1")   ; bip avant l'arrivée de la grenade
+RethrowKey := Trim(IniRead(IniFile, "Settings", "RethrowKey", "k"))   ; touche liée à sv_rethrow_last_grenade (chrono : départ de la relance)
+FlightAsk := (IniRead(IniFile, "Settings", "FlightAsk", "1") = "1")   ; proposer de mesurer le temps de vol après la création d'un stuff
+LogMaxMB := Max(0, ToInt(IniRead(IniFile, "Settings", "LogMaxMB", "10"), 10))   ; taille de console.log au-delà de laquelle il est vidé au lancement (0 = jamais)
 ShotOn := (IniRead(IniFile, "Settings", "Shot", "1") = "1")                         ; captures d'écran des stuffs
 ShotSize := Max(40, Min(300, ToInt(IniRead(IniFile, "Settings", "ShotSize", "100"), 100)))   ; zone capturée (px)
 ShotZoom := Max(60, Min(500, ToInt(IniRead(IniFile, "Settings", "ShotZoom", "160"), 160)))   ; taille d'affichage (px)
@@ -204,8 +210,25 @@ tmVisible := false
 tmRunning := false  ; lecture de console.log active
 tmPos := 0          ; position de lecture dans console.log
 tmClicks := []      ; moments où le clic gauche a été relâché
-tmThrowTick := 0    ; moment de la dernière relance (sv_throw_...)
+tmStarts := []      ; file des départs de grenades en vol : [instant, confirmé par le journal]
+tmLastK := 0
+tmExpect := ""      ; temps de vol attendu (stuff lancé par le menu)
+tmBeeped := false
+tmLastLabel := ""   ; type de la dernière grenade vue (pour le chrono en direct des relances)
+TimerDebug := (IniRead(IniFile, "Settings", "TimerDebug", "0") = "1")
+TmDbgFile := DataDir "\timer_debug.txt"
 tmSentSock := 0     ; connexion pour laquelle « log on » a été envoyé
+tmMeasuring := false ; mesure du temps de vol d'un stuff en cours
+tmMeasured := 0     ; dernier temps mesuré pendant une mesure (secondes)
+tmLive := false     ; chrono en direct affiché
+tmLiveLabel := ""
+tmLiveT0 := 0
+tmCtl := ""         ; texte du chronomètre
+times := Map()      ; temps de vol : clé de position -> secondes
+quizCur := ""       ; stuff du quiz en cours
+qzGui := ""         ; bandeau du quiz
+clGui := ""         ; fenêtre des nouveautés
+qzB := ""
 shotOk := Map()     ; captures vérifiées lisibles
 gs := ""            ; fenêtre qui affiche la capture du stuff sélectionné
 gsPic := ""
@@ -231,6 +254,7 @@ DirCreate(DataDir)
 LoadFavs()
 LoadLocks()
 LoadRecents()
+LoadTimes()
 
 ; =====================================================================
 ;  Fichiers : maps, favoris, récents
@@ -322,6 +346,147 @@ OpenUtil() {
     utilMode := true
     level := 2
     Render()
+}
+
+; =====================================================================
+;  Temps de vol des stuffs (data\times.txt)
+; =====================================================================
+; Clé = position et angle du stuff (stable si on renomme ou déplace le stuff)
+TimeKey(cmd) {
+    pat := "i)setpos\s+(" NUM ")\s+(" NUM ")\s+(" NUM ")(?:\s*;\s*setang\s+(" NUM ")\s+(" NUM "))?"
+    if !RegExMatch(cmd, pat, &m)
+        return ""
+    k := ""
+    try {
+        k := Format("{:.2f}", Number(m[1])) "_" Format("{:.2f}", Number(m[2])) "_" Format("{:.2f}", Number(m[3]))
+        if (m[4] != "" && m[5] != "")
+            k .= "_" Format("{:.2f}", Number(m[4])) "_" Format("{:.2f}", Number(m[5]))
+    }
+    return k
+}
+
+LoadTimes() {
+    global times
+    times := Map()
+    if !FileExist(TimesFile)
+        return
+    for line in StrSplit(FileRead(TimesFile, "UTF-8"), "`n", "`r") {
+        p := StrSplit(line, "`t")
+        if (p.Length >= 2 && p[1] != "" && IsNumber(p[2]))
+            times[p[1]] := p[2]
+    }
+}
+
+SaveTimes() {
+    txt := ""
+    for k, v in times
+        txt .= k "`t" v "`n"
+    try {
+        DirCreate(DataDir)
+        try FileDelete(TimesFile)
+        FileAppend(txt, TimesFile, "UTF-8-RAW")
+    }
+}
+
+; Temps de vol (secondes, en texte) d'un stuff d'après sa commande, "" s'il n'est pas mesuré
+FlightTime(cmd) {
+    k := TimeKey(cmd)
+    return (k != "" && times.Has(k)) ? times[k] : ""
+}
+
+FlightText(secs) {
+    return StrReplace(Format("{:.1f}", Number(secs)), ".", ",") " s"
+}
+
+SetFlightTime(cmd, secs) {
+    k := TimeKey(cmd)
+    if (k = "")
+        return
+    times[k] := Format("{:.2f}", Number(secs))
+    SaveTimes()
+}
+
+DelFlightTime(key) {
+    if (key != "" && times.Has(key)) {
+        times.Delete(key)
+        SaveTimes()
+    }
+}
+
+; Téléporte le joueur au repère, attend qu'il lance la grenade et renvoie le temps mesuré (secondes),
+; ou 0 si annulé. Le joueur valide le temps (il peut refaire le lancer s'il a raté).
+MeasureFlight(cmd, typ := "") {
+    global tmMeasuring, tmMeasured, netFailTick
+    if !ProcessExist("cs2.exe") {
+        MsgBox("CS2 n'est pas lancé.", "Temps de vol", 0x40030)
+        return 0
+    }
+    netFailTick := 0
+    if !NetOpen() {
+        MsgBox("Pas de connexion à CS2 : ferme le jeu et relance le menu.", "Temps de vol", 0x40030)
+        return 0
+    }
+    send := cmd
+    if (typ != "" && !RegExMatch(cmd, "i)give\s+weapon_")) {
+        gv := GiveMap.Get(typ, "")
+        if (gv != "")
+            send .= "; give " gv
+    }
+    Loop {
+        tmMeasuring := true
+        tmMeasured := 0
+        TmApply()
+        WinActivate("ahk_exe cs2.exe")
+        WinWaitActive("ahk_exe cs2.exe", , 3)
+        Sleep(200)
+        RunCmd(send)
+        ToolTip("Chrono : lance la grenade maintenant (Échap pour annuler)")
+        t0 := A_TickCount
+        res := 0
+        canceled := false
+        while (A_TickCount - t0 < 30000) {
+            Sleep(50)
+            if (tmMeasured > 0) {
+                res := tmMeasured
+                break
+            }
+            if GetKeyState("Escape", "P") {
+                canceled := true
+                break
+            }
+        }
+        ToolTip()
+        tmMeasuring := false
+        TmApply()
+        if canceled
+            return 0
+        if (res = 0) {
+            if (MsgBox("Aucune explosion détectée en 30 secondes.`n`nRéessayer ?", "Temps de vol", 0x40024) = "Yes")
+                continue
+            return 0
+        }
+        ans := MsgBox("Temps mesuré : " FlightText(res) "`n`nOui : enregistrer ce temps`nNon : refaire le lancer`nAnnuler : abandonner", "Temps de vol", 0x40023)
+        if (ans = "Yes")
+            return res
+        if (ans = "Cancel")
+            return 0
+    }
+}
+
+; Propose de mesurer le temps de vol d'un stuff qui vient d'être créé
+OfferFlight(cmd, typ) {
+    if !FlightAsk
+        return
+    if !(GiveMap.Has(typ) || RegExMatch(cmd, "i)give\s+weapon_(smokegrenade|flashbang|hegrenade|molotov|incgrenade|decoy)"))
+        return
+    if (MsgBox("Mesurer le temps de vol de ce stuff ?`n`nOui : tu es téléporté au repère, tu lances la grenade et le menu mesure le temps jusqu'à l'explosion. Tu valides ensuite le résultat.`nNon : tu pourras le faire plus tard (Modifier le stuff).", "Temps de vol", 0x40024) != "Yes")
+        return
+    secs := MeasureFlight(cmd, typ)
+    if (secs > 0) {
+        SetFlightTime(cmd, secs)
+        ToolTip("Temps de vol enregistré : " FlightText(secs))
+        SetTimer(() => ToolTip(), -2500)
+    }
 }
 
 ; Ajoute les catégories [Favoris] et [Récents] en tête (si non vides)
@@ -693,9 +858,15 @@ ShotDir(prof := "") {
 ShotPath(mapName, cmd, prof := "") {
     if !RegExMatch(cmd, "i)setpos\s+(" NUM ")\s+(" NUM ")\s+(" NUM ")", &m)
         return ""
+    return ShotDir(prof) "\" mapName "_" ShotCoordKey(cmd) ".bmp"
+}
+
+; Partie « coordonnées » du nom de fichier d'une capture ("" si le stuff n'a pas de position)
+ShotCoordKey(cmd) {
+    if !RegExMatch(cmd, "i)setpos\s+(" NUM ")\s+(" NUM ")\s+(" NUM ")", &m)
+        return ""
     k := m[1] "_" m[2] "_" m[3]
-    k := StrReplace(StrReplace(k, "-", "m"), ".", "p")
-    return ShotDir(prof) "\" mapName "_" k ".bmp"
+    return StrReplace(StrReplace(k, "-", "m"), ".", "p")
 }
 
 ; Capture ShotSize x ShotSize px au centre de la fenêtre CS2 (sinon de l'écran) et l'enregistre en .bmp
@@ -758,7 +929,7 @@ HideShot() {
         gs.Hide()
 }
 
-; Affiche (ou cache) la capture du stuff sélectionné. preview = true : aperçu depuis les réglages F10
+; Affiche (ou cache) la capture du stuff sélectionné. preview = true : aperçu depuis les réglages
 UpdateShot(preview := false) {
     global gs, gsPic, gsTxt
     if (!ShotOn || (!menuOpen && !preview)) {
@@ -870,39 +1041,317 @@ DispName(it, withCat) {
 }
 
 ; Entrées du menu principal (ouvert par la touche MenuKey)
+MainItems() {
+    return [["stuffs", "Stuffs (maps et catégories)"]
+        , ["util", "Utilitaires (bots, god mode, noclip...)"]
+        , ["changemap", "Changer de map"]
+        , ["last", "Relancer le dernier stuff"]
+        , ["quiz", "Quiz : stuff au hasard (sans les infos)"]
+        , ["quizans", "Quiz : voir la réponse"]
+        , ["save", "Sauvegarder la position actuelle"]
+        , ["manage", "Gérer les stuffs et les catégories"]
+        , ["share", "Profils et partage de stuffs"]
+        , ["news", "Nouveautés (historique des versions)"]
+        , ["settings", "Réglages du menu"]
+        , ["exec", "Relancer l'exec de " PracticeCfg]
+        , ["check", "Vérifier l'installation"]
+        , ["close", "Fermer"]]
+}
+
 MainLabels() {
-    return ["Stuffs (maps et catégories)", "Utilitaires (bots, god mode, noclip...)", "Relancer le dernier stuff", "Sauvegarder la position actuelle", "Gérer les stuffs et les catégories", "Profils et partage de stuffs", "Réglages du menu", "Relancer l'exec de " PracticeCfg, "Vérifier l'installation", "Fermer"]
+    out := []
+    for it in MainItems()
+        out.Push(it[2])
+    return out
 }
 
 MainSelect() {
     global level
-    i := mainIdx
-    if (i = 1) {
+    id := MainItems()[mainIdx][1]
+    if (id = "stuffs") {
         OpenStuffs()
         return
     }
-    if (i = 2) {
+    if (id = "util") {
         OpenUtil()
         return
     }
     CloseMenu()
-    if (i = 10)
+    if (id = "close")
         return
     Sleep(60)
-    if (i = 3)
+    if (id = "last")
         RepeatLast()
-    else if (i = 4)
+    else if (id = "changemap")
+        ShowMapChange()
+    else if (id = "quiz")
+        QuizStart()
+    else if (id = "quizans")
+        QuizReveal()
+    else if (id = "save")
         ShowSaveDialog()
-    else if (i = 5)
+    else if (id = "manage")
         ShowManager()
-    else if (i = 6)
+    else if (id = "share")
         ShowShare()
-    else if (i = 7)
+    else if (id = "news")
+        ShowNews("", 5)
+    else if (id = "settings")
         ShowSettings()
-    else if (i = 8)
+    else if (id = "exec")
         ForceExec()
-    else if (i = 9)
+    else if (id = "check")
         SetTimer(StartCheck, -50)
+}
+
+; =====================================================================
+;  Nouveautés : fenêtre qui affiche le CHANGELOG des versions récentes
+; =====================================================================
+; Renvoie [[version, texte], ...] (les plus récentes d'abord) d'après CHANGELOG.md
+ReadChangelog() {
+    f := A_ScriptDir "\CHANGELOG.md"
+    out := []
+    if !FileExist(f)
+        return out
+    ver := ""
+    body := ""
+    for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
+        if RegExMatch(ln, "^##\s+v?(\d+(?:\.\d+)*)", &m) {
+            if (ver != "")
+                out.Push([ver, Trim(body, "`n")])
+            ver := m[1]
+            body := ""
+            continue
+        }
+        if (ver != "")
+            body .= ln "`n"
+    }
+    if (ver != "")
+        out.Push([ver, Trim(body, "`n")])
+    return out
+}
+
+; Texte lisible : sans mise en forme Markdown
+CleanLogText(txt) {
+    txt := StrReplace(txt, Chr(96), "")
+    txt := StrReplace(txt, "**", "")
+    txt := RegExReplace(txt, "m)^\s*-\s+", "• ")
+    return StrReplace(txt, "`n", "`r`n")
+}
+
+; Affiche les versions plus récentes que sinceVer (toutes si vide), jusqu'à maxN versions, sans dépasser la version actuelle
+; Changement de map : envoie « map <nom> » au jeu (le cfg d'entraînement se relance tout seul à la détection de la nouvelle map)
+ShowMapChange() {
+    static open := ""
+    if IsObject(open) {
+        try open.Show()
+        return
+    }
+    LoadMaps()
+    names := []
+    for n in mapNames {
+        if RegExMatch(n, "^\w+$") && SubStr(n, 1, 1) != "_"
+            names.Push(n)
+    }
+    for n in ["de_ancient", "de_anubis", "de_dust2", "de_inferno", "de_mirage", "de_nuke", "de_overpass", "de_train", "de_vertigo"] {
+        has := false
+        for x in names {
+            if (x = n)
+                has := true
+        }
+        if !has
+            names.Push(n)
+    }
+    d := Gui("+AlwaysOnTop", "Changer de map")
+    open := d
+    d.SetFont("s10", "Segoe UI")
+    d.Add("Text", "x12 y12 w300", "Choisis la map à charger (double-clic ou bouton) :")
+    lb := d.Add("ListBox", "x12 y+8 w300 r12", names)
+    lb.Choose(1)
+    d.Add("Text", "x12 y+10 w300", "Ou tape un nom de map (ex. de_mirage, cs_office) :")
+    ed := d.Add("Edit", "x12 y+4 w300")
+    btnGo := d.Add("Button", "x12 y+12 w180 Default", "Changer de map")
+    btnNo := d.Add("Button", "x+8 yp w112", "Fermer")
+    Go(*) {
+        nm := Trim(ed.Value)
+        if (nm = "")
+            nm := lb.Text
+        if !RegExMatch(nm, "^\w+$") {
+            MsgBox("Nom de map invalide.", "Changer de map", 0x40030)
+            return
+        }
+        if !NetSend("map " nm)
+            NetWarn()
+        Shut()
+    }
+    Shut(*) {
+        open := ""
+        try d.Destroy()
+        try WinActivate("ahk_exe cs2.exe")
+    }
+    lb.OnEvent("DoubleClick", Go)
+    btnGo.OnEvent("Click", Go)
+    btnNo.OnEvent("Click", Shut)
+    d.OnEvent("Close", Shut)
+    d.OnEvent("Escape", Shut)
+    d.Show("AutoSize Center")
+}
+
+ShowNews(sinceVer := "", maxN := 5) {
+    global clGui
+    txt := ""
+    n := 0
+    for e in ReadChangelog() {
+        if (VerCompare(e[1], APP_VERSION) > 0)
+            continue
+        if (sinceVer != "" && VerCompare(e[1], sinceVer) <= 0)
+            continue
+        n += 1
+        if (n > maxN)
+            break
+        txt .= "VERSION " e[1] "`r`n" CleanLogText(e[2]) "`r`n`r`n"
+    }
+    if (txt = "") {
+        MsgBox("Aucune nouveauté à afficher (CHANGELOG.md introuvable ou vide).", "Menu Stuf", 0x40040)
+        return false
+    }
+    if IsObject(clGui)
+        try clGui.Destroy()
+    clGui := Gui("+AlwaysOnTop", "Nouveautés - Menu Stuf V." APP_VERSION)
+    clGui.SetFont("s10", "Segoe UI")
+    clGui.Add("Text", "x12 y12 w620", "Voici ce qui a changé dans le menu :")
+    ed := clGui.Add("Edit", "x12 y+8 w620 r20 ReadOnly +VScroll", RTrim(txt, "`r`n"))
+    chk := clGui.Add("CheckBox", "x12 y+10 w620" (ShowChangelogOn ? "" : " Checked"), "Ne plus afficher cette fenêtre après les mises à jour (réglage ShowChangelog)")
+    btn := clGui.Add("Button", "x12 y+10 w160 Default", "Fermer")
+    NewsToggle(*) {
+        global ShowChangelogOn
+        ShowChangelogOn := !chk.Value
+        IniWrite(ShowChangelogOn ? 1 : 0, IniFile, "Settings", "ShowChangelog")
+    }
+    NewsClose(*) {
+        global clGui
+        try clGui.Destroy()
+        clGui := ""
+    }
+    chk.OnEvent("Click", NewsToggle)
+    btn.OnEvent("Click", NewsClose)
+    clGui.OnEvent("Close", NewsClose)
+    clGui.OnEvent("Escape", NewsClose)
+    clGui.Show("AutoSize Center")
+    btn.Focus()
+    return true
+}
+
+; =====================================================================
+;  Quiz : un stuff au hasard de la map, sans l'angle ni les infos du chat
+; =====================================================================
+; Tu es téléporté au point de départ (avec la grenade) mais la visée n'est pas réglée et le message
+; du chat n'est pas envoyé : à toi de retrouver le lineup. « Quiz : voir la réponse » relance le stuff complet.
+QuizStart() {
+    global quizCur, LastMap
+    LoadMaps()
+    target := LastMap
+    if (AutoDetect && FileExist(ConsoleLog) && NetOpen()) {
+        det := DetectMap()
+        if (det != "")
+            target := det
+    }
+    path := ""
+    for i, n in mapNames {
+        if (n = target)
+            path := mapFiles[i]
+    }
+    if (path = "") {
+        ToolTip("Quiz : map introuvable (ouvre d'abord les stuffs de ta map)")
+        SetTimer(() => ToolTip(), -2500)
+        return
+    }
+    pool := []
+    for e in ReadEntries(path)[2] {
+        if (e[1] != UTIL_CAT && RegExMatch(e[3], "i)setpos"))
+            pool.Push(e)
+    }
+    if (pool.Length = 0) {
+        ToolTip("Quiz : aucun stuff avec position dans " target)
+        SetTimer(() => ToolTip(), -2500)
+        return
+    }
+    pick := pool[Random(1, pool.Length)]
+    tries := 0
+    while (pool.Length > 1 && IsObject(quizCur) && quizCur[1] = pick[1] && quizCur[2] = pick[2] && tries < 8) {
+        pick := pool[Random(1, pool.Length)]
+        tries += 1
+    }
+    quizCur := pick
+    qcmd := RegExReplace(pick[3], "i)\s*;?\s*setang\s+" NUM "\s+" NUM "(?:\s+" NUM ")?", "")
+    qcmd := Trim(RegExReplace(qcmd, "\s*;(\s*;)+", ";"), " `t;")
+    RunCmd(qcmd)
+    QzShow("QUIZ : " pick[2], "(" pick[1] ")")
+}
+
+; Bandeau du quiz (haut de l'écran) : reste affiché jusqu'à « voir la réponse » ou un nouveau quiz
+QzShow(l1, l2) {
+    global qzGui, qzB
+    QzHide()
+    if (ovBorder > 0) {
+        qzB := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+        qzB.BackColor := BorderColor()
+    }
+    dark := (Lum(ovBg) < 140)
+    cTxt := dark ? "FFFFFF" : "111111"
+    thh := ThemeById(ovTheme)
+    if IsObject(thh)
+        cTxt := thh[4]
+    fnt := (ovFont = "") ? "Consolas" : ovFont
+    qzGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
+    qzGui.BackColor := ovBg
+    qzGui.MarginX := 14 + ovCorner // 3
+    qzGui.MarginY := 8 + ovCorner // 4
+    qzGui.SetFont("s" FS(15) " bold c" cTxt, fnt)
+    qzGui.Add("Text", "Center", l1 "`n" l2)
+    qzGui.Show("NA AutoSize x0 y0")
+    qzGui.GetPos(, , &w, &h)
+    MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+    qzGui.Move(ml + (mr - ml - w) // 2, mt + 12 + ovBorder)
+    qzGui.GetPos(&px, &py, &pw, &ph)
+    dia := 2 * Min(ovCorner, ph // 2)
+    if (ovCorner > 0)
+        WinSetRegion("0-0 W" pw " H" ph " R" dia "-" dia, qzGui)
+    WinSetTransparent(ovOpacity, qzGui)
+    if IsObject(qzB) {
+        b := ovBorder
+        bw := pw + 2 * b
+        bh := ph + 2 * b
+        qzB.Show("NA x" (px - b) " y" (py - b) " w" bw " h" bh)
+        if (ovCorner > 0) {
+            bd := dia + 2 * b
+            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, qzB)
+        }
+        WinSetTransparent(ovOpacity, qzB)
+        DllCall("SetWindowPos", "Ptr", qzGui.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
+    }
+}
+
+QzHide() {
+    global qzGui, qzB
+    if IsObject(qzGui)
+        try qzGui.Destroy()
+    if IsObject(qzB)
+        try qzB.Destroy()
+    qzGui := ""
+    qzB := ""
+}
+
+QuizReveal() {
+    if !IsObject(quizCur) {
+        ToolTip("Aucun quiz en cours")
+        SetTimer(() => ToolTip(), -1800)
+        return
+    }
+    QzHide()
+    RunCmd(quizCur[3], SplitInfo(quizCur[4])[1])
+    ToolTip("Réponse : " quizCur[2])
+    SetTimer(() => ToolTip(), -2500)
 }
 
 Render() {
@@ -957,6 +1406,9 @@ Render() {
             nl := (infoTxt != "") ? "`n" : ""
             infoTxt .= nl "Tags : " TagsDisp(cur[7])
         }
+        ft := FlightTime(cur[2])
+        if (ft != "")
+            infoTxt .= ((infoTxt != "") ? "`n" : "") "Temps de vol : " FlightText(ft)
     }
     infoCtl.Text := infoTxt
     hintCtl.Text := HintText() "`nCtrl+Z : annuler la dernière suppression de stuff"
@@ -1435,6 +1887,46 @@ AppendLine(path, line) {
     FileAppend(prefix line "`n", path, "UTF-8-RAW")
 }
 
+; Noms uniques : un nom de stuff ne peut exister qu'une fois par map (toutes catégories, « communs » compris)
+; et un nom de catégorie qu'une fois par map, sans tenir compte des majuscules.
+; Renvoie la catégorie du stuff qui porte déjà ce nom, "" sinon. exCat / exName : le stuff en cours de modification (ignoré).
+StuffNameTaken(path, name, exCat := "", exName := "") {
+    nl := StrLower(Trim(name))
+    files := [path]
+    common := MapsDir "\_commun.txt"
+    if (StrLower(path) != StrLower(common))
+        files.Push(common)
+    for f in files {
+        for e in ReadEntries(f)[2] {
+            if (StrLower(Trim(e[2])) != nl)
+                continue
+            if (f = path && exCat != "" && e[1] = exCat && e[2] = exName)
+                continue
+            return e[1]
+        }
+    }
+    return ""
+}
+
+; Renvoie le nom (tel qu'il est écrit) de la catégorie existante qui porte déjà ce nom, "" sinon. exCat : catégorie en cours de renommage (ignorée)
+CatNameTaken(path, name, exCat := "") {
+    nl := StrLower(Trim(name))
+    files := [path]
+    common := MapsDir "\_commun.txt"
+    if (StrLower(path) != StrLower(common))
+        files.Push(common)
+    for f in files {
+        for c in ReadEntries(f)[1] {
+            if (StrLower(Trim(c)) != nl)
+                continue
+            if (f = path && exCat != "" && StrLower(c) = StrLower(exCat))
+                continue
+            return c
+        }
+    }
+    return ""
+}
+
 ShowSaveDialog(presetCat := "", presetMap := "") {
     global dlgOpen, dlgHwnd
     if dlgOpen {
@@ -1710,6 +2202,11 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
                 MsgBox("La catégorie « " sub " » n'existe pas.`n`nChoisis une catégorie dans la liste (tu peux taper pour la chercher), ou crée-la avec le bouton +.", "Sauvegarde", 0x40030)
             return
         }
+        dupCat := StuffNameTaken(mapFiles[ddMap.Value], nm)
+        if (dupCat != "") {
+            MsgBox("Un stuff nommé « " nm " » existe déjà dans cette map (catégorie « " dupCat " »).`n`nChoisis un autre nom.", "Sauvegarde", 0x40030)
+            return
+        }
         cmdFull := pnorm
         if chkGive.Value {
             gv := GiveMap.Get(typ, "")
@@ -1734,6 +2231,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
         CloseDlg()
         ToolTip("Stuff enregistré dans " mapName)
         SetTimer(() => ToolTip(), -2500)
+        OfferFlight(cmdFull, typ)
     }
 
     FillCats()
@@ -1994,6 +2492,116 @@ CleanLegacy() {
     }
 }
 
+; =====================================================================
+;  Diagnostic (copié dans le presse-papiers) et nettoyage des fichiers orphelins
+; =====================================================================
+CopyDiagnostic() {
+    global netFailTick
+    L := []
+    L.Push("Menu Stuf v" APP_VERSION)
+    L.Push("Windows " A_OSVersion (A_Is64bitOS ? " 64 bits" : " 32 bits") " - AutoHotkey " A_AhkVersion)
+    L.Push("CS2 lancé : " (ProcessExist("cs2.exe") ? "oui" : "non"))
+    steamExe := ""
+    try steamExe := RegRead("HKEY_CURRENT_USER\Software\Valve\Steam", "SteamExe")
+    L.Push("Steam : " (steamExe != "" ? steamExe : "introuvable"))
+    L.Push("Dossier cfg : " cfgDir " (" (DirExist(cfgDir) ? "existe" : "introuvable") ")")
+    L.Push("cs2_practice.cfg dans le cfg : " (FileExist(cfgDir "\" PracticeCfg ".cfg") ? "oui" : "non"))
+    sz := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : -1
+    L.Push("console.log : " ConsoleLog " (" (sz >= 0 ? Round(sz / 1024) " Ko" : "absent") ")")
+    netFailTick := 0
+    L.Push("Connexion directe (port " NetconPort ") : " (NetOpen() ? "active" : "inactive"))
+    L.Push("Options de lancement du menu : " StrReplace(LaunchArgs, "{port}", NetconPort))
+    LoadMaps()
+    L.Push("Profil : " curProfile " - maps : " mapNames.Length)
+    L.Push("Touches : menu " MenuKey ", favori " FavKey ", cadenas " LockKey ", nouveau " AddKey)
+    L.Push("Coordonnées : " (hudOn ? "actives" : "inactives") " - chronomètre : " (TimerOn ? "actif" : "inactif") " - exec auto : " (AutoExec ? "oui" : "non"))
+    if (TimerDebug && FileExist(TmDbgFile)) {
+        L.Push("")
+        L.Push("Journal du chronomètre (TimerDebug) :")
+        dl := StrSplit(Trim(FileRead(TmDbgFile, "UTF-8"), "`r`n"), "`n", "`r")
+        Loop Min(30, dl.Length)
+            L.Push(dl[dl.Length - Min(30, dl.Length) + A_Index])
+    }
+    L.Push("")
+    L.Push("Dernières lignes utiles de console.log (positions masquées, identifiants Steam masqués) :")
+    if (sz > 0) {
+        tail := ReadFrom(ConsoleLog, Max(0, sz - 65536))
+        keep := []
+        for ln in StrSplit(tail, "`n", "`r") {
+            if (Trim(ln) = "" || RegExMatch(ln, "i)^\s*(\d\d/\d\d\s+\d\d:\d\d:\d\d\s+)?setpos\s"))
+                continue
+            keep.Push(ln)
+        }
+        i := Max(1, keep.Length - 29)
+        while (i <= keep.Length) {
+            ln := RegExReplace(keep[i], "\[U:\d:\d+\]", "[U:x:xxxx]")
+            ln := RegExReplace(ln, "STEAM_\d:\d:\d+", "STEAM_x:x:xxxx")
+            L.Push(SubStr(ln, 1, 300))
+            i += 1
+        }
+    } else {
+        L.Push("(aucune)")
+    }
+    txt := ""
+    for ln in L
+        txt .= ln "`n"
+    A_Clipboard := txt
+    MsgBox("Le diagnostic est copié dans le presse-papiers.`n`nColle-le (Ctrl+V) dans un message pour le partager.", "Menu Stuf - diagnostic", 0x40040)
+}
+
+; Supprime les captures et les temps de vol qui ne correspondent plus à aucun stuff du profil actif
+CleanOrphans() {
+    validShots := Map()
+    validTimes := Map()
+    Loop Files MapsDir "\*.txt" {
+        for line in ReadLines(A_LoopFileFullPath) {
+            t := Trim(line)
+            if !IsDataLine(t)
+                continue
+            p := StrSplit(t, "|", " `t", 4)
+            if (p[1] = "@cat" || p.Length < 3)
+                continue
+            k := ShotCoordKey(p[3])
+            if (k != "")
+                validShots[k] := 1
+            tk := TimeKey(p[3])
+            if (tk != "")
+                validTimes[tk] := 1
+        }
+    }
+    orphShots := []
+    bytes := 0
+    Loop Files ShotDir() "\*.bmp" {
+        if (SubStr(A_LoopFileName, 1, 1) = "_")
+            continue
+        if RegExMatch(A_LoopFileName, "i)_([mp\d]+_[mp\d]+_[mp\d]+)\.bmp$", &m) {
+            if !validShots.Has(m[1]) {
+                orphShots.Push(A_LoopFileFullPath)
+                bytes += A_LoopFileSize
+            }
+        }
+    }
+    orphTimes := []
+    for k, v in times {
+        if !validTimes.Has(k)
+            orphTimes.Push(k)
+    }
+    if (orphShots.Length = 0 && orphTimes.Length = 0) {
+        MsgBox("Rien à nettoyer : toutes les captures et tous les temps de vol sont liés à un stuff.", "Menu Stuf - nettoyage", 0x40040)
+        return
+    }
+    msg := orphShots.Length " capture(s) orpheline(s) (" Round(bytes / 1024) " Ko) et " orphTimes.Length " temps de vol orphelin(s) dans le profil « " curProfile " ».`n`nLes supprimer ?"
+    if (MsgBox(msg, "Menu Stuf - nettoyage", 0x40024) != "Yes")
+        return
+    for f in orphShots
+        try FileDelete(f)
+    for k in orphTimes
+        times.Delete(k)
+    if (orphTimes.Length > 0)
+        SaveTimes()
+    MsgBox("Nettoyage terminé.", "Menu Stuf - nettoyage", 0x40040)
+}
+
 ToInt(v, def) {
     try
         return Integer(v)
@@ -2211,7 +2819,7 @@ ShowSettings() {
     if setOpen
         return
     setOpen := true
-    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY, "Tm", TimerOn, "TmAuto", TimerAuto, "TmX", TimerX, "TmY", TimerY, "TmDur", TimerDur)
+    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY, "Tm", TimerOn, "TmAuto", TimerAuto, "TmX", TimerX, "TmY", TimerY, "TmDur", TimerDur, "FlAsk", FlightAsk, "TmBeep", TimerBeep)
     vl := SysGet(76)
     vt := SysGet(77)
     vw := SysGet(78)
@@ -2372,9 +2980,11 @@ ShowSettings() {
     txShotY := d.Add("Text", "x406 y" ty " w70", "")
     y += 46
     d.SetFont("s9 c8A8F96")
-    d.Add("Text", "x22 y" y " w460 r4", "Le liseré de la capture (épaisseur et couleur) suit automatiquement celui du menu (onglet Menu) et se dessine par-dessus l'image. La zone capturée s'applique aux prochaines captures. Pour refaire la capture d'un stuff : F11, modifier le stuff, bouton « Refaire la capture ».")
+    d.Add("Text", "x22 y" y " w460 r4", "Le liseré de la capture (épaisseur et couleur) suit automatiquement celui du menu (onglet Menu) et se dessine par-dessus l'image. La zone capturée s'applique aux prochaines captures. Pour refaire la capture d'un stuff : « Gérer les stuffs et les catégories » du menu, double-clic sur le stuff, bouton « Refaire la capture ».")
     d.SetFont("s10 cDefault")
     y += 80
+    btnClean := d.Add("Button", "x22 y" y " w300", "Nettoyer les captures et temps orphelins")
+    y += 46
     yEnd2 := y
 
     ; ----- Onglet Coordonnées -----
@@ -2428,6 +3038,10 @@ ShowSettings() {
     slTmDur := d.Add("Slider", "x140 y" y " w260 Range2-20 ToolTip", TimerDur)
     txTmDur := d.Add("Text", "x406 y" ty " w70", "")
     y += 44
+    chkFlAsk := d.Add("CheckBox", "x22 y" y " w460" (FlightAsk ? " Checked" : ""), "Proposer de mesurer le temps de vol après la création d'un stuff")
+    y += 30
+    chkBeep := d.Add("CheckBox", "x22 y" y " w460" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
+    y += 36
     btnTmTest := d.Add("Button", "x22 y" y " w220", "Tester l'affichage")
     y += 50
     d.SetFont("s9 c8A8F96")
@@ -2439,13 +3053,33 @@ ShowSettings() {
     tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4) + 6
     tabs.Move(6, 6, 500, tabH)
     y := tabH + 18
+    d.SetFont("s10 bold")
+    ledTx := d.Add("Text", "x14 y" y " w466", "")
+    d.SetFont("s10 norm")
+    y += 28
     btnSave := d.Add("Button", "x12 y" y " w150 Default", "Enregistrer")
     btnReset := d.Add("Button", "x+8 yp w150", "Réinitialiser")
     btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
     btnChkS := d.Add("Button", "x12 y+10 w466", "Vérifier l'installation")
+    btnDiag := d.Add("Button", "x12 y+8 w466", "Copier le diagnostic (pour demander de l'aide)")
+
+    LedTick() {
+        if !ProcessExist("cs2.exe") {
+            ledTx.SetFont("cC0392B")
+            ledTx.Text := "● CS2 n'est pas lancé"
+        } else if NetOpen() {
+            ledTx.SetFont("c1B8E3A")
+            ledTx.Text := "● CS2 connecté (connexion directe active)"
+        } else {
+            ledTx.SetFont("cC0392B")
+            ledTx.Text := "● CS2 lancé mais non connecté : relance-le avec le menu"
+        }
+    }
+    LedTick()
+    SetTimer(LedTick, 2000)
 
     Sync(*) {
-        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur
+        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep
         ovFont := (ddFont.Value = 1) ? "" : ddFont.Text
         ovScale := slScale.Value
         ovX := vl + slX.Value
@@ -2487,6 +3121,8 @@ ShowSettings() {
         TimerX := vl + slTmX.Value
         TimerY := vt + slTmY.Value
         TimerDur := slTmDur.Value
+        FlightAsk := chkFlAsk.Value
+        TimerBeep := chkBeep.Value
         txTmX.Text := TimerX
         txTmY.Text := TimerY
         txTmDur.Text := TimerDur " s"
@@ -2587,6 +3223,8 @@ ShowSettings() {
         slTmX.Value := Max(0, Min(12 - vl, xr))
         slTmY.Value := Max(0, Min(820 - vt, yr))
         slTmDur.Value := 6
+        chkFlAsk.Value := 1
+        chkBeep.Value := 1
         chkShotOn.Value := 1
         slShotSz.Value := 100
         slShotZm.Value := 160
@@ -2598,7 +3236,7 @@ ShowSettings() {
     }
 
     Finish(save, *) {
-        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur
+        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep
         if save {
             IniWrite(ovTheme, IniFile, "Overlay", "Theme")
             IniWrite(ovFont, IniFile, "Overlay", "Font")
@@ -2626,6 +3264,8 @@ ShowSettings() {
             IniWrite(TimerX, IniFile, "Settings", "TimerX")
             IniWrite(TimerY, IniFile, "Settings", "TimerY")
             IniWrite(TimerDur, IniFile, "Settings", "TimerDur")
+            IniWrite(FlightAsk ? 1 : 0, IniFile, "Settings", "FlightAsk")
+            IniWrite(TimerBeep ? 1 : 0, IniFile, "Settings", "TimerBeep")
         } else {
             ovFont := old["Font"]
             ovScale := old["Scale"]
@@ -2652,6 +3292,8 @@ ShowSettings() {
             TimerX := old["TmX"]
             TimerY := old["TmY"]
             TimerDur := old["TmDur"]
+            FlightAsk := old["FlAsk"]
+            TimerBeep := old["TmBeep"]
             TmApply()
             HudSet(old["Hud"])
             if hudOn {
@@ -2660,6 +3302,7 @@ ShowSettings() {
             }
         }
         setOpen := false
+        SetTimer(LedTick, 0)
         d.Destroy()
         BuildOverlay()
         if menuOpen
@@ -2684,6 +3327,8 @@ ShowSettings() {
     slHudX.OnEvent("Change", Sync)
     slHudY.OnEvent("Change", Sync)
     chkTm.OnEvent("Click", Sync)
+    chkFlAsk.OnEvent("Click", Sync)
+    chkBeep.OnEvent("Click", Sync)
     ddTmPos.OnEvent("Change", Sync)
     slTmX.OnEvent("Change", Sync)
     slTmY.OnEvent("Change", Sync)
@@ -2701,6 +3346,8 @@ ShowSettings() {
     btnSave.OnEvent("Click", Finish.Bind(true))
     btnReset.OnEvent("Click", ResetClick)
     btnChkS.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
+    btnDiag.OnEvent("Click", (*) => CopyDiagnostic())
+    btnClean.OnEvent("Click", (*) => CleanOrphans())
     btnCancel.OnEvent("Click", Finish.Bind(false))
     d.OnEvent("Close", Finish.Bind(false))
     d.OnEvent("Escape", Finish.Bind(false))
@@ -2798,7 +3445,7 @@ LockPress() {
 }
 
 ; =====================================================================
-;  Gestion des stuffs et des catégories (fenêtre F11)
+;  Gestion des stuffs et des catégories (fenêtre de gestion)
 ; =====================================================================
 BuildLine(cat, name, cmd, info) {
     ln := cat " | " name " | " cmd
@@ -3111,11 +3758,10 @@ ShowManager() {
             Say("Le nom ne peut pas commencer par [ ou @")
             return
         }
-        for cn in ReadEntries(MapPath())[1] {
-            if (cn = nm) {
-                Say("Cette catégorie existe déjà")
-                return
-            }
+        exCn := CatNameTaken(MapPath(), nm)
+        if (exCn != "") {
+            Say("Cette catégorie existe déjà : " exCn)
+            return
         }
         AppendLine(MapPath(), "@cat | " nm)
         RefreshCats(nm)
@@ -3137,6 +3783,11 @@ ShowManager() {
             return
         if BadName(nm) {
             Say("Le nom ne peut pas commencer par [ ou @")
+            return
+        }
+        exRn := CatNameTaken(MapPath(), nm, oc)
+        if (exRn != "") {
+            Say("Une catégorie « " exRn " » existe déjà")
             return
         }
         for ent in ReadEntries(MapPath())[2] {
@@ -3223,6 +3874,11 @@ ShowManager() {
         nm := CleanField(AskText("Renommer le stuff", "Nouveau nom de « " old " » :", old, "ahk_id " d.Hwnd))
         if (nm = "" || nm == old)
             return
+        exDn := StuffNameTaken(MapPath(), nm, sc, old)
+        if (exDn != "") {
+            Say("Un stuff « " nm " » existe déjà (catégorie « " exDn " »)")
+            return
+        }
         Rekey(StuffKey(sc, old), StuffKey(sc, nm))
         RenameStuffInFile(MapPath(), sc, old, nm)
         RefreshStuffs()
@@ -3307,9 +3963,20 @@ ShowManager() {
             Say("Le nom ne peut pas commencer par [ ou @")
             return
         }
+        exDest := CatNameTaken(MapPath(), dest)
+        if (exDest != "")
+            dest := exDest   ; catégorie existante (même nom à la casse près)
         if (dest == sc) {
             Say("Ces stuffs sont déjà dans cette catégorie")
             return
+        }
+        for nm in names {
+            for ent in ReadEntries(MapPath())[2] {
+                if (ent[1] = dest && ent[2] = nm) {
+                    Say("« " nm " » existe déjà dans « " dest " »")
+                    return
+                }
+            }
         }
         for nm in names {
             if locks.Has("it|" StuffKey(sc, nm)) {
@@ -3460,6 +4127,13 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     d.SetFont("s9 c8A8F96")
     d.Add("Text", "xm y+6 w500", "Exemples : give weapon_smokegrenade ou sv_rethrow_last_grenade. Sépare les commandes par un point-virgule.")
     d.SetFont("s10 cDefault")
+    fl := Map("v", "")
+    flOld := FlightTime(cmd)
+    d.Add("Text", "xm y+10 w110", "Temps de vol")
+    txFlight := d.Add("Text", "x130 yp w120", (flOld != "") ? FlightText(flOld) : "non mesuré")
+    btnFlight := d.Add("Button", "x+8 yp-5 w160", "Mesurer...")
+    btnFlightDel := d.Add("Button", "x+8 yp w90", "Supprimer")
+    btnFlightDel.Enabled := (flOld != "")
     shotFile := ShotPath(keyMap, cmd)
     curShot := shotFile
     shotRedone := false
@@ -3606,6 +4280,37 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             edPos.Value := np
     }
 
+    ; Mesure le temps de vol : téléporte au repère, le joueur lance la grenade et valide le résultat
+    FlightClick(*) {
+        flPos := Trim(edPos.Value)
+        if (flPos != "")
+            flPos := NormalizePos(flPos)
+        if (flPos = "") {
+            MsgBox("Renseigne d'abord une position valide (setpos x y z; setang pitch yaw).", "Temps de vol", 0x40030)
+            return
+        }
+        flOth := Trim(CleanField(edOthers.Value), " `t;")
+        flCmd := (flOth != "") ? flPos "; " flOth : flPos
+        d.Hide()
+        try WinHide("ahk_id " ownerHwnd)
+        flSecs := MeasureFlight(flCmd, ddType.Text)
+        try WinShow("ahk_id " ownerHwnd)
+        d.Show()
+        WinActivate("ahk_id " d.Hwnd)
+        if (flSecs > 0) {
+            fl["v"] := flSecs
+            txFlight.Text := FlightText(flSecs) " (nouveau)"
+            btnFlightDel.Enabled := true
+        }
+    }
+
+    ; Retire le temps de vol du stuff (pris en compte à l'enregistrement)
+    FlightDelClick(*) {
+        fl["v"] := "DEL"
+        txFlight.Text := "supprimé"
+        btnFlightDel.Enabled := false
+    }
+
     SaveClick(*) {
         nCat := CleanField(cbCat.Text)
         nName := CleanField(edName.Value)
@@ -3616,6 +4321,14 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
         c1 := SubStr(nCat, 1, 1)
         if (c1 = "[" || c1 = "@") {
             MsgBox("La catégorie ne peut pas commencer par [ ou @.", "Modifier", 0x40030)
+            return
+        }
+        exCat := CatNameTaken(path, nCat)
+        if (exCat != "")
+            nCat := exCat   ; la catégorie existe déjà (même nom à la casse près) : on utilise celle qui existe
+        exDup := (nName = oldName) ? "" : StuffNameTaken(path, nName, oldCat, oldName)   ; le nom n'a pas changé : pas de contrôle (anciens doublons éditables)
+        if (exDup != "") {
+            MsgBox("Un stuff nommé « " nName " » existe déjà dans cette map (catégorie « " exDup " »).`n`nChoisis un autre nom.", "Modifier", 0x40030)
             return
         }
         nPos := Trim(edPos.Value)
@@ -3640,6 +4353,17 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             return
         }
         ReplaceStuffInFile(path, oldCat, oldName, nCat, nName, nCmd, JoinInfo(CleanInfo(edInfo.Value), TagsToStr(tagSel)))
+        ; temps de vol : nouveau temps mesuré, ou temps retiré si la position ou l'angle ont changé
+        oldTK := TimeKey(cmd)
+        newTK := TimeKey(nCmd)
+        if (fl["v"] = "DEL") {
+            DelFlightTime(oldTK)
+            DelFlightTime(newTK)
+        } else if (fl["v"] != "") {
+            SetFlightTime(nCmd, fl["v"])
+        }
+        if (oldTK != "" && oldTK != newTK)
+            DelFlightTime(oldTK)
         newShot := ShotPath(keyMap, nCmd)
         if (!shotRedone && shotFile != "" && newShot != "" && newShot != shotFile && FileExist(shotFile))
             try FileMove(shotFile, newShot, 1)
@@ -3704,6 +4428,8 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
         }
     }
 
+    btnFlight.OnEvent("Click", FlightClick)
+    btnFlightDel.OnEvent("Click", FlightDelClick)
     btnShotNew.OnEvent("Click", ShotRedoClick)
     btnShotDel.OnEvent("Click", ShotDelClick)
     cbCat.OnEvent("Change", CatChange)
@@ -3876,31 +4602,35 @@ HudToggle() {
 ; « threw smokegrenade [x y z] » quand la grenade a explosé.
 TmClick() {
     global tmClicks
-    if !TimerOn
+    if !(TimerOn || tmMeasuring)
         return
     tmClicks.Push(A_TickCount)
+    TmDbg("clic relâché")
     if (tmClicks.Length > 30)
         tmClicks.RemoveAt(1)
 }
 
 ; Active ou arrête la lecture du journal selon le réglage
 TmApply() {
-    global tmRunning, tmPos, tmSentSock
-    if (TimerOn && !tmRunning) {
+    global tmRunning, tmPos, tmSentSock, tmLive
+    want := (TimerOn || tmMeasuring)
+    if (want && !tmRunning) {
         tmRunning := true
         tmSentSock := 0
         tmPos := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : 0
         SetTimer(TmTick, 50)
-    } else if (!TimerOn && tmRunning) {
+    } else if (!want && tmRunning) {
         tmRunning := false
+        tmLive := false
         SetTimer(TmTick, 0)
+        SetTimer(TmLiveTick, 0)
         TmHide()
     }
 }
 
 TmTick() {
-    global tmPos, tmSentSock, tmThrowTick
-    if (!TimerOn || !FileExist(ConsoleLog))
+    global tmPos, tmSentSock, tmStarts
+    if (!(TimerOn || tmMeasuring) || !FileExist(ConsoleLog))
         return
     sz := FileGetSize(ConsoleLog)
     if (sz < tmPos)
@@ -3928,39 +4658,161 @@ TmTick() {
     tmPos := sz - (StrPut(tail, "UTF-8") - 1)
     txt := SubStr(txt, 1, nl)
     pos := 1
-    while (pos := RegExMatch(txt, "i)sv_throw_\w+|threw\s+(smokegrenade|flashbang|hegrenade|molotov|incgrenade|decoy)", &m, pos)) {
+    while (pos := RegExMatch(txt, "i)sv_throw_(\w+)|threw\s+(smokegrenade|flashbang|hegrenade|molotov|incgrenade|decoy)", &m, pos)) {
         pos += StrLen(m[0])
-        if (m[1] = "")
-            tmThrowTick := now
-        else
-            TmFinish(m[1], now)
+        if (m[2] = "") {
+            st := TmThrowLine(now)
+            TmDbg("ligne sv_throw_" m[1] " -> départ il y a " (now - st) " ms")
+            if TimerOn
+                TmLiveStart(TmName(m[1]), st)
+        } else {
+            TmDbg("ligne threw " m[2])
+            TmFinish(m[2], now)
+        }
     }
 }
 
+; Une ligne sv_throw_... apparaît : elle confirme la relance (touche K) en attente, sinon c'est un lancer normal
+TmThrowLine(now) {
+    global tmStarts
+    for e in tmStarts {
+        if (!e[2] && now - e[1] < 1500) {
+            e[2] := true
+            return e[1]
+        }
+    }
+    st := now
+    i := tmClicks.Length
+    if (i >= 1 && now - tmClicks[i] < 1500) {
+        st := tmClicks[i]
+        tmClicks.RemoveAt(i)
+    }
+    tmStarts.Push([st, true])
+    return st
+}
+
 TmFinish(kind, now) {
-    global tmThrowTick
+    global tmStarts, tmLive, tmMeasured, tmLastLabel, tmBeeped
+    ; on oublie les grenades trop anciennes (jamais explosées ou jamais vues)
+    while (tmStarts.Length >= 1 && now - tmStarts[1][1] > 9000)
+        tmStarts.RemoveAt(1)
     start := 0
-    if (tmThrowTick != 0 && now - tmThrowTick < 12000) {
-        start := tmThrowTick
-        tmThrowTick := 0
+    if (tmStarts.Length >= 1) {
+        start := tmStarts[1][1]   ; la plus ancienne en vol explose en premier
+        tmStarts.RemoveAt(1)
     } else {
         i := tmClicks.Length
         while (i >= 1) {
-            if (now - tmClicks[i] < 12000) {
+            if (now - tmClicks[i] < 9000) {
                 start := tmClicks[i]
+                tmClicks.RemoveAt(i)
                 break
             }
             i -= 1
         }
     }
-    if (start = 0)
+    if (start = 0) {
+        TmDbg("explosion sans départ connu : ignorée")
         return
+    }
     secs := (now - start) / 1000
+    TmDbg("explosion " kind " -> " Round(secs, 2) " s")
     if (secs < 0.2)
         return
-    names := Map("smokegrenade", "Smoke", "flashbang", "Flash", "hegrenade", "HE", "molotov", "Molotov", "incgrenade", "Incendiaire", "decoy", "Leurre")
-    label := names.Has(StrLower(kind)) ? names[StrLower(kind)] : kind
-    TmShow(label " : " StrReplace(Format("{:.1f}", secs), ".", ",") " s")
+    if (TimerBeep && TimerOn && !(tmLive && tmBeeped))
+        SoundBeep(1250, 70)
+    tmLastLabel := TmName(kind)
+    tmLive := false
+    SetTimer(TmLiveTick, 0)
+    if tmMeasuring
+        tmMeasured := secs
+    if TimerOn
+        TmShow(TmName(kind) " : " StrReplace(Format("{:.1f}", secs), ".", ",") " s")
+}
+
+TmDbg(msg) {
+    if !TimerDebug
+        return
+    try {
+        if (FileExist(TmDbgFile) && FileGetSize(TmDbgFile) > 200000)
+            FileDelete(TmDbgFile)
+        FileAppend(A_Hour ":" A_Min ":" A_Sec "." A_MSec " " msg "`n", TmDbgFile, "UTF-8")
+    }
+}
+
+; Nom affiché d'une grenade d'après son nom dans le journal (reconnaissance souple : « flash », « flashbang »...)
+TmName(kind) {
+    k := StrLower(kind)
+    if InStr(k, "smoke")
+        return "Smoke"
+    if InStr(k, "flash")
+        return "Flash"
+    if InStr(k, "molotov")
+        return "Molotov"
+    if InStr(k, "inc")
+        return "Incendiaire"
+    if InStr(k, "decoy")
+        return "Leurre"
+    if (InStr(k, "he") = 1)
+        return "HE"
+    return "Grenade"
+}
+
+; Relance avec la touche de sv_rethrow_last_grenade : le chrono part tout de suite (la ligne du journal n'est pas toujours écrite)
+TmRethrow() {
+    global tmStarts, tmLastK
+    if !(TimerOn || tmMeasuring)
+        return
+    if (menuOpen || dlgOpen || mgrOpen || setOpen)
+        return
+    now := A_TickCount
+    if (now - tmLastK < 250)   ; répétition automatique de la touche maintenue
+        return
+    tmLastK := now
+    tmStarts.Push([now, false])
+    if (tmStarts.Length > 20)
+        tmStarts.RemoveAt(1)
+    TmDbg("touche relance")
+    if (TimerOn && tmLastLabel != "")
+        TmLiveStart(tmLastLabel, now)
+}
+
+; Chrono en direct : démarre à la relance d'une grenade (type connu) et s'arrête à l'explosion
+TmLiveStart(label, now) {
+    global tmLive, tmLiveLabel, tmLiveT0, tmExpect, tmBeeped, tmLastLabel
+    tmLive := true
+    tmLiveLabel := label
+    tmLastLabel := label
+    tmLiveT0 := now
+    tmBeeped := false
+    tmExpect := ""
+    if (recents.Length > 0) {
+        ft := FlightTime(recents[1][2])
+        if (ft != "")
+            tmExpect := Number(ft)
+    }
+    TmShow(label " : 0,0 s", true)
+    SetTimer(TmLiveTick, 100)
+}
+
+TmLiveTick() {
+    global tmLive, tmBeeped
+    if !tmLive {
+        SetTimer(TmLiveTick, 0)
+        return
+    }
+    el := A_TickCount - tmLiveT0
+    if (TimerBeep && tmExpect != "" && !tmBeeped && el >= tmExpect * 1000 - 500) {
+        tmBeeped := true
+        SoundBeep(1250, 70)
+    }
+    if (el > ((tmExpect != "") ? tmExpect * 1000 + 3000 : 15000)) {
+        tmLive := false
+        SetTimer(TmLiveTick, 0)
+        TmHide()
+        return
+    }
+    try tmCtl.Text := tmLiveLabel " : " StrReplace(Format("{:.1f}", el / 1000), ".", ",") " s"
 }
 
 TmHide() {
@@ -3972,8 +4824,8 @@ TmHide() {
 }
 
 ; Affiche le texte avec le même style que les coordonnées (police, couleurs, liseré, coins, opacité)
-TmShow(txt) {
-    global tmGui, tmB, tmText, tmVisible
+TmShow(txt, hold := false) {
+    global tmGui, tmB, tmText, tmVisible, tmCtl
     tmText := txt
     if IsObject(tmGui)
         try tmGui.Destroy()
@@ -3996,7 +4848,8 @@ TmShow(txt) {
     tmGui.MarginX := 12 + ovCorner // 3
     tmGui.MarginY := 6 + ovCorner // 4
     tmGui.SetFont("s" FS(16) " bold c" cTxt, fnt)
-    tmGui.Add("Text", "Center w" Round(200 * ovScale / 100), txt)
+    tmCtl := tmGui.Add("Text", "Center", "Incendiaire : 99,9 s")   ; largeur fixe pour tous les textes
+    tmCtl.Text := txt
     tmGui.Show("NA AutoSize x0 y0")
     tmGui.GetPos(, , &w, &h)
     vl := SysGet(76)
@@ -4043,7 +4896,10 @@ TmShow(txt) {
         DllCall("SetWindowPos", "Ptr", tmGui.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
     }
     tmVisible := true
-    SetTimer(TmHide, -TimerDur * 1000)
+    if hold
+        SetTimer(TmHide, 0)
+    else
+        SetTimer(TmHide, -TimerDur * 1000)
 }
 
 ; =====================================================================
@@ -4308,6 +5164,11 @@ BuildPack(list, withImgs := false) {
     out := "CS2STUFFPACK;1;" TpZOffset ";" CleanField(curProfile) "`n"
     for e in list
         out .= e[1] " | " e[2] " | " e[3] " | " e[4] " | " e[5] "`n"
+    for e in list {
+        ft := FlightTime(e[4])
+        if (ft != "")
+            out .= "@TIME | " e[1] " | " e[2] " | " e[3] " | " ft "`n"
+    }
     if withImgs {
         tmp := A_Temp "\stuffshot_export.jpg"
         for e in list {
@@ -4349,8 +5210,14 @@ ParsePack(txt) {
     from := (h.Length >= 4) ? h[4] : ""
     ents := []
     imgs := Map()
+    tms := Map()
     Loop lines.Length - hi {
         p := StrSplit(lines[hi + A_Index], "|", " `t", 5)
+        if (p[1] = "@TIME") {
+            if (p.Length >= 5 && IsNumber(p[5]) && Number(p[5]) >= 0.1 && Number(p[5]) <= 60)
+                tms[CleanField(p[2]) "|" CleanField(p[3]) "|" CleanField(p[4])] := Number(p[5])
+            continue
+        }
         if (p[1] = "@IMG") {
             if (p.Length >= 5 && p[5] != "")
                 imgs[CleanField(p[2]) "|" CleanField(p[3]) "|" CleanField(p[4])] := p[5]
@@ -4372,7 +5239,7 @@ ParsePack(txt) {
         }
         ents.Push([p[1], cat, nm, p[4], raw5])
     }
-    return Map("z", zoff, "from", from, "ents", ents, "imgs", imgs)
+    return Map("z", zoff, "from", from, "ents", ents, "imgs", imgs, "tms", tms)
 }
 
 ; Statut d'un stuff reçu par rapport au profil de destination
@@ -4386,8 +5253,8 @@ ImportStatus(e, prof, zdelta, cache) {
     if !cache.Has(path)
         cache[path] := ReadEntries(path)[2]
     for x in cache[path] {
-        if (x[1] = e[1] && x[2] = e[2]) {
-            if (x[3] = ShiftZ(e[4], zdelta) && x[4] = e[5])
+        if (x[2] = e[3]) {   ; même nom (dans n'importe quelle catégorie de la map)
+            if (x[1] = e[2] && x[3] = ShiftZ(e[4], zdelta) && x[4] = e[5])
                 return "Identique"
             return "Doublon"
         }
@@ -4414,6 +5281,57 @@ PrettyCmd(c) {
 }
 
 ; Enregistre la capture reçue d'un stuff importé (sans écraser la tienne sauf remplacement)
+; Enregistre le temps de vol importé dans le profil de destination (sans écraser un temps déjà mesuré, sauf si overwrite)
+SaveImportedTime(tms, e, cmd, prof, overwrite, stats) {
+    if !IsObject(tms)
+        return
+    key := e[1] "|" e[2] "|" e[3]
+    if !tms.Has(key)
+        return
+    tk := TimeKey(cmd)
+    if (tk = "")
+        return
+    secs := Format("{:.2f}", tms[key])
+    if (ProfData(prof) = DataDir) {
+        if (times.Has(tk) && !overwrite)
+            return
+        times[tk] := secs
+        SaveTimes()
+        stats["time"] += 1
+        return
+    }
+    f := ProfData(prof) "\times.txt"
+    lines := []
+    found := false
+    if FileExist(f) {
+        for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
+            if (ln = "")
+                continue
+            if (StrSplit(ln, "`t")[1] = tk) {
+                found := true
+                if !overwrite {
+                    lines.Push(ln)
+                    continue
+                }
+                ln := tk "`t" secs
+            }
+            lines.Push(ln)
+        }
+    }
+    if !found
+        lines.Push(tk "`t" secs)
+    txt := ""
+    for ln in lines
+        txt .= ln "`n"
+    try {
+        DirCreate(ProfData(prof))
+        try FileDelete(f)
+        FileAppend(txt, f, "UTF-8-RAW")
+        if (!found || overwrite)
+            stats["time"] += 1
+    }
+}
+
 SaveImportedShot(imgs, e, cmd, prof, overwrite, tmpImg, stats) {
     if !IsObject(imgs)
         return
@@ -4433,8 +5351,8 @@ SaveImportedShot(imgs, e, cmd, prof, overwrite, tmpImg, stats) {
 }
 
 ; policy : 1 = ignorer les doublons, 2 = garder les deux, 3 = remplacer
-ApplyImport(rows, prof, zdelta, policy, imgs := "") {
-    stats := Map("add", 0, "rep", 0, "skip", 0, "img", 0)
+ApplyImport(rows, prof, zdelta, policy, imgs := "", tms := "") {
+    stats := Map("add", 0, "rep", 0, "skip", 0, "img", 0, "time", 0)
     tmpImg := A_Temp "\stuffshot_import.jpg"
     mdir := ProfMaps(prof)
     DirCreate(mdir)
@@ -4452,24 +5370,25 @@ ApplyImport(rows, prof, zdelta, policy, imgs := "") {
         nm := e[3]
         dup := false
         taken := Map()
-        for x in ReadEntries(path)[2] {
-            if (x[1] = e[2])
-                taken[StrLower(x[2])] := x
-        }
+        for x in ReadEntries(path)[2]
+            taken[StrLower(x[2])] := x   ; les noms sont uniques dans toute la map
         if taken.Has(StrLower(nm)) {
             old := taken[StrLower(nm)]
-            if (old[3] = cmd && old[4] = e[5]) {
+            sameCat := (old[1] = e[2])
+            if (sameCat && old[3] = cmd && old[4] = e[5]) {
                 stats["skip"] += 1
+                SaveImportedTime(tms, e, cmd, prof, false, stats)
                 continue
             }
             if (policy = 1) {
                 stats["skip"] += 1
                 continue
             }
-            if (policy = 3) {
+            if (policy = 3 && sameCat) {
                 ReplaceStuffInFile(path, old[1], old[2], e[2], nm, cmd, e[5])
                 stats["rep"] += 1
                 SaveImportedShot(imgs, e, cmd, prof, true, tmpImg, stats)
+                SaveImportedTime(tms, e, cmd, prof, true, stats)
                 continue
             }
             n := 2
@@ -4480,6 +5399,7 @@ ApplyImport(rows, prof, zdelta, policy, imgs := "") {
         AppendLine(path, BuildLine(e[2], nm, cmd, e[5]))
         stats["add"] += 1
         SaveImportedShot(imgs, e, cmd, prof, false, tmpImg, stats)
+        SaveImportedTime(tms, e, cmd, prof, false, stats)
     }
     try FileDelete(tmpImg)
     return stats
@@ -4499,6 +5419,7 @@ ShowImport(txt, ownerHwnd) {
     }
     zdelta := pack["z"] - TpZOffset
     imgs := pack["imgs"]
+    tms := pack["tms"]
     res := Map("done", false)
     d := Gui("+AlwaysOnTop +OwnDialogs", "Importer des stuffs")
     d.SetFont("s10", "Segoe UI")
@@ -4508,6 +5429,8 @@ ShowImport(txt, ownerHwnd) {
     cbTarget := d.Add("ComboBox", "x170 y42 w300", ListProfiles())
     d.Add("Text", "x12 y82 w150", "Si le stuff existe déjà")
     ddPolicy := d.Add("DropDownList", "x170 y78 w300 Choose1", ["Ignorer (ne rien changer)", "Garder les deux (renommer le nouveau)", "Remplacer le mien"])
+    chkTimes := d.Add("CheckBox", "x490 y80 w240" (tms.Count > 0 ? " Checked" : ""), "Importer les temps de vol")
+    chkTimes.Enabled := (tms.Count > 0)
     lv := d.Add("ListView", "x12 y116 w720 r13 Checked NoSort", ["Map", "Catégorie", "Nom", "Statut"])
     lv.ModifyCol(1, 110)
     lv.ModifyCol(2, 190)
@@ -4515,6 +5438,8 @@ ShowImport(txt, ownerHwnd) {
     lv.ModifyCol(4, 140)
     sumT := d.Add("Text", "x12 y+6 w720", "")
     imgNote := (imgs.Count > 0) ? "Ce pack contient " imgs.Count " capture(s) d'écran, importée(s) avec les stuffs." : "Ce pack ne contient pas de captures d'écran."
+    if (tms.Count > 0)
+        imgNote .= " Il contient aussi " tms.Count " temps de vol."
     d.Add("Text", "x12 y+4 w720", "Aperçu du stuff sélectionné (clique sur une ligne). " imgNote)
     picPrev := d.Add("Picture", "x582 y+2 w130 h130", "")
     picPrev.Visible := false
@@ -4632,12 +5557,14 @@ ShowImport(txt, ownerHwnd) {
         isNew := !ProfileExists(tgt)
         if isNew
             CreateProfile(tgt)
-        st := ApplyImport(picked, tgt, zdelta, ddPolicy.Value, imgs)
+        st := ApplyImport(picked, tgt, zdelta, ddPolicy.Value, imgs, chkTimes.Value ? tms : "")
         res["done"] := true
         res["target"] := tgt
         res["msg"] := st["add"] " ajouté(s), " st["rep"] " remplacé(s), " st["skip"] " ignoré(s)."
         if (imgs.Count > 0)
             res["msg"] .= "`n" st["img"] " capture(s) d'écran importée(s)."
+        if (tms.Count > 0 && chkTimes.Value)
+            res["msg"] .= "`n" st["time"] " temps de vol importé(s)."
         d.Destroy()
     }
 
@@ -4719,7 +5646,9 @@ ShowShare() {
     stT := d.Add("Text", "x12 y" yStat " w740", "")
     d.SetFont("s10 cDefault")
     btnClose := d.Add("Button", "x12 y" yClose " w120", "Fermer")
-    btnRest := d.Add("Button", "x+8 yp w230", "Restaurer une sauvegarde…")
+    btnRest := d.Add("Button", "x+8 yp w200", "Restaurer une sauvegarde…")
+    btnPExp := d.Add("Button", "x+8 yp w170", "Exporter le profil…")
+    btnPImp := d.Add("Button", "x+8 yp w170", "Importer un profil…")
 
     pick := 1
     for k, pn in ListProfiles() {
@@ -4790,6 +5719,14 @@ ShowShare() {
         if (nShots > 0)
             MsgBox("Code copié, mais SANS les " nShots " capture(s) d'écran : les images sont trop lourdes pour un code à copier-coller.`n`nPour envoyer les captures avec les stuffs, utilise « Exporter vers un fichier… » avec la case « Inclure les captures » cochée.", "Export par code", 0x40030)
         Say("Code copié (" sel.Length " stuff(s)) : colle-le à ton ami, de préférence dans un bloc de code. Pour beaucoup de stuffs, envoie plutôt un fichier.")
+    }
+
+    ImportProfileBtn(*) {
+        nm := ImportProfileZip(d.Hwnd)
+        if (nm = "")
+            return
+        if (MsgBox("Activer le profil « " nm " » maintenant ? (le menu redémarre)", "Importer un profil", 0x40024) = "Yes")
+            SwitchProfile(nm)
     }
 
     ImportFileBtn(*) {
@@ -4868,6 +5805,8 @@ ShowShare() {
     btnDelP.OnEvent("Click", DelProf)
     btnClose.OnEvent("Click", Finish)
     btnRest.OnEvent("Click", (*) => ShowRestore(d.Hwnd))
+    btnPExp.OnEvent("Click", (*) => ExportProfile(ddProf.Text, d.Hwnd))
+    btnPImp.OnEvent("Click", ImportProfileBtn)
     d.OnEvent("Close", Finish)
     d.OnEvent("Escape", Finish)
     Fill()
@@ -5027,6 +5966,204 @@ AutoBackup() {
     }
 }
 
+; =====================================================================
+;  Export / import d'un profil complet dans un seul fichier .zip
+; =====================================================================
+; Réglages emportés avec le profil (jamais les chemins de ce PC)
+ProfSettingKeys() {
+    return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
+        , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
+        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk"]
+}
+
+ExportProfile(prof, ownerHwnd) {
+    dest := FileSelect("S16", A_Desktop "\Menu-Stuf-" prof ".zip", "Exporter le profil « " prof " »", "Profil (*.zip)")
+    if (dest = "")
+        return
+    if !RegExMatch(dest, "i)\.zip$")
+        dest .= ".zip"
+    stage := A_Temp "\cs2stuff_profexp"
+    try DirDelete(stage, true)
+    ok := true
+    try {
+        DirCreate(stage "\maps")
+        DirCreate(stage "\data")
+        DirCreate(stage "\data\shots")
+        Loop Files ProfMaps(prof) "\*.txt"
+            FileCopy(A_LoopFileFullPath, stage "\maps\" A_LoopFileName, 1)
+        Loop Files ProfData(prof) "\*.txt"
+            FileCopy(A_LoopFileFullPath, stage "\data\" A_LoopFileName, 1)
+        Loop Files ProfData(prof) "\shots\*.*" {
+            if RegExMatch(A_LoopFileName, "i)\.(bmp|jpe?g)$")
+                FileCopy(A_LoopFileFullPath, stage "\data\shots\" A_LoopFileName, 1)
+        }
+        FileAppend("name=" prof "`nversion=" APP_VERSION "`n", stage "\profil.txt", "UTF-8-RAW")
+        for k in ProfSettingKeys() {
+            v := IniRead(IniFile, "Settings", k, "")
+            if (v != "")
+                IniWrite(v, stage "\settings.ini", "Settings", k)
+        }
+        for k in ["Theme", "Font", "Scale", "X", "Y", "Opacity", "Bg", "Border", "Corner", "BorderColor"] {
+            v := IniRead(IniFile, "Overlay", k, "")
+            if (v != "")
+                IniWrite(v, stage "\settings.ini", "Overlay", k)
+        }
+        try FileDelete(dest)
+        q := "'"
+        dq := Chr(34)
+        RunWait("powershell -NoProfile -ExecutionPolicy Bypass -Command " dq "Compress-Archive -Path " q stage "\*" q " -DestinationPath " q dest q " -Force" dq, , "Hide")
+        ok := FileExist(dest) ? true : false
+    } catch {
+        ok := false
+    }
+    try DirDelete(stage, true)
+    if ok
+        MsgBox("Profil « " prof " » exporté :`n" dest "`n`nSur l'autre PC : « Importer un profil… » dans cette même fenêtre.", "Exporter un profil", 0x40040)
+    else
+        MsgBox("L'export a échoué.", "Exporter un profil", 0x40010)
+}
+
+; Retourne le nom du profil importé ("" si annulé ou échec)
+ImportProfileZip(ownerHwnd) {
+    src := FileSelect(3, A_Desktop, "Importer un profil", "Profil (*.zip)")
+    if (src = "")
+        return ""
+    tmp := A_Temp "\cs2stuff_profimp"
+    try DirDelete(tmp, true)
+    DirCreate(tmp)
+    q := "'"
+    dq := Chr(34)
+    try RunWait("powershell -NoProfile -ExecutionPolicy Bypass -Command " dq "Expand-Archive -LiteralPath " q src q " -DestinationPath " q tmp q " -Force" dq, , "Hide")
+    if (!FileExist(tmp "\profil.txt") || !DirExist(tmp "\maps")) {
+        MsgBox("Ce fichier n'est pas un profil exporté par le menu.", "Importer un profil", 0x40010)
+        try DirDelete(tmp, true)
+        return ""
+    }
+    nm := ""
+    try {
+        for ln in StrSplit(FileRead(tmp "\profil.txt", "UTF-8"), "`n", "`r") {
+            if RegExMatch(ln, "^name=(.+)$", &mm)
+                nm := mm[1]
+        }
+    }
+    ib := InputBox("Nom du profil sur ce PC (un nom existant est remplacé après sauvegarde) :", "Importer un profil", "w420 h130", CleanProfileName(nm))
+    if (ib.Result != "OK") {
+        try DirDelete(tmp, true)
+        return ""
+    }
+    nm := CleanProfileName(ib.Value)
+    if (nm = "") {
+        try DirDelete(tmp, true)
+        return ""
+    }
+    exists := ProfileExists(nm)
+    if exists {
+        if (MsgBox("Le profil « " nm " » existe déjà. Ses maps et ses données de même nom seront remplacées.`nUne sauvegarde est faite avant.`n`nContinuer ?", "Importer un profil", 0x40024) != "Yes") {
+            try DirDelete(tmp, true)
+            return ""
+        }
+        root := ProfData(nm) "\backup\auto"
+        safe := root "\avant-import-" FormatTime(, "yyyy-MM-dd_HHmmss")
+        try {
+            DirCreate(safe "\data")
+            Loop Files ProfMaps(nm) "\*.txt"
+                FileCopy(A_LoopFileFullPath, safe "\" A_LoopFileName, 1)
+            Loop Files ProfData(nm) "\*.txt"
+                FileCopy(A_LoopFileFullPath, safe "\data\" A_LoopFileName, 1)
+        }
+    } else {
+        CreateProfile(nm)
+    }
+    DirCreate(ProfMaps(nm))
+    DirCreate(ProfData(nm))
+    nStuff := 0
+    nBlocked := 0
+    try {
+        Loop Files tmp "\maps\*.txt" {
+            if !RegExMatch(A_LoopFileName, "^[\w\-. ]+\.txt$")
+                continue
+            out := ""
+            for ln in StrSplit(FileRead(A_LoopFileFullPath, "UTF-8"), "`n", "`r") {
+                parts := StrSplit(ln, "|")
+                if (SubStr(Trim(ln), 1, 1) != "#" && parts.Length >= 3 && BlockedCmd(parts[3]) != "") {
+                    nBlocked += 1
+                    continue
+                }
+                if (parts.Length >= 3 && SubStr(Trim(ln), 1, 1) != "#")
+                    nStuff += 1
+                out .= ln "`n"
+            }
+            dst := ProfMaps(nm) "\" A_LoopFileName
+            try FileDelete(dst)
+            FileAppend(RTrim(out, "`n") "`n", dst, "UTF-8-RAW")
+        }
+        Loop Files tmp "\data\*.txt" {
+            if RegExMatch(A_LoopFileName, "^[\w\-. ]+\.txt$")
+                FileCopy(A_LoopFileFullPath, ProfData(nm) "\" A_LoopFileName, 1)
+        }
+        if DirExist(tmp "\data\shots") {
+            DirCreate(ProfData(nm) "\shots")
+            Loop Files tmp "\data\shots\*.*" {
+                if RegExMatch(A_LoopFileName, "i)^[\w\-. ]+\.(bmp|jpe?g)$")
+                    FileCopy(A_LoopFileFullPath, ProfData(nm) "\shots\" A_LoopFileName, 1)
+            }
+        }
+    } catch as err {
+        MsgBox("L'import a échoué : " err.Message, "Importer un profil", 0x40010)
+        try DirDelete(tmp, true)
+        return ""
+    }
+    msg := "Profil « " nm " » importé (" nStuff " stuffs)."
+    if (nBlocked > 0)
+        msg .= "`n" nBlocked " ligne(s) avec une commande interdite (quit, exec, bind...) ont été ignorées."
+    if (FileExist(tmp "\settings.ini") && MsgBox(msg "`n`nAppliquer aussi les réglages de ce profil (apparence, touches, chronomètre) ?", "Importer un profil", 0x40024) = "Yes") {
+        for k in ProfSettingKeys() {
+            v := IniRead(tmp "\settings.ini", "Settings", k, "")
+            if (v != "")
+                IniWrite(v, IniFile, "Settings", k)
+        }
+        for k in ["Theme", "Font", "Scale", "X", "Y", "Opacity", "Bg", "Border", "Corner", "BorderColor"] {
+            v := IniRead(tmp "\settings.ini", "Overlay", k, "")
+            if (v != "")
+                IniWrite(v, IniFile, "Overlay", k)
+        }
+        msg .= "`nRéglages appliqués (visibles au prochain redémarrage du menu)."
+    } else if FileExist(tmp "\settings.ini") {
+        msg .= "`nRéglages non appliqués."
+    }
+    try DirDelete(tmp, true)
+    return nm
+}
+
+; Avant une mise à jour : copie les maps et les fichiers de data (temps, favoris, cadenas) de chaque profil
+PreUpdateBackup() {
+    stamp := "avant-maj-" APP_VERSION "_" FormatTime(, "yyyy-MM-dd_HHmmss")
+    for pn in ListProfiles() {
+        mdir := ProfMaps(pn)
+        if !DirExist(mdir)
+            continue
+        root := ProfData(pn) "\backup\auto"
+        dest := root "\" stamp
+        try {
+            DirCreate(dest "\data")
+            Loop Files mdir "\*.txt"
+                FileCopy(A_LoopFileFullPath, dest "\" A_LoopFileName, 1)
+            Loop Files ProfData(pn) "\*.txt"
+                FileCopy(A_LoopFileFullPath, dest "\data\" A_LoopFileName, 1)
+        } catch {
+            continue
+        }
+        names := []
+        Loop Files root "\avant-maj-*", "D"
+            names.Push(A_LoopFileName)
+        SortNames(names)
+        while (names.Length > 5) {
+            try DirDelete(root "\" names[1], true)
+            names.RemoveAt(1)
+        }
+    }
+}
+
 ShowRestore(ownerHwnd) {
     root := DataDir "\backup\auto"
     names := []
@@ -5067,6 +6204,10 @@ ShowRestore(ownerHwnd) {
                 FileCopy(A_LoopFileFullPath, safe "\" A_LoopFileName, 1)
             Loop Files root "\" sel "\*.txt"
                 FileCopy(A_LoopFileFullPath, MapsDir "\" A_LoopFileName, 1)
+            if DirExist(root "\" sel "\data") {
+                Loop Files root "\" sel "\data\*.txt"
+                    FileCopy(A_LoopFileFullPath, DataDir "\" A_LoopFileName, 1)
+            }
         } catch as err {
             MsgBox("La restauration a échoué : " err.Message, "Restaurer", 0x40010)
             return
@@ -5342,6 +6483,7 @@ InstallUpdate() {
     }
     DirCreate(DataDir "\backup")
     try FileCopy(A_ScriptFullPath, DataDir "\backup\stuff_menu.ahk.bak", 1)
+    PreUpdateBackup()
     try {
         for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1"] {
             if FileExist(src "\" fn)
@@ -5380,6 +6522,8 @@ SafeHotkey(key, fn) {
 HotIf(InGame)
 SafeHotkey(MenuKey, (*) => Toggle())
 Hotkey("~LButton Up", (*) => TmClick())   ; chronomètre : moment où la grenade est lâchée
+if (RethrowKey != "")
+    SafeHotkey("~" RethrowKey, (*) => TmRethrow())   ; chronomètre : relance avec la touche de sv_rethrow_last_grenade
 
 HotIf(MenuActive)
 Hotkey("Up", (*) => Move(-1))
@@ -5396,6 +6540,14 @@ SafeHotkey(LockKey, (*) => LockPress())
 SafeHotkey(AddKey, (*) => NewStuffPress())
 Hotkey("^z", (*) => UndoPress())
 HotIf()
+
+; console.log trop gros : on le vide quand CS2 est fermé (le jeu le recrée)
+if (LogMaxMB > 0 && FileExist(ConsoleLog) && !ProcessExist("cs2.exe")) {
+    try {
+        if (FileGetSize(ConsoleLog) > LogMaxMB * 1048576)
+            FileDelete(ConsoleLog)
+    }
+}
 
 ; Le menu doit être lancé AVANT CS2 : c'est lui qui démarre le jeu avec la connexion directe (seul moyen d'envoyer les commandes)
 if (IniRead(IniFile, "State", "SkipCheck", "0") != "1") {
@@ -5423,6 +6575,13 @@ CleanLegacy()
 if HudAtStart
     HudToggle()
 TmApply()
+; Après une mise à jour : fenêtre des nouveautés (première installation : la dernière version seulement)
+lastSeen := IniRead(IniFile, "State", "LastSeenVersion", "")
+if (lastSeen != APP_VERSION) {
+    IniWrite(APP_VERSION, IniFile, "State", "LastSeenVersion")
+    if ShowChangelogOn
+        ShowNews(lastSeen, (lastSeen = "") ? 1 : 8)
+}
 if AutoBackupOn
     SetTimer(AutoBackup, -2500)
 skipCheck := (IniRead(IniFile, "State", "SkipCheck", "0") = "1")
