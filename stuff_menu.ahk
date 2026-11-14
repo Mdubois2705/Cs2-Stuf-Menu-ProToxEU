@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.12.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.13.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -60,6 +60,11 @@ ShotY := ToInt(IniRead(IniFile, "Settings", "ShotY", "100"), 100)
 PracticeCfg := IniRead(IniFile, "Settings", "PracticeCfg", "cs2_practice")
 AutoExec := (IniRead(IniFile, "Settings", "AutoExec", "1") = "1")
 ConsoleKey := IniRead(IniFile, "Settings", "ConsoleKey", "")
+; Connexion directe à la console de CS2 (option de lancement -netconport) : envoie les commandes sans touche ni fichier
+NetconPort := Max(0, Min(65535, ToInt(IniRead(IniFile, "Settings", "NetconPort", "2121"), 2121)))
+netSock := -1          ; socket ouvert vers CS2 (-1 = aucun)
+netWsa := false        ; Winsock initialisé
+netFailTick := 0       ; moment de la dernière connexion ratée (pas de nouvel essai avant quelques secondes)
 ; Touches que le script « appuie » lui-même pour parler à CS2 (choisies par l'utilisateur au premier lancement)
 ; [nom AutoHotkey, nom CS2, libellé]
 KEYTAB := [
@@ -410,6 +415,101 @@ AddRecent(it) {
 }
 
 ; =====================================================================
+;  Connexion directe à la console de CS2 (option de lancement -netconport)
+; =====================================================================
+; CS2 ouvre un port TCP local qui accepte des commandes de console en texte. Le script s'y connecte
+; (127.0.0.1 uniquement) et y envoie les commandes : pas de fichier cfg, pas de touche, pas de exec.
+; Si la connexion n'est pas possible, WriteAndExecRaw revient à l'ancienne méthode (cfg + touche).
+NetOpen() {
+    global netSock, netWsa, netFailTick
+    if (NetconPort <= 0)
+        return false
+    if (netSock != -1)
+        return true
+    if (netFailTick != 0 && A_TickCount - netFailTick < 5000)
+        return false
+    if !netWsa {
+        wsa := Buffer(408, 0)
+        if (DllCall("ws2_32\WSAStartup", "UShort", 0x0202, "Ptr", wsa, "Int") != 0) {
+            netFailTick := A_TickCount
+            return false
+        }
+        netWsa := true
+    }
+    sk := DllCall("ws2_32\socket", "Int", 2, "Int", 1, "Int", 6, "Ptr")   ; AF_INET, SOCK_STREAM, TCP
+    if (sk = -1) {
+        netFailTick := A_TickCount
+        return false
+    }
+    sa := Buffer(16, 0)
+    NumPut("UShort", 2, sa, 0)
+    NumPut("UShort", ((NetconPort & 0xFF) << 8) | (NetconPort >> 8), sa, 2)   ; port en ordre réseau
+    NumPut("UChar", 127, sa, 4)
+    NumPut("UChar", 1, sa, 7)                                                  ; 127.0.0.1
+    if (DllCall("ws2_32\connect", "Ptr", sk, "Ptr", sa, "Int", 16, "Int") != 0) {
+        DllCall("ws2_32\closesocket", "Ptr", sk)
+        netFailTick := A_TickCount
+        return false
+    }
+    nb := Buffer(4, 0)
+    NumPut("UInt", 1, nb)
+    DllCall("ws2_32\ioctlsocket", "Ptr", sk, "UInt", 0x8004667E, "Ptr", nb)   ; mode non bloquant
+    netSock := sk
+    netFailTick := 0
+    SetTimer(NetDrain, 1000)
+    return true
+}
+
+NetClose() {
+    global netSock
+    if (netSock != -1)
+        DllCall("ws2_32\closesocket", "Ptr", netSock)
+    netSock := -1
+}
+
+; Le jeu répond sur la même connexion : on jette ce qu'il envoie pour ne jamais saturer le tampon
+NetDrain() {
+    if (netSock = -1)
+        return
+    buf := Buffer(4096)
+    Loop 64 {
+        n := DllCall("ws2_32\recv", "Ptr", netSock, "Ptr", buf, "Int", 4096, "Int", 0, "Int")
+        if (n > 0)
+            continue
+        if (n = 0)
+            NetClose()   ; fermée par le jeu
+        break
+    }
+}
+
+NetSendRaw(txt) {
+    n := StrPut(txt, "UTF-8") - 1
+    buf := Buffer(n + 1, 0)
+    StrPut(txt, buf, "UTF-8")
+    return (DllCall("ws2_32\send", "Ptr", netSock, "Ptr", buf, "Int", n, "Int", 0, "Int") = n)
+}
+
+; Envoie une commande à CS2 par la connexion directe. false = pas de connexion (on utilise alors cfg + touche)
+NetSend(cmd) {
+    if !NetOpen()
+        return false
+    NetDrain()
+    if (netSock = -1 && !NetOpen())
+        return false
+    if NetSendRaw(cmd "`n")
+        return true
+    NetClose()   ; connexion morte (jeu relancé) : un seul nouvel essai
+    if !NetOpen()
+        return false
+    if NetSendRaw(cmd "`n")
+        return true
+    NetClose()
+    return false
+}
+
+OnExit((*) => NetClose())
+
+; =====================================================================
 ;  Dialogue avec le jeu (cfg + console.log)
 ; =====================================================================
 WriteAndExec(cmd) {
@@ -426,6 +526,8 @@ WriteAndExecRaw(cmd) {
     global lastCmdTick
     lastCmdTick := A_TickCount
     cmd := "sv_cheats 1; " cmd   ; setpos, give, god, bot_place... exigent sv_cheats 1
+    if NetSend(cmd)   ; connexion directe : aucune touche, aucun fichier
+        return
     try FileDelete(CfgPath)
     FileAppend(cmd "`n", CfgPath, "UTF-8-RAW")
     Sleep(30)
@@ -3521,6 +3623,8 @@ HudTick() {
 ; elles ne touchent jamais à stuff_run.cfg ni à la touche des stuffs.
 HudPing() {
     global hudBound
+    if NetSend("sv_cheats 1; getpos")
+        return
     if !hudBound {
         WriteAndExec('bind "' KeyBind(HudKey) '" "exec hud_pos"')
         hudBound := true
@@ -4668,6 +4772,12 @@ Check2() {
         return [out, false, false]
     }
     out.Push(["ok", "console.log présent", ""])
+    if (NetconPort > 0) {
+        if NetOpen()
+            out.Push(["ok", "Connexion directe à CS2 active (port " NetconPort ") : les commandes partent sans touche", ""])
+        else
+            out.Push(["warn", "Connexion directe à CS2 inactive : le script utilise les touches du clavier", "Optionnel : ajoute -netconport " NetconPort " -insecure aux options de lancement de CS2 (Steam), puis relance le jeu. Attention : -insecure désactive VAC, retire-le pour jouer en ligne"])
+    }
     ; même commande que la détection de map : si le jeu répond, l'envoi fonctionne
     txt := RunAndReadLog("status", "main lump")
     if !RegExMatch(txt, "i)main lump|hostname|Not connected|loopback|spawngroup") {
@@ -4908,7 +5018,7 @@ Hotkey("^z", (*) => UndoPress())
 HotIf()
 
 ; Choix des touches du script (une fois, ou tant que l'utilisateur répond « Plus tard »)
-if (IniRead(IniFile, "State", "BindsV", "") != "1")
+if (IniRead(IniFile, "State", "BindsV", "") != "1" && !NetOpen())   ; connexion directe possible : pas besoin de touches
     ShowKeyPicker(true)
 else
     WritePracticeBinds(KeyBind(ExecKey), KeyBind(HudKey), Map())   ; remet les liaisons si cs2_practice.cfg a été recopié

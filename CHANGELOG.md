@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.13.1
+
+- La connexion directe exige l'option de lancement `-insecure` en plus de `-netconport 2121` (sans elle, CS2 n'ouvre pas le port). README, `config.example.ini` et la vérification de l'installation l'indiquent, avec l'avertissement : `-insecure` désactive VAC, à retirer pour jouer en ligne.
+
+## v2.13.0
+
+- Connexion directe à CS2 : avec l'option de lancement `-netconport 2121`, le script envoie les commandes à la console du jeu par un port local, sans fichier `stuff_run.cfg`, sans appui de touche et sans `exec cs2_practice`. Les stuffs, utilitaires, coordonnées et la vérification l'utilisent automatiquement. Si la connexion échoue, le script revient aux 2 touches comme avant.
+- Nouvelle clé `NetconPort` dans `config.ini` (2121 par défaut, 0 pour désactiver).
+- La vérification de l'installation indique si la connexion directe est active.
+- La fenêtre de choix des touches ne s'ouvre pas si la connexion directe fonctionne au lancement.
+
 ## v2.12.1
 
 - Nettoyage du code : suppression de fonctions et de variables qui n'étaient plus utilisées (anciens raccourcis de suppression et d'ajout, aides inutilisées). Aucun changement de fonctionnement.
