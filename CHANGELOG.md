@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.11.0
+
+- Choix des touches du script : au premier lancement de cette version, une fenêtre propose 2 touches (lancer les stuffs, coordonnées) parmi une liste. Le script lit ta configuration CS2 (touches enregistrées et fichiers cfg) et signale celles qui sont déjà utilisées ; les touches libres sont proposées en premier. Évite qu'une touche déjà utilisée (arme, Discord, logiciel de clavier) déclenche autre chose en jeu.
+- Nouveau bouton « Touches du script » dans les réglages (F10) pour les changer plus tard ; clés `ExecKey` et `HudKey` dans `config.ini`.
+- `cs2_practice.cfg` (dossier cfg de CS2) est réécrit automatiquement avec les touches choisies. Si CS2 tourne, il est relancé tout de suite avec l'ancienne touche ; sinon tape `exec cs2_practice` une fois dans la console.
+
 ## v2.10.1
 
 - Coordonnées en temps réel : elles ont leur propre fichier (`hud_pos.cfg`) et leur propre touche (`kp_slash`) et ne réécrivent plus `stuff_run.cfg` en boucle. Pause de 2 secondes après chaque commande du menu. Corrige un stuff (avec `give`) rejoué en boucle quand les coordonnées étaient actives. La liaison de la touche se fait toute seule à l'activation, sans refaire `exec cs2_practice`.

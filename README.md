@@ -67,7 +67,7 @@ Dans le menu des stuffs :
 | `F4` | Créer un nouveau stuff (fenêtre de sauvegarde, catégorie courante pré-remplie) |
 | `Ctrl+Z` | Annuler la dernière suppression de stuff |
 
-La suppression de stuffs et de catégories se fait depuis la fenêtre de gestion. Les touches se changent dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`). Le script utilise aussi la touche `kp_multiply` (pavé numérique `*`) pour déclencher le cfg, ainsi que `K`, `N`, `L`, `P` dans `cs2_practice.cfg`.
+La suppression de stuffs et de catégories se fait depuis la fenêtre de gestion. Les touches se changent dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`). Le script appuie lui-même sur 2 touches pour parler à CS2 (lancer les stuffs, lire les coordonnées) : au premier lancement d'une version qui en a besoin, une fenêtre te propose de les choisir parmi des touches libres (le script lit ta config CS2 pour repérer celles qui sont déjà utilisées). Tu peux les changer à tout moment dans les réglages du menu (bouton « Touches du script ») ou avec `ExecKey` et `HudKey` dans `config.ini`. `cs2_practice.cfg` contient aussi les touches `K`, `N`, `L`, `P`.
 
 ## Gestion des stuffs et des catégories
 
@@ -88,7 +88,7 @@ L'affichage s'active dans « Réglages du menu », onglet **Coordonnées** (pas 
 Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dans `console.log` (option `-condebug`). Il ne lit pas la mémoire du jeu.
 
 - La fréquence se règle avec `HudInterval` (en ms, 300 par défaut) . `HudAtStart` (0 ou 1) est géré par la case des réglages.
-- Pendant que l'affichage est actif, le script envoie une touche (`kp_slash`, le `/` du pavé numérique) à chaque mise à jour, avec son propre fichier `hud_pos.cfg` : il n'utilise pas la touche ni le fichier des stuffs et fait une pause de 2 secondes après chaque stuff lancé. **Désactive-le quand même avant d'ouvrir la console ou le chat**, sinon le caractère `/` s'y écrit.
+- Pendant que l'affichage est actif, le script envoie une touche (celle choisie pour les coordonnées, `/` du pavé numérique par défaut) à chaque mise à jour, avec son propre fichier `hud_pos.cfg` : il n'utilise pas la touche ni le fichier des stuffs et fait une pause de 2 secondes après chaque stuff lancé. **Désactive-le quand même avant d'ouvrir la console ou le chat**, sinon le caractère `/` s'y écrit.
 - Il se met en pause quand le menu ou une fenêtre du script est ouverte, et quand CS2 n'est pas la fenêtre active.
 
 ## Profils et partage
@@ -202,7 +202,7 @@ Lance ensuite CS2 et une map locale : dès que le jeu est au premier plan, le sc
 
 - Pour relancer la vérification : bouton « Vérifier l'installation » dans les réglages du menu (visible sous tous les onglets).
 - Pour la désactiver : `AutoCheck=0` dans `config.ini`.
-- Le test d'envoi appuie sur la touche `*` du pavé numérique dans le jeu : ne laisse pas la console ni le chat ouverts pendant la vérification.
+- Le test d'envoi appuie sur la touche choisie pour les stuffs (`*` du pavé numérique par défaut) dans le jeu : ne laisse pas la console ni le chat ouverts pendant la vérification.
 
 ## Mise à jour
 
