@@ -2,9 +2,9 @@
 
 Menu en overlay, navigable au clavier, pour s'entraîner aux lineups (smokes, flashs, molotovs, spawns…) en **entraînement local** sur Counter-Strike 2.
 
-Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessus le jeu et envoie les commandes à CS2 via un petit fichier `cfg`. Tes repères sont de simples fichiers texte, un par map.
+Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessus le jeu et envoie les commandes à CS2 par une **connexion directe** à sa console (option de lancement `-netconport`), sans aucune touche appuyée à ta place. Tes repères sont de simples fichiers texte, un par map.
 
-> Projet de la communauté, sans lien avec Valve. À utiliser **uniquement en local** : ferme le script avant de jouer en matchmaking, sur FACEIT ou sur un serveur avec anti-cheat.
+> Projet de la communauté, sans lien avec Valve. À utiliser **uniquement en local**. Le menu lance CS2 avec `-insecure`, qui **désactive VAC** : dans cette session, pas de matchmaking, de Premier ni de FACEIT. Pour jouer en ligne, ferme le jeu et lance-le normalement depuis Steam, sans passer par le menu.
 
 ## Fonctionnalités
 
@@ -19,22 +19,24 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 
 ## Prérequis
 
-- Windows et [AutoHotkey v2](https://www.autohotkey.com/)
+- Windows, [Steam](https://store.steampowered.com/) et [AutoHotkey v2](https://www.autohotkey.com/)
 - Counter-Strike 2
-- L'option de lancement Steam `-condebug` (détection de la map et capture de position)
-- Optionnel : les options de lancement `-netconport 2121 -insecure` (envoi des commandes sans touche, voir [Connexion directe](#connexion-directe-à-cs2))
+- L'option de lancement Steam **`-condebug`** (obligatoire : le menu lit `console.log` pour détecter la map et ta position). Aucune autre option de lancement n'est à ajouter : `-netconport` et `-insecure` sont ajoutées par le menu lui-même.
 
 ## Installation
 
 1. Installe [AutoHotkey v2](https://www.autohotkey.com/).
 2. Télécharge ce dépôt (bouton vert **Code > Download ZIP**) et extrais-le où tu veux, ou clone-le.
-3. Dans Steam, clic droit sur Counter-Strike 2 > **Propriétés** > **Options de lancement**, et ajoute `-condebug`. Optionnel : ajoute aussi `-netconport 2121 -insecure` pour la [connexion directe](#connexion-directe-à-cs2) (lis d'abord l'avertissement de cette section).
-4. Double-clique sur `stuff_menu.ahk`. Au premier lancement, **tout se configure tout seul** :
+3. Dans Steam, clic droit sur Counter-Strike 2 > **Propriétés** > **Options de lancement**, et ajoute **`-condebug`** (une seule fois). Garde tes autres options si tu en as.
+4. **Ferme CS2**, puis double-clique sur `stuff_menu.ahk`. Au premier lancement, **tout se configure tout seul** :
    - `config.ini` est créé à partir de `config.example.ini` ;
    - le dossier cfg de CS2 est trouvé automatiquement (Steam et ses bibliothèques). S'il n'est pas trouvé, une fenêtre te demande de le choisir : `...\Counter-Strike Global Offensive\game\csgo\cfg` ;
-   - `cs2_practice.cfg` est copié dans ce dossier cfg (un fichier existant n'est jamais écrasé).
-5. Lance CS2 et une **map d'entraînement locale**. Avec la connexion directe, c'est tout : le script envoie les commandes directement. Sans elle, ouvre la console et tape `exec cs2_practice` **une seule fois** : cela crée la touche qui relie le jeu au menu. Ensuite, le script l'exécute tout seul (voir [Exec automatique](#exec-automatique)).
-6. Appuie sur `F1` en jeu pour ouvrir le menu. Une fenêtre de vérification contrôle l'installation au lancement du script et se ferme toute seule si tout est bon.
+   - `cs2_practice.cfg` est copié dans ce dossier cfg (un fichier existant n'est jamais écrasé) ;
+   - une fenêtre t'explique que le menu va lancer CS2 avec `-netconport 2121 -insecure`, puis il **démarre le jeu lui-même** (par Steam, sans modifier tes options de lancement).
+5. Attends que CS2 soit chargé et lance une **map d'entraînement locale**. Une petite infobulle « Connexion directe à CS2 active » confirme que tout est prêt.
+6. Appuie sur `F1` en jeu pour ouvrir le menu. Une fenêtre de vérification contrôle l'installation et se ferme toute seule si tout est bon.
+
+**Règle à retenir : lance toujours le script (`stuff_menu.ahk`) avant CS2.** C'est lui qui démarre le jeu avec la connexion directe, le seul moyen d'envoyer les commandes. Si CS2 est déjà ouvert quand tu lances le script, il te propose de le fermer et de le relancer avec les bonnes options.
 
 Le menu est vide au départ : sauvegarde tes stuffs avec « Sauvegarder la position actuelle » (voir plus bas) ou importe ceux d'un ami avec « Profils et partage de stuffs ».
 
@@ -70,25 +72,16 @@ Dans le menu des stuffs :
 
 La suppression de stuffs et de catégories se fait depuis la fenêtre de gestion. Les touches du menu se changent dans `config.ini` (`MenuKey`, `FavKey`, `LockKey`, `AddKey`).
 
-### Les 2 touches que le script appuie lui-même
-
-Sans connexion directe (`-netconport`), le script parle à CS2 en appuyant sur 2 touches du clavier : une pour lancer les stuffs et les utilitaires (`ExecKey`), une pour les coordonnées (`HudKey`). Au premier lancement, une fenêtre te propose de les choisir parmi des touches libres : le script lit ta config CS2 pour repérer celles qui sont déjà utilisées. Choisis des touches que tu n'utilises jamais, ni dans CS2, ni dans un autre logiciel (Discord, logiciel de clavier ou de souris).
-
-- Tu peux les changer à tout moment : réglages du menu, bouton « Touches du script », ou `ExecKey` et `HudKey` dans `config.ini`.
-- Après un changement, tape `exec cs2_practice` une fois dans la console de CS2 : le script a réécrit les liaisons dans `cs2_practice.cfg`.
-- `cs2_practice.cfg` contient aussi les touches `K`, `N`, `L`, `P` (rejouer une grenade, noclip, supprimer les smokes, kit d'armes).
-
 ## Connexion directe à CS2
 
-Avec les options de lancement `-netconport 2121 -insecure`, CS2 ouvre un port TCP qui accepte des commandes de console. Le script s'y connecte et envoie les commandes directement :
+Le menu envoie toutes ses commandes (téléportation, give, bots, god mode, coordonnées…) par un port TCP local que CS2 ouvre avec les options `-netconport 2121 -insecure`. Aucun fichier `cfg` n'est écrit, aucune touche n'est appuyée à ta place : pas de collision avec tes touches, Discord ou un logiciel de clavier.
 
-- plus de fichier `stuff_run.cfg` ni de touche appuyée à ta place, donc plus de collision avec tes touches, Discord ou un logiciel de clavier ;
-- plus besoin de taper `exec cs2_practice` pour relier une touche au menu ;
-- les coordonnées en temps réel n'appuient plus sur rien.
-
-**Avertissement : `-insecure` désactive VAC.** Une copie de CS2 lancée avec cette option ne peut pas rejoindre de serveur protégé (matchmaking, Premier, FACEIT...). Retire `-insecure` des options de lancement avant de jouer en ligne ; le script marche alors avec les 2 touches. Le port est ouvert sur le réseau local : garde le pare-feu Windows actif et n'utilise cette option que sur un réseau de confiance.
-
-C'est automatique : si la connexion est possible, elle est utilisée, sinon le script revient aux 2 touches (voir ci-dessus). La vérification de l'installation indique laquelle des deux est active. Le port se règle avec `NetconPort` dans `config.ini` (`0` pour désactiver). Si le port 2121 est déjà pris par un autre programme, choisis-en un autre dans l'option de lancement et dans `NetconPort`. Sans `-insecure`, CS2 n'ouvre pas le port.
+- **Le menu lance CS2 pour toi** (`steam.exe -applaunch 730 -condebug -netconport 2121 -insecure`). Tes options de lancement enregistrées dans Steam ne sont pas modifiées.
+- **Sans cette connexion, le menu ne peut pas envoyer de commandes.** S'il n'arrive pas à se connecter, une infobulle te le dit. Ferme CS2 et relance le menu.
+- **`-insecure` désactive VAC** : une copie de CS2 lancée ainsi ne peut pas rejoindre de serveur protégé (matchmaking, Premier, FACEIT…). Pour jouer en ligne, ferme le jeu et relance-le normalement depuis Steam.
+- Le port est ouvert sur le réseau local : garde le pare-feu Windows actif et n'utilise le menu que sur un réseau de confiance.
+- Le port se règle avec `NetconPort` dans `config.ini` (2121 par défaut) ; les options données au jeu avec `LaunchArgs` (`{port}` est remplacé par `NetconPort`). Si le port est déjà pris par un autre programme, change `NetconPort`.
+- Si le lancement par le menu ne fonctionne pas chez toi, ajoute `-netconport 2121 -insecure` dans les options de lancement de CS2 sur Steam, à côté de `-condebug`. Le menu se connecte alors au jeu lancé de cette façon.
 
 ## Gestion des stuffs et des catégories
 
@@ -109,7 +102,7 @@ L'affichage s'active dans « Réglages du menu », onglet **Coordonnées** (pas 
 Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dans `console.log` (option `-condebug`). Il ne lit pas la mémoire du jeu.
 
 - La fréquence se règle avec `HudInterval` (en ms, 300 par défaut) . `HudAtStart` (0 ou 1) est géré par la case des réglages.
-- Pendant que l'affichage est actif, le script envoie une touche (celle choisie pour les coordonnées, `/` du pavé numérique par défaut) à chaque mise à jour, avec son propre fichier `hud_pos.cfg` : il n'utilise pas la touche ni le fichier des stuffs et fait une pause de 2 secondes après chaque stuff lancé. **Désactive-le quand même avant d'ouvrir la console ou le chat**, sinon le caractère `/` s'y écrit.
+- Les coordonnées sont demandées par la connexion directe, sans aucune touche : elles ne gênent ni la console ni le chat. Le script fait une pause de 2 secondes après chaque stuff lancé.
 - Il se met en pause quand le menu ou une fenêtre du script est ouverte, et quand CS2 n'est pas la fenêtre active.
 
 ## Profils et partage
@@ -148,9 +141,8 @@ Réglages dans `config.ini` :
 | --- | --- |
 | `AutoExec` | `1` = exec automatique, `0` = désactivé |
 | `PracticeCfg` | Nom du cfg à exécuter (par défaut `cs2_practice`) |
-| `ConsoleKey` | Optionnel : touche de la console (ex. `{sc029}`, la touche à gauche du 1) |
 
-Avec `ConsoleKey` vide, l'exec passe par la touche liée au menu, créée par ton premier `exec cs2_practice` manuel. Avec `ConsoleKey` renseignée, le script ouvre la console, tape la commande et la referme lui-même, sans exec manuel. Utilise-la seulement si la touche est la bonne : sinon les lettres tapées arrivent dans le jeu.
+L'exec est envoyé à CS2 par la connexion directe : tu n'as rien à taper dans la console.
 
 ## Captures d'écran des stuffs
 
@@ -229,11 +221,11 @@ Si tu modifies ensuite le fond (préréglage ou curseurs), le menu repasse en «
 
 Au lancement, le script vérifie ce qui peut l'être sans CS2 : dossier cfg, `cs2_practice.cfg`, tes maps, droits d'écriture, présence de `console.log`. Une petite fenêtre affiche le résultat avec ✔, ⚠ ou ✘ et la solution de chaque problème.
 
-Lance ensuite CS2 et une map locale : dès que le jeu est au premier plan, le script teste l'envoi d'une commande (via `console.log`), les cheats et la détection de la map. S'il n'y a aucun problème, la fenêtre se ferme toute seule.
+Dès que CS2 est lancé et au premier plan dans une map locale, le script teste la connexion directe, l'envoi d'une commande (via `console.log`), les cheats et la détection de la map. S'il n'y a aucun problème, la fenêtre se ferme toute seule.
 
 - Pour relancer la vérification : bouton « Vérifier l'installation » dans les réglages du menu (visible sous tous les onglets).
 - Pour la désactiver : `AutoCheck=0` dans `config.ini`.
-- Le test d'envoi appuie sur la touche choisie pour les stuffs (`*` du pavé numérique par défaut) dans le jeu : ne laisse pas la console ni le chat ouverts pendant la vérification.
+- Le test d'envoi passe par la connexion directe. Si elle échoue, la ligne « Connexion directe à CS2 impossible » indique quoi faire.
 
 ## Mise à jour
 
@@ -241,16 +233,18 @@ Lance ensuite CS2 et une map locale : dès que le jeu est au premier plan, le sc
 - **Sans le script** : ferme le script, puis double-clique sur `update.bat`. Il télécharge la dernière version et remplace les fichiers du programme.
 - **Avec Git** : `git pull` dans le dossier.
 
-Dans tous les cas, `maps\`, `data\`, `profiles\` et `config.ini` ne sont jamais modifiés : tes stuffs, favoris, profils et réglages restent en place. L'ancien script est copié dans `data\backup\stuff_menu.ahk.bak`. Si `cs2_practice.cfg` change (voir le CHANGELOG), supprime l'ancienne copie du dossier cfg de CS2 : le script en recopie une neuve au lancement.
+Dans tous les cas, `maps\`, `data\`, `profiles\` et `config.ini` ne sont jamais modifiés : tes stuffs, favoris, profils et réglages restent en place. L'ancien script est copié dans `data\backup\stuff_menu.ahk.bak`. Si `cs2_practice.cfg` change (voir le CHANGELOG), supprime l'ancienne copie du dossier cfg de CS2 : le script en recopie une neuve au lancement. Les anciennes liaisons de touches (`stuff_run`, `hud_pos`) laissées par les versions précédentes sont retirées automatiquement.
 
 ## Dépannage
 
 - **Le menu n'apparaît pas** : vérifie que le script tourne et que CS2 est en mode fenêtré (plein écran fenêtré). Tu peux aussi placer le menu sur un autre écran dans les réglages du menu (réglages de position).
-- **La map n'est pas détectée** : vérifie `-condebug`, ou règle `AutoDetectMap=0` dans `config.ini`.
+- **La map n'est pas détectée** : vérifie que `-condebug` est dans les options de lancement de CS2 sur Steam, ou règle `AutoDetectMap=0` dans `config.ini`.
+- **Une infobulle dit « Pas de connexion à CS2 »** : CS2 n'a pas été lancé par le menu (ou sans `-netconport`). Ferme le jeu puis relance le menu : il redémarre CS2 avec les bonnes options. Contrôle avec « Vérifier l'installation » dans les réglages. En ligne de commande : `netstat -ano | findstr 2121` doit afficher `LISTENING` quand le jeu tourne.
+- **CS2 ne se lance pas depuis le menu** : vérifie que Steam est installé et connecté. En dernier recours, ajoute `-condebug -netconport 2121 -insecure` dans les options de lancement de CS2 sur Steam et lance le jeu toi-même.
 - **TP, give, God mode ou bot ne marchent plus** : ces commandes exigent `sv_cheats 1`. Le script l'envoie avant chaque commande ; si ça ne marche toujours pas, vérifie que tu es bien dans une partie locale (pas en matchmaking). Test rapide : tape `setpos 0 0 0` dans la console.
-- **Rien ne se passe au choix d'un stuff** : vérifie que tu es dans une partie locale. Avec `-netconport 2121 -insecure` dans les options de lancement, la connexion est directe ; sans elles, tape `exec cs2_practice` dans la console depuis le lancement de CS2 (il relie la touche du script au fichier généré). Le bouton « Vérifier l'installation » des réglages indique où ça bloque.
-- **Des armes changent toutes seules, ou une touche fait autre chose** : une des 2 touches du script est aussi utilisée ailleurs (CS2, Discord, logiciel de clavier). Change-la dans les réglages du menu, bouton « Touches du script », puis retape `exec cs2_practice`.
-- **L'exec automatique ne se déclenche pas** : vérifie `-condebug` (détection de map) ou utilise l'entrée « Relancer l'exec » du menu.
+- **Rien ne se passe au choix d'un stuff** : vérifie que tu es dans une partie locale et que la connexion directe est active (« Vérifier l'installation »).
+- **Des armes changent toutes seules** : d'anciennes versions du menu liaient des touches du pavé numérique (`*`, `/`). Le menu les retire de `cs2_practice.cfg` au lancement ; relance CS2 depuis le menu pour repartir proprement. Si le problème persiste, vérifie qu'aucun logiciel (Discord, clavier, souris) ne répète une touche.
+- **L'exec automatique ne se déclenche pas** : vérifie `-condebug` (détection de map) et la connexion directe, ou utilise l'entrée « Relancer l'exec » du menu.
 - **Suppression par erreur** : récupère le fichier dans `data/backup/`.
 
 ## Contribuer

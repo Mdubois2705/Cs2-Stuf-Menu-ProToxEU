@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.14.2"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.16.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -59,32 +59,12 @@ ShotX := ToInt(IniRead(IniFile, "Settings", "ShotX", "520"), 520)
 ShotY := ToInt(IniRead(IniFile, "Settings", "ShotY", "100"), 100)
 PracticeCfg := IniRead(IniFile, "Settings", "PracticeCfg", "cs2_practice")
 AutoExec := (IniRead(IniFile, "Settings", "AutoExec", "1") = "1")
-ConsoleKey := IniRead(IniFile, "Settings", "ConsoleKey", "")
-; Connexion directe à la console de CS2 (option de lancement -netconport) : envoie les commandes sans touche ni fichier
-NetconPort := Max(0, Min(65535, ToInt(IniRead(IniFile, "Settings", "NetconPort", "2121"), 2121)))
+; Connexion directe à la console de CS2 (option de lancement -netconport) : seul moyen d'envoyer des commandes au jeu
+NetconPort := Max(1, Min(65535, ToInt(IniRead(IniFile, "Settings", "NetconPort", "2121"), 2121)))
+LaunchArgs := Trim(IniRead(IniFile, "Settings", "LaunchArgs", "-condebug -netconport {port} -insecure"))
 netSock := -1          ; socket ouvert vers CS2 (-1 = aucun)
 netWsa := false        ; Winsock initialisé
 netFailTick := 0       ; moment de la dernière connexion ratée (pas de nouvel essai avant quelques secondes)
-; Touches que le script « appuie » lui-même pour parler à CS2 (choisies par l'utilisateur au premier lancement)
-; [nom AutoHotkey, nom CS2, libellé]
-KEYTAB := [
-    ["NumpadMult", "kp_multiply", "* du pavé numérique"],
-    ["NumpadDiv", "kp_slash", "/ du pavé numérique"],
-    ["NumpadSub", "kp_minus", "- du pavé numérique"],
-    ["NumpadAdd", "kp_plus", "+ du pavé numérique"],
-    ["ScrollLock", "scrolllock", "Arrêt défil (Scroll Lock)"],
-    ["Pause", "pause", "Pause"],
-    ["Insert", "ins", "Inser (Insert)"],
-    ["Delete", "del", "Suppr (Delete)"],
-    ["Home", "home", "Début (Home)"],
-    ["End", "end", "Fin (End)"],
-    ["PgUp", "pgup", "Page précédente"],
-    ["PgDn", "pgdn", "Page suivante"]
-]
-ExecKey := KeyOk(IniRead(IniFile, "Settings", "ExecKey", "NumpadMult"), "NumpadMult")
-HudKey := KeyOk(IniRead(IniFile, "Settings", "HudKey", "NumpadDiv"), "NumpadDiv")
-if (StrLower(ExecKey) = StrLower(HudKey))
-    HudKey := (StrLower(ExecKey) = "numpaddiv") ? "NumpadSub" : "NumpadDiv"
 execMap := ""       ; map pour laquelle le cfg d'entraînement a déjà été exécuté
 
 ; Apparence du menu (modifiable avec la touche de réglages)
@@ -135,10 +115,7 @@ if (CfgPath = "" || !DirExist(cfgDir)) {
 practiceSrc := A_ScriptDir "\" PracticeCfg ".cfg"
 practiceDst := cfgDir "\" PracticeCfg ".cfg"
 if (FileExist(practiceSrc) && !FileExist(practiceDst)) {
-    try {
-        FileCopy(practiceSrc, practiceDst)
-        practiceCopied := true
-    }
+    try FileCopy(practiceSrc, practiceDst)
 }
 if (ConsoleLog = "") {
     SplitPath(cfgDir, , &csgoDir)
@@ -203,7 +180,6 @@ hudLast := ""
 hudPos := 0         ; position de lecture dans console.log
 cmdBusy := 0        ; > 0 pendant l'envoi d'une commande au jeu
 lastCmdTick := 0    ; moment du dernier envoi de commande (pause des coordonnées après un stuff)
-hudBound := false   ; la touche des coordonnées est liée dans le jeu
 chkGui := ""        ; fenêtre de vérification de l'installation
 chkHead := ""
 chkTxt := ""
@@ -425,8 +401,8 @@ AddRecent(it) {
 ;  Connexion directe à la console de CS2 (option de lancement -netconport)
 ; =====================================================================
 ; CS2 ouvre un port TCP local qui accepte des commandes de console en texte. Le script s'y connecte
-; (127.0.0.1 uniquement) et y envoie les commandes : pas de fichier cfg, pas de touche, pas de exec.
-; Si la connexion n'est pas possible, WriteAndExecRaw revient à l'ancienne méthode (cfg + touche).
+; (127.0.0.1 uniquement) et y envoie les commandes : pas de fichier cfg, pas de touche.
+; Sans connexion, aucune commande ne part (NetWarn prévient l'utilisateur).
 NetOpen() {
     global netSock, netWsa, netFailTick
     if (NetconPort <= 0)
@@ -458,6 +434,9 @@ NetOpen() {
         netFailTick := A_TickCount
         return false
     }
+    nd := Buffer(4, 0)
+    NumPut("Int", 1, nd)
+    DllCall("ws2_32\setsockopt", "Ptr", sk, "Int", 6, "Int", 1, "Ptr", nd, "Int", 4)   ; TCP_NODELAY : envoi immédiat, sans attendre l'accusé de réception (évite 40 à 200 ms de retard)
     nb := Buffer(4, 0)
     NumPut("UInt", 1, nb)
     DllCall("ws2_32\ioctlsocket", "Ptr", sk, "UInt", 0x8004667E, "Ptr", nb)   ; mode non bloquant
@@ -496,7 +475,7 @@ NetSendRaw(txt) {
     return (DllCall("ws2_32\send", "Ptr", netSock, "Ptr", buf, "Int", n, "Int", 0, "Int") = n)
 }
 
-; Envoie une commande à CS2 par la connexion directe. false = pas de connexion (on utilise alors cfg + touche)
+; Envoie une commande à CS2 par la connexion directe. false = pas de connexion
 NetSend(cmd) {
     if !NetOpen()
         return false
@@ -516,6 +495,54 @@ NetSend(cmd) {
 
 OnExit((*) => NetClose())
 
+; Lance CS2 par Steam avec les options nécessaires à la connexion directe, sans toucher aux options enregistrées dans Steam.
+; Méthode fiable : steam.exe -applaunch 730 <options> (le lien steam://rungameid ignore souvent les options).
+launchWatch := 0
+LaunchGame() {
+    global launchWatch
+    args := StrReplace(LaunchArgs, "{port}", NetconPort)
+    steamExe := ""
+    try steamExe := RegRead("HKEY_CURRENT_USER\Software\Valve\Steam", "SteamExe")
+    steamExe := StrReplace(steamExe, "/", "\")
+    ok := false
+    if (steamExe != "" && FileExist(steamExe)) {
+        try {
+            Run('"' steamExe '" -applaunch 730 ' args)
+            ok := true
+        }
+    }
+    if !ok {
+        try {
+            Run("steam://rungameid/730//" StrReplace(args, " ", "%20"))
+            ok := true
+        }
+    }
+    if ok {
+        launchWatch := A_TickCount
+        SetTimer(LaunchCheck, 3000)
+    }
+    return ok
+}
+
+; Après le lancement : attend que le port s'ouvre ; au bout de 2 minutes, prévient si le jeu n'a pas reçu les options
+LaunchCheck() {
+    global launchWatch, netFailTick
+    if (A_TickCount - launchWatch > 120000) {
+        SetTimer(LaunchCheck, 0)
+        if ProcessExist("cs2.exe") && !NetOpen()
+            MsgBox("CS2 est lancé mais n'a pas reçu l'option -netconport " NetconPort ".`n`nAjoute-la dans les options de lancement de CS2 sur Steam (clic droit sur le jeu > Propriétés) :`n" StrReplace(LaunchArgs, "{port}", NetconPort) "`n`nFerme puis relance le jeu. Sans cette option, le menu ne peut pas envoyer de commandes.", "Menu Stuf", 0x40040)
+        return
+    }
+    if !ProcessExist("cs2.exe")
+        return
+    netFailTick := 0
+    if NetOpen() {
+        SetTimer(LaunchCheck, 0)
+        ToolTip("Connexion directe à CS2 active")
+        SetTimer(() => ToolTip(), -2500)
+    }
+}
+
 ; =====================================================================
 ;  Dialogue avec le jeu (cfg + console.log)
 ; =====================================================================
@@ -533,14 +560,18 @@ WriteAndExecRaw(cmd) {
     global lastCmdTick
     lastCmdTick := A_TickCount
     cmd := "sv_cheats 1; " cmd   ; setpos, give, god, bot_place... exigent sv_cheats 1
-    if NetSend(cmd)   ; connexion directe : aucune touche, aucun fichier
+    if !NetSend(cmd)
+        NetWarn()
+}
+
+; Prévient (sans spammer) que le jeu n'est pas joignable
+NetWarn() {
+    static last := 0
+    if (A_TickCount - last < 8000)
         return
-    try FileDelete(CfgPath)
-    FileAppend(cmd "`n", CfgPath, "UTF-8-RAW")
-    Sleep(30)
-    Send("{" ExecKey " down}")
-    Sleep(40)
-    Send("{" ExecKey " up}")
+    last := A_TickCount
+    ToolTip("Pas de connexion à CS2 : ferme le jeu et relance le menu (il lance CS2 lui-même)")
+    SetTimer(() => ToolTip(), -3500)
 }
 
 ; Exécute une commande puis renvoie ce qui a été écrit dans console.log
@@ -556,7 +587,7 @@ RunAndReadLog(cmd, pattern := "") {
 }
 
 RunAndReadLogRaw(cmd, pattern := "") {
-    if !FileExist(ConsoleLog)
+    if !FileExist(ConsoleLog) || !NetOpen()
         return ""
     size := FileGetSize(ConsoleLog)
     WriteAndExec(cmd)
@@ -1919,270 +1950,33 @@ FindCs2Cfg() {
     return ""
 }
 
-; =====================================================================
-;  Touches utilisées par le script pour parler à CS2 (ExecKey, HudKey)
-; =====================================================================
-; Nom AutoHotkey valide de la liste (sinon la valeur par défaut)
-KeyOk(v, def) {
-    for e in KEYTAB {
-        if (StrLower(e[1]) = StrLower(Trim(v)))
-            return e[1]
-    }
-    return def
-}
-
-; Nom CS2 (bind) d'une touche AutoHotkey de la liste
-KeyBind(ahk) {
-    for e in KEYTAB {
-        if (StrLower(e[1]) = StrLower(ahk))
-            return e[2]
-    }
-    return StrLower(ahk)
-}
-
-AddUsed(used, ours, key, cmd) {
-    key := StrLower(Trim(key))
-    cmd := Trim(cmd, ' "`t;')
-    if (key = "" || cmd = "")
-        return
-    if RegExMatch(cmd, "i)exec\s+(stuff_run|hud_pos)") {
-        ours[key] := cmd
-        return
-    }
-    if !used.Has(key)
-        used[key] := cmd
-}
-
-; Touches déjà liées dans la configuration de CS2 (touches enregistrées par le jeu + fichiers cfg).
-; Renvoie Map(nom CS2 en minuscules -> commande). Les liaisons du script lui-même vont dans ours.
-UsedBinds(&ours) {
-    used := Map()
-    ours := Map()
-    steams := []
-    for key in ["HKEY_CURRENT_USER\Software\Valve\Steam|SteamPath", "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam|InstallPath", "HKEY_LOCAL_MACHINE\SOFTWARE\Valve\Steam|InstallPath"] {
-        kp := StrSplit(key, "|")
-        try {
-            sp := RegRead(kp[1], kp[2])
-            if (sp != "")
-                steams.Push(RTrim(StrReplace(sp, "/", "\"), "\"))
-        }
-    }
-    steams.Push("C:\Program Files (x86)\Steam")
-    ; 1) touches enregistrées par CS2 : Steam\userdata\<id>\730\local\cfg\cs2_user_keys*.vcfg
-    for st in steams {
-        try {
-            Loop Files st "\userdata\*", "D" {
-                ud := A_LoopFilePath
-                Loop Files ud "\730\local\cfg\cs2_user_keys*.vcfg" {
-                    try {
-                        for ln in StrSplit(FileRead(A_LoopFilePath, "UTF-8"), "`n", "`r") {
-                            if RegExMatch(ln, '^\s*"([^"]+)"\s+"([^"]*)"\s*$', &m)
-                                AddUsed(used, ours, m[1], m[2])
-                        }
-                    }
-                }
-            }
-        }
-    }
-    ; 2) lignes bind des fichiers cfg (autoexec.cfg...), hors fichiers du script
+; Retire les restes du mode « touches » des anciennes versions : liaisons dans cs2_practice.cfg et fichiers stuff_run.cfg / hud_pos.cfg
+CleanLegacy() {
     try {
-        Loop Files cfgDir "\*.cfg" {
-            nm := StrLower(RegExReplace(A_LoopFileName, "\.cfg$"))
-            if (nm = StrLower(PracticeCfg) || nm = "stuff_run" || nm = "hud_pos")
-                continue
-            try {
-                txt := FileRead(A_LoopFilePath, "UTF-8")
-            } catch {
-                continue
-            }
+        f := cfgDir "\" PracticeCfg ".cfg"
+        if FileExist(f) {
+            txt := FileRead(f, "UTF-8")
+            out := ""
+            changed := false
             for ln in StrSplit(txt, "`n", "`r") {
-                if RegExMatch(ln, 'i)^\s*bind\s+"?([^"\s]+)"?\s+"?([^"]*)', &m)
-                    AddUsed(used, ours, m[1], m[2])
+                if RegExMatch(ln, 'i)^\s*bind\s+"[^"]+"\s+"exec\s+(stuff_run|hud_pos)"') {
+                    changed := true
+                    continue
+                }
+                if RegExMatch(ln, "i)^//\s*(-+ Liaison avec le menu|Liaison avec le menu|Ne pas modifier : cette touche|Coordonnées en temps réel \(le script)") {
+                    changed := true
+                    continue
+                }
+                out .= ln "`n"
             }
+            if changed
+                FileOpen(f, "w", "UTF-8-RAW").Write(RTrim(out, "`n") "`n")
         }
     }
-    return used
-}
-
-; Réécrit les liaisons du script dans cs2_practice.cfg (dossier cfg de CS2) avec les touches choisies
-WritePracticeBinds(execBind, hudBind, ours) {
-    f := cfgDir "\" PracticeCfg ".cfg"
-    if !FileExist(f)
-        return
-    try {
-        txt := FileRead(f, "UTF-8")
-    } catch {
-        return
+    for n in ["stuff_run.cfg", "hud_pos.cfg"] {
+        if FileExist(cfgDir "\" n)
+            try FileDelete(cfgDir "\" n)
     }
-    out := []
-    echoAt := 0
-    for ln in StrSplit(txt, "`n", "`r") {
-        if InStr(ln, "menu-stuf")
-            continue
-        if RegExMatch(ln, 'i)^\s*bind\s+"[^"]+"\s+"exec\s+(stuff_run|hud_pos)"\s*$')
-            continue
-        if RegExMatch(ln, "i)^\s*//\s*(-+\s*Liaison avec le menu|Ne pas modifier : cette touche|Coordonnées en temps réel \(le script)")
-            continue
-        out.Push(ln)
-    }
-    while (out.Length > 0 && Trim(out[out.Length]) = "")
-        out.Pop()
-    blk := ["", "// menu-stuf : liaison avec le script (touches choisies dans le menu, à ne pas modifier à la main)"]
-    for k, c in ours {
-        if (k != execBind && k != hudBind)
-            blk.Push('unbind "' k '" // menu-stuf')
-    }
-    blk.Push('bind "' execBind '" "exec stuff_run" // menu-stuf')
-    blk.Push('bind "' hudBind '" "exec hud_pos" // menu-stuf')
-    ; insère le bloc avant la dernière ligne echo, sinon à la fin
-    for i, ln in out {
-        if RegExMatch(ln, "i)^\s*echo\s")
-            echoAt := i
-    }
-    res := []
-    for i, ln in out {
-        if (i = echoAt) {
-            for b in blk
-                res.Push(b)
-            res.Push("")
-        }
-        res.Push(ln)
-    }
-    if (echoAt = 0) {
-        for b in blk
-            res.Push(b)
-    }
-    ; pas de lignes vides en double (sinon le fichier grossirait à chaque réécriture)
-    joined := ""
-    prevBlank := false
-    for ln in res {
-        blank := (Trim(ln) = "")
-        if (blank && prevBlank)
-            continue
-        joined .= ln "`n"
-        prevBlank := blank
-    }
-    if (StrReplace(txt, "`r`n", "`n") = joined)
-        return
-    try FileDelete(f)
-    FileAppend(joined, f, "UTF-8-RAW")
-}
-
-; Fenêtre de choix des 2 touches (stuffs et coordonnées). first = true au démarrage.
-ShowKeyPicker(first := true) {
-    global ExecKey, HudKey
-    ours := Map()
-    used := UsedBinds(&ours)
-    scr := Map()
-    for k in [MenuKey, FavKey, LockKey, AddKey]
-        scr[StrLower(k)] := 1
-    opts := []
-    for e in KEYTAB {
-        why := ""
-        if scr.Has(StrLower(e[1]))
-            why := "utilisée par le menu"
-        else if used.Has(e[2])
-            why := "déjà liée à : " used[e[2]]
-        opts.Push([e[1], e[2], e[3], why])
-    }
-    sorted := []
-    for o in opts {
-        if (o[4] = "")
-            sorted.Push(o)
-    }
-    for o in opts {
-        if (o[4] != "")
-            sorted.Push(o)
-    }
-    strs := []
-    for o in sorted {
-        suf := (o[4] = "") ? "   (libre)" : "   (" o[4] ")"
-        strs.Push(o[3] suf)
-    }
-    PickIdx(pref, avoid) {
-        for i, o in sorted {
-            if (StrLower(o[1]) = StrLower(pref) && o[4] = "" && i != avoid)
-                return i
-        }
-        for i, o in sorted {
-            if (o[4] = "" && i != avoid)
-                return i
-        }
-        return (avoid = 1) ? 2 : 1
-    }
-    i1 := PickIdx(ExecKey, 0)
-    i2 := PickIdx(HudKey, i1)
-
-    g := Gui("+AlwaysOnTop", "Menu Stuf - choix des touches")
-    g.SetFont("s9", "Segoe UI")
-    g.MarginX := 14
-    g.MarginY := 12
-    intro := "Pour parler à CS2, le menu appuie lui-même sur 2 touches du clavier (tu n'as jamais à les utiliser). Choisis 2 touches que tu n'utilises jamais, ni dans CS2, ni dans un autre logiciel.`n`nSi une touche est déjà utilisée, des armes peuvent changer toutes seules ou le menu peut ne pas fonctionner. Les touches « libres » ne sont liées à rien dans ta configuration CS2 : garde-en de préférence une de celles-là."
-    g.Add("Text", "w440", intro)
-    g.Add("Text", "xm y+14 w440", "Touche pour lancer les stuffs et les utilitaires :")
-    d1 := g.Add("DropDownList", "xm w440 Choose" i1, strs)
-    g.Add("Text", "xm y+12 w440", "Touche pour les coordonnées en temps réel :")
-    d2 := g.Add("DropDownList", "xm w440 Choose" i2, strs)
-    g.SetFont("s8 c8A8F96")
-    g.Add("Text", "xm y+10 w440", "Vérifie aussi que Discord, un logiciel de clavier ou de souris (Razer, Logitech, Corsair...) n'utilise pas ces touches. Tu pourras les changer plus tard : réglages du menu, bouton « Touches du script ».")
-    g.SetFont("s9 cDefault")
-    okBtn := g.Add("Button", "xm y+14 w150 Default", "Valider")
-    noBtn := g.Add("Button", "x+8 yp w150", first ? "Plus tard" : "Annuler")
-    okFn(*) {
-        a := sorted[d1.Value]
-        b := sorted[d2.Value]
-        if (a[1] = b[1]) {
-            MsgBox("Choisis deux touches différentes.", "Menu Stuf", 0x40030)
-            return
-        }
-        warn := ""
-        if (a[4] != "")
-            warn .= a[3] " : " a[4] "`n"
-        if (b[4] != "")
-            warn .= b[3] " : " b[4] "`n"
-        if (warn != "") {
-            if (MsgBox("Attention :`n`n" warn "`nCette touche risque de déclencher autre chose pendant le jeu. La garder quand même ?", "Menu Stuf", 0x40134) != "Yes")
-                return
-        }
-        g.Destroy()
-        ApplyKeys(a, b, ours)
-    }
-    okBtn.OnEvent("Click", okFn)
-    noBtn.OnEvent("Click", (*) => g.Destroy())
-    g.OnEvent("Close", (*) => g.Destroy())
-    g.OnEvent("Escape", (*) => g.Destroy())
-    g.Show()
-    try WinWaitClose("ahk_id " g.Hwnd)
-}
-
-ApplyKeys(a, b, ours) {
-    global ExecKey, HudKey, hudBound
-    IniWrite(a[1], IniFile, "Settings", "ExecKey")
-    IniWrite(b[1], IniFile, "Settings", "HudKey")
-    IniWrite("1", IniFile, "State", "BindsV")
-    changed := (StrLower(a[1]) != StrLower(ExecKey) || StrLower(b[1]) != StrLower(HudKey))
-    WritePracticeBinds(a[2], b[2], ours)
-    ; si CS2 tourne, on réapplique tout de suite avec l'ancienne touche (si elle est encore liée dans le jeu)
-    sent := false
-    if (changed && WinExist("ahk_exe cs2.exe")) {
-        try {
-            WinActivate("ahk_exe cs2.exe")
-            if WinWaitActive("ahk_exe cs2.exe", , 2) {
-                Sleep(300)
-                WriteAndExec("exec " PracticeCfg)
-                sent := true
-            }
-        }
-    }
-    ExecKey := a[1]
-    HudKey := b[1]
-    hudBound := false
-    txt := "Touches enregistrées :`n`n  Stuffs et utilitaires : " a[3] "`n  Coordonnées : " b[3] "`n`n"
-    if sent
-        txt .= "Le cfg a été relancé dans CS2. Si les stuffs ne se lancent pas, tape quand même exec " PracticeCfg " dans la console du jeu."
-    else
-        txt .= "Dans CS2, tape exec " PracticeCfg " dans la console (une seule fois, à chaque lancement du jeu) pour activer ces touches."
-    MsgBox(txt, "Menu Stuf - touches", 0x40040)
 }
 
 ToInt(v, def) {
@@ -2588,7 +2382,7 @@ ShowSettings() {
     txHudY := d.Add("Text", "x406 y" ty " w70", "")
     y += 46
     d.SetFont("s9 c8A8F96")
-    d.Add("Text", "x22 y" y " w460 r8", "Affiche la map, ta position (X, Y, Z) et ton angle de vue dans le coin inférieur gauche de l'écran.`n`nSi tu l'actives puis cliques sur Enregistrer, il reste activé à chaque lancement du script, jusqu'à ce que tu le désactives ici.`n`nAttention : le script envoie une touche (celle choisie pour les coordonnées) à chaque mise à jour, avec son propre fichier : il ne gêne plus les stuffs. Désactive quand même l'affichage avant d'ouvrir la console ou le chat, sinon le caractère / s'y écrit.")
+    d.Add("Text", "x22 y" y " w460 r8", "Affiche la map, ta position (X, Y, Z) et ton angle de vue dans le coin inférieur gauche de l'écran.`n`nSi tu l'actives puis cliques sur Enregistrer, il reste activé à chaque lancement du script, jusqu'à ce que tu le désactives ici.`n`nLes coordonnées sont demandées au jeu par la connexion directe, sans aucune touche : elles ne gênent ni les stuffs ni le chat.")
     d.SetFont("s10 cDefault")
     y += 150
     yEnd3 := y
@@ -2599,8 +2393,7 @@ ShowSettings() {
     btnSave := d.Add("Button", "x12 y" y " w150 Default", "Enregistrer")
     btnReset := d.Add("Button", "x+8 yp w150", "Réinitialiser")
     btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
-    btnChkS := d.Add("Button", "x12 y+10 w227", "Vérifier l'installation")
-    btnKeys := d.Add("Button", "x+8 yp w227", "Touches du script...")
+    btnChkS := d.Add("Button", "x12 y+10 w466", "Vérifier l'installation")
 
     Sync(*) {
         global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY
@@ -2826,7 +2619,6 @@ ShowSettings() {
     btnSave.OnEvent("Click", Finish.Bind(true))
     btnReset.OnEvent("Click", ResetClick)
     btnChkS.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
-    btnKeys.OnEvent("Click", (*) => ShowKeyPicker(false))
     btnCancel.OnEvent("Click", Finish.Bind(false))
     d.OnEvent("Close", Finish.Bind(false))
     d.OnEvent("Escape", Finish.Bind(false))
@@ -2837,24 +2629,10 @@ ShowSettings() {
 ; =====================================================================
 ;  Exec automatique du cfg d'entraînement
 ; =====================================================================
-; Exécute cs2_practice dans le jeu.
-;  - ConsoleKey vide : passe par la touche liée (ExecKey -> exec stuff_run).
-;    Il faut avoir lancé "exec cs2_practice" une fois à la main pour créer cette touche.
-;  - ConsoleKey renseignée : ouvre la console, tape la commande et la referme.
+; Exécute cs2_practice dans le jeu (par la connexion directe).
 RunPractice() {
-    if (ConsoleKey != "") {
-        Send(ConsoleKey)
-        Sleep(300)
-        SendText("exec " PracticeCfg)
-        Sleep(60)
-        Send("{Enter}")
-        Sleep(200)
-        Send(ConsoleKey)
-        Sleep(300)
-    } else {
-        WriteAndExec("exec " PracticeCfg)
-        Sleep(400)
-    }
+    WriteAndExec("exec " PracticeCfg)
+    Sleep(400)
 }
 
 ; Lance l'exec une fois par map détectée (renvoie true si exécuté)
@@ -3976,32 +3754,9 @@ HudTick() {
     HudPing()
 }
 
-; Les coordonnées ont leur propre fichier (hud_pos.cfg) et leur propre touche (HudKey) :
-; elles ne touchent jamais à stuff_run.cfg ni à la touche des stuffs.
+; Demande la position au jeu (getpos) : la réponse est lue dans console.log
 HudPing() {
-    global hudBound
-    if NetSend("sv_cheats 1; getpos")
-        return
-    if !hudBound {
-        WriteAndExec('bind "' KeyBind(HudKey) '" "exec hud_pos"')
-        hudBound := true
-        return
-    }
-    Send("{" HudKey " down}")
-    Sleep(40)
-    Send("{" HudKey " up}")
-}
-
-; Crée hud_pos.cfg (contenu fixe) dans le dossier cfg de CS2
-HudWriteCfg() {
-    f := cfgDir "\hud_pos.cfg"
-    want := "sv_cheats 1; getpos`n"
-    try {
-        if (!FileExist(f) || FileRead(f) != want) {
-            try FileDelete(f)
-            FileAppend(want, f, "UTF-8-RAW")
-        }
-    }
+    NetSend("sv_cheats 1; getpos")
 }
 
 ; Affiche (true) ou masque (false) les coordonnées
@@ -4013,11 +3768,9 @@ HudSet(on) {
 }
 
 HudToggle() {
-    global hudOn, hudPos, hudLast, hudBound
+    global hudOn, hudPos, hudLast
     hudOn := !hudOn
     if hudOn {
-        hudBound := false
-        HudWriteCfg()
         hudPos := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : 0
         hudLast := FileExist(ConsoleLog) ? "En attente de la position..." : "console.log introuvable (-condebug ?)"
         BuildHud()
@@ -5128,22 +4881,24 @@ Check1() {
 
 ; Renvoie [liste, envoiOk, peutReessayer]
 Check2() {
+    global netFailTick
     out := []
     if !FileExist(ConsoleLog) {
         out.Push(["fail", "console.log introuvable alors que CS2 est lancé", "Ajoute -condebug dans les options de lancement de CS2 (Steam), puis relance le jeu"])
         return [out, false, false]
     }
     out.Push(["ok", "console.log présent", ""])
-    if (NetconPort > 0) {
-        if NetOpen()
-            out.Push(["ok", "Connexion directe à CS2 active (port " NetconPort ") : les commandes partent sans touche", ""])
-        else
-            out.Push(["warn", "Connexion directe à CS2 inactive : le script utilise les touches du clavier", "Optionnel : ajoute -netconport " NetconPort " -insecure aux options de lancement de CS2 (Steam), puis relance le jeu. Attention : -insecure désactive VAC, retire-le pour jouer en ligne"])
+    netFailTick := 0
+    if NetOpen() {
+        out.Push(["ok", "Connexion directe à CS2 active (port " NetconPort ")", ""])
+    } else {
+        out.Push(["fail", "Connexion directe à CS2 impossible (port " NetconPort ")", "Ferme CS2, puis relance le menu : il lance le jeu avec -netconport " NetconPort " -insecure. Si ça persiste, ajoute ces options dans les options de lancement de CS2 sur Steam"])
+        return [out, false, true]
     }
     ; même commande que la détection de map : si le jeu répond, l'envoi fonctionne
     txt := RunAndReadLog("status", "main lump")
     if !RegExMatch(txt, "i)main lump|hostname|Not connected|loopback|spawngroup") {
-        out.Push(["fail", "Test d'envoi de commande : pas de réponse du jeu", "Entre dans une partie (map locale) sans ouvrir la console, puis clique sur Relancer la vérification. Si ça persiste, tape une fois exec " PracticeCfg " dans la console de CS2, puis relance la vérification. Si les armes changent toutes seules ou rien ne se passe, change les touches du script dans les réglages (bouton Touches du script)"])
+        out.Push(["fail", "Test d'envoi de commande : pas de réponse du jeu", "Entre dans une partie (map locale), puis clique sur Relancer la vérification. Vérifie que -condebug est dans les options de lancement de CS2"])
         return [out, false, true]
     }
     out.Push(["ok", "Envoi de commandes vers CS2 : fonctionne", ""])
@@ -5234,7 +4989,7 @@ CheckTick() {
     if chkBusy
         return
     if !ProcessExist("cs2.exe") {
-        CheckRender("Étape 1 terminée. Lance maintenant CS2 puis une map d'entraînement locale.`nLa suite de la vérification se fera toute seule.")
+        CheckRender("Étape 1 terminée. CS2 n'est pas lancé : le menu le démarre au lancement du script (ferme-le puis relance le menu si besoin).`nEntre ensuite dans une map d'entraînement locale : la suite de la vérification se fera toute seule.")
         return
     }
     if (!WinActive("ahk_exe cs2.exe") || menuOpen || dlgOpen) {
@@ -5379,11 +5134,29 @@ SafeHotkey(AddKey, (*) => NewStuffPress())
 Hotkey("^z", (*) => UndoPress())
 HotIf()
 
-; Choix des touches du script (une fois, ou tant que l'utilisateur répond « Plus tard »)
-if (IniRead(IniFile, "State", "BindsV", "") != "1" && !NetOpen())   ; connexion directe possible : pas besoin de touches
-    ShowKeyPicker(true)
-else
-    WritePracticeBinds(KeyBind(ExecKey), KeyBind(HudKey), Map())   ; remet les liaisons si cs2_practice.cfg a été recopié
+; Le menu doit être lancé AVANT CS2 : c'est lui qui démarre le jeu avec la connexion directe (seul moyen d'envoyer les commandes)
+if (IniRead(IniFile, "State", "SkipCheck", "0") != "1") {
+    if !ProcessExist("cs2.exe") {
+        if (IniRead(IniFile, "State", "LaunchInfo", "") != "1") {
+            MsgBox("Le menu va lancer CS2 avec les options " StrReplace(LaunchArgs, "{port}", NetconPort) ".`n`n-netconport permet au menu d'envoyer les commandes directement au jeu.`n-insecure désactive VAC pour cette session : pas de matchmaking, Premier ni FACEIT. Pour jouer en ligne, ferme le jeu et lance-le normalement depuis Steam, sans le menu.`n`nTes options de lancement Steam ne sont pas modifiées.", "Menu Stuf - lancement de CS2", 0x40040)
+            IniWrite("1", IniFile, "State", "LaunchInfo")
+        }
+        if !LaunchGame()
+            MsgBox("Steam n'a pas pu être lancé : démarre CS2 toi-même avec les options " StrReplace(LaunchArgs, "{port}", NetconPort) " dans les options de lancement de Steam.", "Menu Stuf", 0x40030)
+    } else if !NetOpen() {
+        if (MsgBox("CS2 est déjà lancé sans la connexion directe : le menu ne peut pas lui envoyer de commandes.`n`nFermer CS2 et le relancer avec les bonnes options ?", "Menu Stuf - CS2 déjà ouvert", 0x40024) = "Yes") {
+            try WinClose("ahk_exe cs2.exe")
+            ProcessWaitClose("cs2.exe", 10)
+            if ProcessExist("cs2.exe") {
+                try ProcessClose("cs2.exe")
+                ProcessWaitClose("cs2.exe", 5)
+            }
+            Sleep(1500)
+            LaunchGame()
+        }
+    }
+}
+CleanLegacy()
 if HudAtStart
     HudToggle()
 if AutoBackupOn

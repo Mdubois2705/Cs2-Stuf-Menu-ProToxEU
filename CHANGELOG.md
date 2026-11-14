@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.16.0
+
+- **Connexion directe obligatoire** : le menu n'utilise plus de touches ni de fichier `stuff_run.cfg` pour parler à CS2. Fini le sélecteur de touches, le bouton « Touches du script », `ExecKey`, `HudKey` et `ConsoleKey`.
+- Le menu doit être lancé **avant** CS2 : il démarre le jeu avec `-condebug -netconport 2121 -insecure` (par `steam.exe -applaunch 730`). Si CS2 est déjà ouvert sans la connexion directe, il propose de le fermer et de le relancer. Une fenêtre d'information s'affiche au premier lancement (avertissement VAC).
+- Nettoyage automatique des anciennes liaisons (`exec stuff_run`, `exec hud_pos`) dans `cs2_practice.cfg` et suppression de `stuff_run.cfg` / `hud_pos.cfg`.
+- Les coordonnées en temps réel et l'exec automatique passent par la connexion directe.
+- « Vérifier l'installation » : la connexion directe est maintenant un point obligatoire.
+- README réécrit : seule l'option de lancement `-condebug` est à ajouter par le joueur, installation et dépannage mis à jour.
+- Clé `LaunchCs2` supprimée.
+
+## v2.15.4
+
+- Lancement de CS2 : utilise `steam.exe -applaunch 730` avec les options (le lien `steam://rungameid` ne transmettait pas `-netconport` chez certains joueurs). Le lien reste en secours si Steam est introuvable.
+- Après le lancement, le menu attend l'ouverture du port et prévient au bout de 2 minutes si le jeu n'a pas reçu les options.
+- « Vérifier l'installation » réessaie la connexion sans attendre le délai de 5 secondes.
+
+## v2.15.3
+
+- Connexion directe : envoi immédiat des commandes (TCP_NODELAY). Corrige les petits retards ponctuels (téléportation, give du kit complet) causés par l'attente d'accusé de réception de TCP quand plusieurs commandes partent à la suite.
+
+## v2.15.2
+
+- Retour du lancement de CS2 par le menu (contenu de l'ancienne v2.15.0) : si le jeu est fermé au démarrage du script, le menu propose de le lancer avec `-condebug -netconport 2121 -insecure` par Steam, sans modifier les options de lancement du joueur.
+- Clés `LaunchCs2` (0 jamais, 1 demander, 2 automatique) et `LaunchArgs` dans `config.ini`.
+
+## v2.15.1
+
+- Retour au contenu de la v2.14.2 : le lancement de CS2 par le menu (v2.15.0) est retiré. Numéro plus élevé pour que la mise à jour s'installe.
+
 ## v2.14.2
 
 - Fenêtre de sauvegarde : la liste **Catégorie** est maintenant une liste de **recherche** (taper filtre les catégories existantes). Elle ne crée plus jamais de catégorie : un nom inconnu est refusé, les catégories se créent avec le bouton **+**. Sans catégorie choisie, la catégorie portant le nom du type est utilisée si elle existe déjà, sinon un message demande d'en choisir une.
