@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.25.2"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.25.5"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -221,6 +221,8 @@ tmPos := 0          ; position de lecture dans console.log
 tmClicks := []      ; moments où le clic gauche a été relâché
 tmStarts := []      ; file des départs de grenades en vol : [instant, confirmé par le journal]
 tmLastK := 0
+launcherHwnd := 0   ; fenêtre du launcher (pour placer la vérification à côté)
+newsUnseen := false  ; nouvelle version : un point apparaît sur « Nouveautés » du launcher
 tmLastThrow := ""   ; dernier lancer : Map(kind, pos, secs)
 tmPosWait := 0
 tmLineWasK := false
@@ -450,7 +452,7 @@ MeasureFlight(cmd, typ := "") {
         tmMeasuring := true
         tmMeasured := 0
         TmApply()
-        WinActivate("ahk_exe cs2.exe")
+        try WinActivate("ahk_exe cs2.exe")
         WinWaitActive("ahk_exe cs2.exe", , 3)
         Sleep(200)
         RunCmd(send)
@@ -731,6 +733,7 @@ TraySetup() {
 
 ; Fenêtre d'accueil : lancer le jeu, nouveautés, vérification, réglages
 OpenLauncher() {
+    global launcherHwnd
     static lg := ""
     static st := ""
     if IsObject(lg) {
@@ -742,6 +745,7 @@ OpenLauncher() {
     }
     p := WinPal()
     lg := WinNew("Menu Stuf", "")
+    launcherHwnd := lg.Hwnd
     lg.MarginX := 24
     lg.MarginY := 20
     lg.SetFont("s" Round(WinSz() * 2) " bold c" p["accent"], WinFontName)
@@ -753,7 +757,7 @@ OpenLauncher() {
     st := lg.Add("Text", "x24 y+14 w372", "")
     lg.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
     btnGo := lg.Add("Button", "x24 y+16 w372 h46 Default", "Lancer CS2")
-    btnNews := lg.Add("Button", "x24 y+12 w180 h36", "Nouveautés")
+    btnNews := lg.Add("Button", "x24 y+12 w180 h36", newsUnseen ? "Nouveautés  ●" : "Nouveautés")
     btnChk := lg.Add("Button", "x+12 yp w180 h36", "Vérification")
     btnSet := lg.Add("Button", "x24 y+10 w180 h36", "Réglages")
     btnDir := lg.Add("Button", "x+12 yp w180 h36", "Ouvrir le dossier")
@@ -764,10 +768,13 @@ OpenLauncher() {
     GoClick(*) {
         LaunchFlow()
         if AutoCheck
-            SetTimer(StartCheck, -1500)
+            SetTimer(StartCheck, -1500)   ; la vérification s'ouvre à côté du launcher
         LauncherTick()
     }
     NewsClick(*) {
+        global newsUnseen
+        newsUnseen := false
+        btnNews.Text := "Nouveautés"
         ShowNews("", 5)
     }
     ChkClick(*) {
@@ -2575,7 +2582,7 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
         dlgOpen := false
         d.Destroy()
         try FileDelete(tmpShot)
-        WinActivate("ahk_exe cs2.exe")
+        try WinActivate("ahk_exe cs2.exe")
     }
 
     SaveClick(*) {
@@ -3906,7 +3913,7 @@ ShowSettings() {
         BuildOverlay()
         if menuOpen
             Render()
-        WinActivate("ahk_exe cs2.exe")
+        try WinActivate("ahk_exe cs2.exe")
     }
 
     ddTheme.OnEvent("Change", ThemeChange)
@@ -4685,7 +4692,7 @@ ShowManager() {
             }
         }
         d.Destroy()
-        WinActivate("ahk_exe cs2.exe")
+        try WinActivate("ahk_exe cs2.exe")
     }
 
     ddMap.OnEvent("Change", (*) => RefreshCats(""))
@@ -4961,7 +4968,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             MsgBox("console.log introuvable : lance CS2 avec l'option -condebug.", "Modifier", 0x40030)
             return
         }
-        WinActivate("ahk_exe cs2.exe")
+        try WinActivate("ahk_exe cs2.exe")
         WinWaitActive("ahk_exe cs2.exe", , 2)
         Sleep(250)
         np := CapturePos()
@@ -5096,7 +5103,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             return
         d.Hide()
         try WinHide("ahk_id " ownerHwnd)
-        WinActivate("ahk_exe cs2.exe")
+        try WinActivate("ahk_exe cs2.exe")
         WinWaitActive("ahk_exe cs2.exe", , 2)
         Loop 3 {
             left := 4 - A_Index
@@ -5135,7 +5142,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     d.Show("AutoSize Center")
     hwnd := d.Hwnd
     WinWaitClose("ahk_id " hwnd)
-    WinActivate("ahk_id " ownerHwnd)
+    try WinActivate("ahk_id " ownerHwnd)
     return res["cat"]
 }
 
@@ -6308,7 +6315,7 @@ ShowImport(txt, ownerHwnd) {
     d.Show("AutoSize Center")
     hwnd := d.Hwnd
     WinWaitClose("ahk_id " hwnd)
-    WinActivate("ahk_id " ownerHwnd)
+    try WinActivate("ahk_id " ownerHwnd)
     if res["done"] {
         msg := res["msg"]
         if (res["target"] != curProfile) {
@@ -6540,7 +6547,7 @@ ShowShare() {
         global mgrOpen
         mgrOpen := false
         d.Destroy()
-        WinActivate("ahk_exe cs2.exe")
+        try WinActivate("ahk_exe cs2.exe")
     }
 
     btnAll.OnEvent("Click", CheckAll.Bind(true))
@@ -6994,7 +7001,7 @@ ShowRestore(ownerHwnd) {
     d.Show("AutoSize Center")
     hw := d.Hwnd
     WinWaitClose("ahk_id " hw)
-    WinActivate("ahk_id " ownerHwnd)
+    try WinActivate("ahk_id " ownerHwnd)
 }
 
 ; =====================================================================
@@ -7171,7 +7178,18 @@ StartCheck(*) {
     chkGui.OnEvent("Escape", CheckClose)
     CheckRender("Vérification en cours...")
     WinStyle(chkGui)
-    chkGui.Show("AutoSize NoActivate")
+    if (launcherHwnd && WinExist("ahk_id " launcherHwnd)) {
+        ; à droite du launcher (à gauche s'il n'y a pas la place)
+        WinGetPos(&lx, &ly, &lw, &lh, "ahk_id " launcherHwnd)
+        chkGui.Show("AutoSize NoActivate x" (lx + lw + 12) " y" ly)
+        chkGui.GetPos(&cx, &cy, &cw, &ch)
+        mon := MonitorGetPrimary()
+        MonitorGetWorkArea(mon, &ml, &mt, &mr, &mb)
+        if (cx + cw > mr)
+            chkGui.Move(Max(ml, lx - 12 - cw), ly)
+    } else {
+        chkGui.Show("AutoSize NoActivate")
+    }
     SetTimer(CheckTick, 2000)
     CheckTick()
 }
@@ -7343,6 +7361,7 @@ if (LogMaxMB > 0 && FileExist(ConsoleLog) && !ProcessExist("cs2.exe")) {
 }
 
 ; Le menu doit être lancé AVANT CS2 : c'est lui qui démarre le jeu avec la connexion directe (seul moyen d'envoyer les commandes)
+newsUnseen := (LauncherOn && ShowChangelogOn && IniRead(IniFile, "State", "LastSeenVersion", "") != APP_VERSION)
 TraySetup()
 if (IniRead(IniFile, "State", "SkipCheck", "0") != "1") {
     if LauncherOn
@@ -7358,7 +7377,7 @@ TmApply()
 lastSeen := IniRead(IniFile, "State", "LastSeenVersion", "")
 if (lastSeen != APP_VERSION) {
     IniWrite(APP_VERSION, IniFile, "State", "LastSeenVersion")
-    if ShowChangelogOn
+    if (ShowChangelogOn && !LauncherOn)
         ShowNews(lastSeen, (lastSeen = "") ? 1 : 8)
 }
 if AutoBackupOn

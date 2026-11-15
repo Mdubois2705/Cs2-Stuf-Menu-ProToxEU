@@ -60,7 +60,7 @@ Le menu est vide au départ : sauvegarde tes stuffs avec « Sauvegarder la posit
 
 ## Launcher
 
-Au démarrage du menu, une fenêtre d'accueil propose : **Lancer CS2**, **Nouveautés**, **Vérification** (de l'installation), **Réglages**, **Ouvrir le dossier** et **Quitter le menu**. Un voyant indique l'état de CS2 (non lancé, lancé et connecté, lancé sans connexion directe). Fermer la fenêtre laisse le menu actif : l'icône près de l'horloge la rouvre (clic). `Launcher=0` dans `config.ini` supprime la fenêtre et rétablit l'ancien comportement : le menu lance CS2 tout seul au démarrage.
+Au démarrage du menu, une fenêtre d'accueil propose : **Lancer CS2**, **Nouveautés**, **Vérification** (de l'installation), **Réglages**, **Ouvrir le dossier** et **Quitter le menu**. Après « Lancer CS2 », la vérification de l'installation s'ouvre toute seule à côté du launcher (`AutoCheck=0` pour la désactiver) ; les nouveautés ne s'ouvrent pas toutes seules. Un voyant indique l'état de CS2 (non lancé, lancé et connecté, lancé sans connexion directe). Fermer la fenêtre laisse le menu actif : l'icône près de l'horloge la rouvre (clic). `Launcher=0` dans `config.ini` supprime la fenêtre et rétablit l'ancien comportement : le menu lance CS2 tout seul au démarrage.
 
 ## Raccourcis
 
@@ -316,7 +316,7 @@ Dès que CS2 est lancé et au premier plan dans une map locale, le script teste 
 
 ## Mise à jour
 
-Après chaque mise à jour, une fenêtre **Nouveautés** s'ouvre au démarrage du script et liste les modifications des versions que tu n'avais pas encore vues (lues dans `CHANGELOG.md`). Tu peux la désactiver avec la case de la fenêtre ou `ShowChangelog=0` dans `config.ini`, et la rouvrir à tout moment avec l'entrée « Nouveautés » du menu.
+Après une mise à jour, un point ● apparaît sur le bouton **Nouveautés** du launcher (rien ne s'ouvre tout seul). Le bouton, ou l'entrée « Nouveautés » du menu en jeu, affiche les modifications des dernières versions (lues dans `CHANGELOG.md`). `ShowChangelog=0` dans `config.ini` supprime le point. Si tu désactives le launcher (`Launcher=0`), la fenêtre Nouveautés s'ouvre de nouveau toute seule après chaque mise à jour.
 
 - **Automatique** : au lancement, le script regarde s'il existe une version plus récente sur GitHub. Si oui, il te propose de l'installer ; accepte et il redémarre tout seul. Pour désactiver la vérification : `AutoUpdate=0` dans `config.ini`.
 - **Sans le script** : ferme le script, puis double-clique sur `update.bat`. Il télécharge la dernière version et remplace les fichiers du programme.

@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.25.5
+
+- La vérification de l'installation s'ouvre de nouveau toute seule, 1,5 s après « Lancer CS2 » (comme avant), mais à côté du launcher et non plus par-dessus. La fenêtre Nouveautés ne s'ouvre pas toute seule (point ● sur le bouton du launcher).
+
+## v2.25.4
+
+- Plus de fenêtre « Vérification de l'installation » ni « Nouveautés » qui s'ouvre toute seule au démarrage : elles s'ouvrent avec leurs boutons du launcher. Un point ● sur « Nouveautés » signale une nouvelle version.
+
+## v2.25.3
+
+- Correction : fermer les réglages (ou une autre fenêtre) quand CS2 n'est pas lancé provoquait l'erreur « Target window not found ». Désormais sans effet si le jeu est fermé.
+
 ## v2.25.2
 
 - **Installateur** : il cherche ton ancienne installation et te propose de reprendre tes stuffs, favoris, temps de vol, profils et réglages dans le nouveau dossier. L'ancien dossier n'est jamais modifié ni supprimé. Un dossier qui contient déjà des stuffs n'est jamais écrasé.
