@@ -14,7 +14,7 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 - [Stuffs](#stuffs) : [ajouter](#ajouter-des-stuffs), [gérer](#gérer-les-stuffs-et-les-catégories), [dernier lancer](#dernier-lancer-en-stuff), [cadenas](#cadenas), [captures](#captures-décran-des-stuffs), [quiz](#quiz)
 - [Chronomètre de grenade](#chronomètre-de-grenade) et [temps de vol](#temps-de-vol-dun-stuff)
 - [Partage](#partage) : [profils](#profils-et-partage), [packs de stuffs](#packs-de-stuffs)
-- [Réglages](#réglages) : [coordonnées](#coordonnées-en-temps-réel), [fenêtres](#style-des-fenêtres), [thèmes du menu](#thèmes-et-police)
+- [Réglages](#réglages) : [coordonnées](#coordonnées-en-temps-réel), [touches à l'écran](#touches-à-lécran), [fenêtres](#style-des-fenêtres), [thèmes du menu](#thèmes-et-police)
 - [Maintenance](#maintenance) : [sauvegardes](#sauvegardes-et-annulation), [vérification](#vérification-de-linstallation), [mise à jour](#mise-à-jour), [retour arrière](#retour-à-la-version-précédente), [rapport](#signaler-un-problème), [dépannage](#dépannage)
 - [Structure du dossier](#structure-du-dossier)
 
@@ -93,7 +93,7 @@ Au démarrage, une fenêtre d'accueil propose :
 | Vérification | Contrôle de l'installation (s'ouvre aussi toute seule à côté du launcher après « Lancer CS2 » ; `AutoCheck=0` pour l'éviter) |
 | Réglages, Ouvrir le dossier | Réglages du menu, dossier d'installation |
 | Sauvegarder maintenant | Copie manuelle de tes stuffs, favoris et temps de vol |
-| Packs de stuffs | Packs publiés sur GitHub (voir [packs](#packs-de-stuffs)) |
+| Packs de stuffs | Packs publiés sur GitHub (voir [packs](#packs-de-stuffs)) ; point ● quand il y en a de nouveaux |
 | Guide de démarrage | Les 3 étapes pour débuter |
 | Signaler un problème | Rapport à envoyer (voir [rapport](#signaler-un-problème)) |
 
@@ -116,7 +116,7 @@ Une seule touche en jeu : **`F1`** ouvre le **menu principal**. Tout le reste s'
 | Gérer les stuffs et les catégories | Fenêtre de gestion |
 | Profils et partage de stuffs | Profils, export, import, sauvegardes |
 | Nouveautés | Historique des dernières versions |
-| Réglages du menu | Sept onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Aide |
+| Réglages du menu | Huit onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Aide |
 | Relancer l'exec de cs2_practice | Relance le cfg d'entraînement |
 | Vérifier l'installation | Contrôle de l'installation |
 
@@ -238,14 +238,14 @@ Le bouton **Nettoyer les captures et temps orphelins** (onglet Captures des rég
 
 ## Chronomètre de grenade
 
-Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu affiche le temps entre le moment où tu la **lâches** et celui où elle **explose**, par exemple `Smoke : 2,9 s`. Le résultat reste à l'écran le temps choisi, puis disparaît.
+Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu affiche le temps entre le moment où tu la **lâches** et celui où elle **explose**, par exemple `Smoke : 2,9 s`. Le panneau reste affiché en permanence, même en alt-tab (« Chrono : -- » en attente) ; le résultat s'affiche le temps choisi, puis le panneau revient à l'attente.
 
 - **Départ** : le relâchement du clic gauche, ou la touche de relance `sv_rethrow_last_grenade` (touche `K` du cfg d'entraînement ; si tu l'as changée, mets la même dans `RethrowKey`). Chaque grenade en vol garde son propre départ.
 - **Fin** : la ligne `threw smokegrenade [x y z]` écrite dans `console.log` à l'explosion. Le menu active tout seul le journal du serveur (`log on`, `mp_logdetail 3`), ce qui crée aussi des fichiers dans `game\csgo\logs\` ; pour l'éviter, désactive le chronomètre.
 - **Chrono en direct** : le compteur tourne à l'écran dès le lâcher (type connu par la ligne `sv_throw_...`), puis s'arrête sur le temps final. Avec la touche de relance, il démarre avec le type de la dernière grenade vue.
 - **Précision** : environ un dixième de seconde (lecture du fichier toutes les 50 ms).
 - **Limite** : le menu ne sait pas quelle arme tu tiens ; un tir pendant que la grenade vole peut fausser le temps.
-- **Réglages** (onglet Chrono) : activer, placement (par défaut au-dessus des coordonnées, ou libre), durée d'affichage, « Tester l'affichage ». L'apparence suit celle du menu. Équivalents : `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
+- **Réglages** (onglet Chrono) : activer (le panneau reste alors affiché en permanence), placement (par défaut au-dessus des coordonnées, ou libre), durée d'affichage du résultat, « Tester l'affichage ». L'apparence suit celle du menu. Équivalents : `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
 - **Tester la mesure** : pendant 60 s, chaque grenade lancée est mesurée et le résultat s'affiche dans les réglages avec l'origine du départ, même si le chronomètre est désactivé.
 - **Temps incorrect ?** Mets `TimerDebug=1` : les événements sont notés dans `data\timer_debug.txt`.
 
@@ -267,12 +267,12 @@ Le temps de vol d'un stuff peut être mémorisé et affiché dans le menu, sous 
 - **Exporter** : coche les stuffs à partager, puis « Exporter vers un fichier… » (`.stuffpack`) ou « Copier le code » (texte à coller dans Discord, de préférence dans un bloc de code ; pour beaucoup de stuffs, envoie plutôt le fichier).
 - **Importer** : « Importer un fichier… » ou « Importer depuis le presse-papiers ». Une fenêtre liste les stuffs reçus avec leur statut (Nouveau, Doublon, Identique). Tu coches ceux à garder, tu choisis le profil de destination et ce qu'il faut faire des doublons : ignorer, garder les deux (le nouveau est renommé) ou remplacer le tien.
 - **Profil complet** : « Exporter le profil… » crée un `.zip` (maps, temps de vol, favoris, cadenas, captures, réglages sans les chemins de ce PC). « Importer un profil… » le recrée sur un autre PC ; un profil existant est sauvegardé avant d'être remplacé.
-- **Sécurité** : l'import n'ajoute que ce que tu coches, ne supprime rien et sauvegarde les fichiers touchés dans `data\backup\`. Les stuffs contenant `quit`, `exec`, `bind`, `unbind`, `unbindall`, `alias`, `connect`, `disconnect`, `rcon`… sont refusés. Cadenas et favoris ne sont pas exportés.
+- **Sécurité** : l'import n'ajoute que ce que tu coches et ne supprime rien. Avant chaque import, le profil de destination est sauvegardé en entier (« Avant un import de profil » dans « Restaurer une sauvegarde », 5 gardées) et les fichiers touchés sont copiés dans `data\backup\`. Les stuffs contenant `quit`, `exec`, `bind`, `unbind`, `unbindall`, `alias`, `connect`, `disconnect`, `rcon`… sont refusés. Cadenas et favoris ne sont pas exportés.
 - **Hauteur** : le pack contient le réglage `TpZOffset` de l'exportateur ; à l'import, les coordonnées sont ajustées pour que la hauteur reste correcte avec ton réglage.
 
 ### Packs de stuffs
 
-Le bouton « Packs de stuffs » (launcher, ou « Profils et partage > Partager des stuffs ») liste les packs publiés dans le dossier `packs\` du dépôt GitHub. Un clic télécharge le pack et ouvre la fenêtre d'import habituelle (tu choisis quoi garder et où le ranger). Les joueurs ne peuvent que les importer.
+Le bouton « Packs de stuffs » (launcher, ou « Profils et partage > Partager des stuffs ») liste les packs publiés dans le dossier `packs\` du dépôt GitHub. La liste affiche, pour chaque pack, son état (**Nouveau**, **Mis à jour** ou **Importé**), le nombre de stuffs, les maps et la date ; sa description apparaît quand tu le sélectionnes. Un point ● sur le bouton du launcher signale un pack nouveau ou mis à jour depuis ta dernière visite. Un clic sur « Importer ce pack » le télécharge et ouvre la fenêtre d'import habituelle (tu choisis quoi garder et où le ranger). Les joueurs ne peuvent que les importer.
 
 **Publier un pack (propriétaire du dépôt)** :
 
@@ -281,11 +281,11 @@ Le bouton « Packs de stuffs » (launcher, ou « Profils et partage > Partager d
 3. Dans la fenêtre des packs, clique sur « Publier un pack (administrateur)... », choisis le fichier, un titre et une description. La première fois, choisis ton dossier Git (`PackRepoDir`). Le fichier est copié dans `packs\` et `packs\index.txt` est mis à jour (le dossier est créé si besoin).
 4. `git add .`, `git commit -m "..."`, `git push`.
 
-Format de `packs\index.txt` : une ligne par pack, `fichier.stuffpack | Titre | Description`. Pour corriger un pack, republie un fichier du même nom ; pour le retirer, supprime sa ligne et le fichier. Le dépôt doit être public.
+Format de `packs\index.txt` : une ligne par pack, `fichier.stuffpack | Titre | Description | version | date | nombre de stuffs | maps`. Le menu remplit tout seul les 4 derniers champs à la publication. Pour corriger un pack, republie un fichier du même nom : sa version augmente et tes amis le voient comme « Mis à jour ». Pour le retirer, supprime sa ligne et le fichier. Le dépôt doit être public.
 
 ## Réglages
 
-« Réglages du menu » (sept onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Aide) :
+« Réglages du menu » (huit onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Aide) :
 
 - Un voyant indique en direct si CS2 est connecté au menu (vert) ou non (rouge).
 - Chaque position (menu, capture, coordonnées, chrono) a un bouton **Placer avec la souris** : tu cliques à l'endroit voulu à l'écran.
@@ -296,6 +296,10 @@ Format de `packs\index.txt` : une ligne par pack, `fichier.stuffpack | Titre | D
 Activées dans l'onglet **Coords** (pas de raccourci clavier) ; l'affichage reste actif à chaque lancement jusqu'à ce que tu le désactives. Par défaut dans le **coin inférieur gauche**, ou à la position X / Y de ton choix. Il affiche la map, ta position (X, Y, Z) et ton angle (pitch, yaw), mis à jour plusieurs fois par seconde, avec l'apparence du menu.
 
 Le menu demande `getpos` au jeu par la connexion directe et lit la réponse dans `console.log` ; il ne lit pas la mémoire du jeu. La fréquence se règle avec `HudInterval` (300 ms par défaut). L'affichage se met en pause quand le menu ou une fenêtre est ouverte, ou quand CS2 n'est pas la fenêtre active.
+
+### Touches à l'écran
+
+« Réglages du menu » > onglet **Touches** : un petit overlay affiche en direct les touches pressées (Maj, Ctrl, Espace, **Z Q S D** et les clics de la souris), affiché en permanence, même en alt-tab (comme les coordonnées). Les touches s'allument à la couleur d'accent des fenêtres. Réglages : activer, taille, opacité, position (à droite au milieu de l'écran par défaut, ou libre avec « Placer avec la souris »). Il suit les couleurs, la police, les coins et le liseré du menu. Équivalents dans `config.ini` : `KeysOn` (désactivé par défaut), `KeysSize`, `KeysOpacity`, `KeysAuto`, `KeysX`, `KeysY`. Il lit seulement l'état des touches de Windows (rien n'est lu dans le jeu). L'overlay **reprend tes touches de CS2** (fichier `cs2_user_keys_0_slot0.vcfg` de ton dossier Steam `userdata`) : déplacement, marche, accroupi, saut et tir. Par exemple, avec la marche sur MOUSE4, la case de gauche affiche « SOURIS 4 » et s'allume quand tu appuies sur ce bouton. Si tu changes tes touches dans CS2, clique sur « Relire les touches ». Décoche « Utiliser les touches de CS2 » (`KeysFromGame=0`) pour garder les touches par défaut (Maj, Ctrl, Espace, ZQSD). CS2 note les touches par leur position sur le clavier : le menu suit cette position, donc avec un clavier AZERTY les cases affichent Z, Q, S, D (et W, A, S, D avec un QWERTY). Les changements de l'onglet s'appliquent tout de suite.
 
 ### Style des fenêtres
 

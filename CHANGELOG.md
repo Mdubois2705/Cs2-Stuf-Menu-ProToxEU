@@ -1,5 +1,87 @@
 # Changelog
 
+## v2.29.7
+
+- Touches à l'écran : le liseré du menu (couleur et épaisseur des réglages) entoure aussi l'overlay. Position par défaut : à droite, au milieu de l'écran.
+
+## v2.29.6
+
+- Chronomètre de grenade : il reste affiché en permanence (« Chrono : -- » en attente), même en alt-tab, comme les coordonnées. Le résultat s'affiche le temps réglé puis le panneau revient à l'attente. Pour le retirer : décocher l'option dans Réglages > Chrono.
+
+## v2.29.5
+
+- Touches à l'écran : l'overlay reste affiché en permanence, même en alt-tab, comme les coordonnées.
+
+## v2.29.4
+
+- Menu en jeu : rappel des touches du bas réorganisé (favori, cadenas et nouveau stuff chacun sur sa ligne) et phrase « Sauvegarde, réglages... » supprimée.
+
+## v2.29.3
+
+- Réglages > Chrono : la case « Bip » (inutile depuis la suppression des sons) ne chevauche plus les boutons « Tester ».
+
+## v2.29.2
+
+- Menu en jeu : le rappel des touches en jaune (doublon du bas) est supprimé. La hauteur du menu s'adapte au contenu : plus de grand vide en bas, les infos et messages n'occupent de la place que quand il y en a.
+
+## v2.29.1
+
+- Correction : le menu ne démarrait plus (erreur « This Class cannot be used as an output variable » ligne 215). Un nom de classe entrait en conflit avec une variable.
+
+## v2.29.0
+
+- Nouveau design lissé pour tout l'affichage en jeu : menu, coordonnées, chronomètre, quiz et capture du stuff. Même style que les touches à l'écran : fond arrondi, lignes en cases arrondies, ligne choisie mise en valeur avec un repère, liseré et textes sans effet d'escalier.
+- Les réglages (thème, police, taille, opacité, coins, liseré) s'appliquent toujours.
+
+## v2.28.9
+
+- Map automatique : après l'exec du cfg d'entraînement, le round est redémarré (`mp_restartgame 1`) pour que l'argent, les bots et les réglages soient bien pris en compte au départ. Le troisième passage de la 2.28.8 est retiré.
+
+## v2.28.8
+
+- Map automatique : le cfg d'entraînement attend 5 s après la détection de la map (au lieu de 3 s), puis est renvoyé 6 s et 16 s plus tard, au cas où le mode de jeu remette ses réglages après le chargement.
+
+## v2.28.7
+
+- Touches à l'écran : dessin lissé (GDI+). Les bords arrondis, les cases et les textes n'ont plus d'effet d'escalier, et la transparence est calculée pixel par pixel (coins du fond parfaitement arrondis).
+
+## v2.28.6
+
+- Touches à l'écran : les cases sont maintenant dessinées comme des images (rectangles arrondis) avec la couleur exacte du fond dans les coins. Plus de coins bleus, et les cases réagissent dès la première pression.
+
+## v2.28.5
+
+- Touches à l'écran : l'arrondi des cases est appliqué directement à chaque case (il ne marchait pas bien avant).
+
+## v2.28.4
+
+- Touches à l'écran : les cases ont maintenant des coins arrondis.
+
+## v2.28.3
+
+- **Touches à l'écran** : correction pour les claviers AZERTY. CS2 note ses touches par position (W, A...) : l'overlay suit maintenant la position des touches et affiche les lettres de ton clavier (Z, Q, S, D). Avant, il surveillait les mauvaises touches.
+- Les réglages de l'overlay quittent le menu en jeu et passent dans un nouvel onglet **Touches** des réglages du menu. Les onglets sont un peu plus larges.
+
+## v2.28.2
+
+- Map automatique : le deuxième essai ne se produit plus qu'après 60 s et seulement si aucune map n'est chargée (il pouvait relancer la map pendant son chargement et annuler le cfg d'entraînement). Le cfg est exécuté une fois la map prête, puis une seconde fois quelques secondes plus tard avec `bot_quota 0` et `bot_kick` pour retirer les bots.
+- Les étapes sont notées dans `data\auto_debug.txt` (et dans le rapport « Signaler un problème ») pour comprendre ce qui se passe.
+
+## v2.28.1
+
+- **Touches à l'écran** : l'overlay lit maintenant les touches enregistrées dans CS2 (déplacement, marche, accroupi, saut, tir). Si ta marche est sur MOUSE4, la case affiche « SOURIS 4 » et s'allume avec ce bouton. Case « Utiliser les touches de CS2 » et bouton « Relire les touches » dans le réglage (`KeysFromGame=0` pour revenir aux touches par défaut).
+
+## v2.28.0
+
+- **Touches à l'écran** : petit overlay qui affiche en direct les touches pressées (Maj, Ctrl, Espace, **Z Q S D** au clavier AZERTY, clics de la souris), par-dessus CS2 et seulement quand le jeu est au premier plan. Menu principal > « Touches à l'écran » : activer, taille, opacité, position (coin inférieur droit ou libre avec la souris). Désactivé par défaut (`KeysOn=1` pour l'activer).
+
+## v2.27.0
+
+- **Packs : aperçu avant import** : la liste affiche le nombre de stuffs, les maps et la date de mise à jour de chaque pack, et sa description quand tu le sélectionnes.
+- **Packs : versions** : un pack republié passe à la version suivante. La liste indique « Nouveau », « Mis à jour » ou « Importé » selon ce que tu as déjà importé.
+- **Packs : point ●** sur le bouton « Packs de stuffs » du launcher quand un pack est nouveau ou mis à jour depuis ta dernière visite.
+- **Sauvegarde avant import** : avant chaque import de stuffs (fichier, code ou pack), une sauvegarde complète du profil de destination est faite (« Avant un import de profil » dans « Restaurer une sauvegarde », les 5 dernières sont gardées).
+
 ## v2.26.6
 
 - Version de test de la mise à jour automatique (aucun changement).

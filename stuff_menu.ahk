@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.26.6"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.29.7"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -71,7 +71,14 @@ if !RegExMatch(WinAccent, "^[0-9A-F]{6}$")
     WinAccent := "5B9BFF"
 WinFontName := IniRead(IniFile, "Settings", "WinFont", "Segoe UI")
 WinScale := Max(90, Min(120, ToInt(IniRead(IniFile, "Settings", "WinScale", "100"), 100)))
-TimerBeep := (IniRead(IniFile, "Settings", "TimerBeep", "1") = "1")   ; bip avant l'arrivée de la grenade
+TimerBeep := (IniRead(IniFile, "Settings", "TimerBeep", "1") = "1")   ; ancien réglage de bip (inutilisé : le menu ne produit plus aucun son)
+KeysFromGame := (IniRead(IniFile, "Settings", "KeysFromGame", "1") = "1")   ; lire les touches de CS2 (marche, accroupi, saut, déplacement)
+KeysOn := (IniRead(IniFile, "Settings", "KeysOn", "0") = "1")   ; touches à l'écran (Maj, Ctrl, Espace, ZQSD, souris)
+KeysSize := Max(60, Min(200, ToInt(IniRead(IniFile, "Settings", "KeysSize", "100"), 100)))
+KeysOpacity := Max(80, Min(255, ToInt(IniRead(IniFile, "Settings", "KeysOpacity", "220"), 220)))
+KeysAuto := (IniRead(IniFile, "Settings", "KeysAuto", "1") = "1")   ; 1 = à droite au milieu de l'écran, 0 = position libre
+KeysX := ToInt(IniRead(IniFile, "Settings", "KeysX", "1500"), 1500)
+KeysY := ToInt(IniRead(IniFile, "Settings", "KeysY", "900"), 900)
 RethrowKey := Trim(IniRead(IniFile, "Settings", "RethrowKey", "k"))   ; touche liée à sv_rethrow_last_grenade (chrono : départ de la relance)
 FlightAsk := (IniRead(IniFile, "Settings", "FlightAsk", "1") = "1")   ; proposer de mesurer le temps de vol après la création d'un stuff
 LogMaxMB := Max(0, ToInt(IniRead(IniFile, "Settings", "LogMaxMB", "10"), 10))   ; taille de console.log au-delà de laquelle il est vidé au lancement (0 = jamais)
@@ -200,6 +207,11 @@ setOpen := false    ; fenêtre de réglages ouverte
 mgrOpen := false    ; fenêtre de gestion ouverte
 hudOn := false      ; affichage des coordonnées en temps réel
 hudGui := ""
+keysGui := ""       ; touches à l'écran
+keysCtl := []
+keysCfg := Map()
+keysTok := 0
+keysShown := false
 hudTxt := ""
 hudLast := ""
 hudPos := 0         ; position de lecture dans console.log
@@ -244,6 +256,10 @@ tmLive := false     ; chrono en direct affiché
 tmLiveLabel := ""
 tmLiveT0 := 0
 tmCtl := ""         ; texte du chronomètre
+ovCol := Map()
+ovSt := Map()
+hudSt := Map()
+tmSt := ""
 times := Map()      ; temps de vol : clé de position -> secondes
 quizCur := ""       ; stuff du quiz en cours
 qzGui := ""         ; bandeau du quiz
@@ -699,6 +715,7 @@ OnError(ScriptError)
 ; Lance CS2 par Steam avec les options nécessaires à la connexion directe, sans toucher aux options enregistrées dans Steam.
 ; Méthode fiable : steam.exe -applaunch 730 <options> (le lien steam://rungameid ignore souvent les options).
 launchWatch := 0
+autoPracDone := false  ; true une fois le cfg d'entraînement exécuté après la map automatique
 autoMapDone := true   ; false après un lancement de CS2 par le menu : la map automatique reste à charger
 updRemote := ""       ; dernière version trouvée sur GitHub
 updTick := 0
@@ -745,6 +762,7 @@ OpenLauncher() {
     static lg := ""
     static st := ""
     static upT := ""
+    static btnPack := ""
     if IsObject(lg) {
         try {
             lg.Show()
@@ -849,6 +867,7 @@ OpenLauncher() {
         ManualBackup()
     }
     PackClick(*) {
+        btnPack.Text := "Packs de stuffs"
         ShowPacks(lg.Hwnd)
     }
     GuideClick(*) {
@@ -872,6 +891,9 @@ OpenLauncher() {
         updTick := A_TickCount
         updRemote := RemoteVersion()
         UpShow()
+        rows := FetchPackIndex()
+        n := IsObject(rows) ? PacksUnseenCount(rows) : 0
+        try btnPack.Text := (n > 0) ? "Packs de stuffs  ●" : "Packs de stuffs"   ; point ● : packs nouveaux ou mis à jour
     }
     UpShow() {
         pp := WinPal()
@@ -1023,43 +1045,79 @@ AutoMapName() {
     return RegExMatch(AutoMap, "^\w+$") ? AutoMap : ""
 }
 
-; Charge la map d'entraînement une fois le jeu prêt (un seul nouvel essai si le jeu n'était pas encore à l'écran d'accueil)
+; Journal des étapes de la map automatique (data\auto_debug.txt) : aide à comprendre si le cfg d'entraînement ne se lance pas
+AutoLog(msg) {
+    try {
+        DirCreate(A_ScriptDir "\data")
+        lf := A_ScriptDir "\data\auto_debug.txt"
+        if (FileExist(lf) && FileGetSize(lf) > 50000)
+            FileDelete(lf)
+        FileAppend(FormatTime(, "HH:mm:ss") " " msg "`n", lf, "UTF-8")
+    }
+}
+
+; Charge la map d'entraînement une fois le jeu prêt. Un seul nouvel essai, tard, si le jeu n'a rien chargé (jamais pendant un chargement)
 AutoMapGo(tryNo := 1, *) {
+    global autoPracDone
     if !ProcessExist("cs2.exe")
         return
     nm := AutoMapName()
     if (nm = "")
         return
-    if (tryNo > 1 && InStr(RunAndReadLog("status", "main lump"), "main lump"))
-        return
-    if NetSend("map " nm) {
+    if (tryNo > 1) {
+        if (autoPracDone || InStr(RunAndReadLog("status", "main lump"), "main lump")) {
+            AutoLog("essai 2 ignoré : map déjà chargée")
+            return
+        }
+    } else {
+        autoPracDone := false
+    }
+    ok := NetSend("map " nm)
+    AutoLog("essai " tryNo " : map " nm (ok ? " envoyée" : " NON envoyée (pas de connexion)"))
+    if ok {
         ToolTip("Chargement de la map " nm "...")
         SetTimer(() => ToolTip(), -3500)
         if AutoExec
-            SetTimer(AutoPracticeWait.Bind(0), -4000)   ; le cfg d'entraînement (bots, argent, etc.) s'exécute dès que la map est chargée
+            SetTimer(AutoPracticeWait.Bind(0), -6000)   ; le cfg d'entraînement (bots, argent, etc.) s'exécute dès que la map est chargée
     }
     if (tryNo < 2)
-        SetTimer(AutoMapGo.Bind(2), -20000)
+        SetTimer(AutoMapGo.Bind(2), -60000)
 }
 
-; Attend la fin du chargement de la map (jusqu'à 90 s) puis exécute le cfg d'entraînement une fois
+; Attend la fin du chargement de la map (jusqu'à 2 minutes) puis exécute le cfg d'entraînement
 AutoPracticeWait(n := 0, *) {
-    global execMap
-    if !ProcessExist("cs2.exe")
+    global execMap, autoPracDone
+    if (autoPracDone || !ProcessExist("cs2.exe"))
         return
     txt := RunAndReadLog("status", "main lump")
-    if RegExMatch(txt, "main lump") {
-        Sleep(2500)   ; laisse les joueurs et les bots apparaître avant l'exec
+    if InStr(txt, "main lump") {
+        autoPracDone := true
+        AutoLog("map chargée (essai " n "), attente avant l'exec")
+        Sleep(5000)   ; laisse la partie et les bots se mettre en place
         LoadMaps()
         mp := MapFromStatus(txt)
         execMap := (mp != "") ? mp : "?"
         RunPractice()
+        WriteAndExec("mp_restartgame 1")   ; redémarre le round : argent, bots et réglages du cfg sont pris en compte dès le départ
+        AutoLog("exec " PracticeCfg " envoyé puis round redémarré")
         ToolTip(PracticeCfg " exécuté")
         SetTimer(() => ToolTip(), -2000)
+        SetTimer(AutoPracticeAgain, -6000)
         return
     }
-    if (n < 40)
+    if (n < 60)
         SetTimer(AutoPracticeWait.Bind(n + 1), -2000)
+    else
+        AutoLog("abandon : la map n'a pas été détectée après 2 minutes")
+}
+
+; Second passage : le jeu remet parfois les bots et la partie en place après le premier exec
+AutoPracticeAgain() {
+    if !ProcessExist("cs2.exe")
+        return
+    RunPractice()
+    WriteAndExec("bot_quota 0; bot_kick")
+    AutoLog("second exec et bot_kick envoyés")
 }
 
 ; Liste des maps proposées (tes fichiers de map + les maps officielles)
@@ -1288,82 +1346,6 @@ HideShot() {
         gs.Hide()
 }
 
-; Affiche (ou cache) la capture du stuff sélectionné. preview = true : aperçu depuis les réglages
-UpdateShot(preview := false) {
-    global gs, gsPic, gsTxt
-    if (!ShotOn || (!menuOpen && !preview)) {
-        HideShot()
-        return
-    }
-    path := ""
-    if preview {
-        Loop Files, ShotDir() "\*.bmp" {
-            if (SubStr(A_LoopFileName, 1, 1) != "_") {
-                path := A_LoopFileFullPath
-                break
-            }
-        }
-    } else {
-        cur := CurrentItem()
-        if IsObject(cur)
-            path := ShotPath(StrSplit(cur[5], "|")[1], cur[2])
-        if !ShotValid(path) {
-            HideShot()
-            return
-        }
-    }
-    if (preview && path != "" && !ShotValid(path))
-        path := ""
-    bw := ovBorder
-    if !IsObject(gs) {
-        gs := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-        gs.BackColor := SelColor()
-        gsPic := gs.Add("Picture", "x0 y0 w" ShotZoom " h" ShotZoom, "")
-        gsTxt := gs.Add("Text", "x0 y0 w" ShotZoom " h" ShotZoom " Center 0x200 Background" SelColor() " cA0A6AE", "Aperçu de la capture")
-        if (bw > 0) {
-            ; liseré dessiné PAR-DESSUS l'image (créé après elle)
-            bc := BorderColor()
-            gs.Add("Text", "x0 y0 w" ShotZoom " h" bw " Background" bc, "")
-            gs.Add("Text", "x0 y" (ShotZoom - bw) " w" ShotZoom " h" bw " Background" bc, "")
-            gs.Add("Text", "x0 y0 w" bw " h" ShotZoom " Background" bc, "")
-            gs.Add("Text", "x" (ShotZoom - bw) " y0 w" bw " h" ShotZoom " Background" bc, "")
-        }
-    }
-    if (path != "") {
-        try {
-            gsPic.Value := "*w" ShotZoom " *h" ShotZoom " " path
-            gsPic.Visible := true
-            gsTxt.Visible := false
-        } catch {
-            gsPic.Visible := false
-            gsTxt.Visible := true
-        }
-    } else {
-        gsPic.Visible := false
-        gsTxt.Visible := true
-    }
-    tw := ShotZoom
-    vl := SysGet(76)
-    vt := SysGet(77)
-    vw := SysGet(78)
-    vh := SysGet(79)
-    if (ShotPlace = 1) {
-        MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
-        px := mr - tw - 12
-        py := mt + 12
-    } else {
-        px := Max(vl, Min(ShotX, vl + vw - tw))
-        py := Max(vt, Min(ShotY, vt + vh - tw))
-    }
-    gs.Show("NA x" px " y" py " w" tw " h" tw)
-    if (ShotCorner > 0) {
-        rd := 2 * Min(ShotCorner, ShotZoom // 2)
-        WinSetRegion("0-0 W" tw " H" tw " R" rd "-" rd, gs)
-    } else {
-        WinSetRegion("", gs)
-    }
-    WinSetTransparent(Max(ovOpacity, 200), gs)
-}
 
 ; =====================================================================
 ;  Affichage
@@ -1875,48 +1857,6 @@ QuizStart() {
     QzShow("QUIZ : " pick[2], "(" pick[1] ")")
 }
 
-; Bandeau du quiz (haut de l'écran) : reste affiché jusqu'à « voir la réponse » ou un nouveau quiz
-QzShow(l1, l2) {
-    global qzGui, qzB
-    QzHide()
-    if (ovBorder > 0) {
-        qzB := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-        qzB.BackColor := BorderColor()
-    }
-    dark := (Lum(ovBg) < 140)
-    cTxt := dark ? "FFFFFF" : "111111"
-    thh := ThemeById(ovTheme)
-    if IsObject(thh)
-        cTxt := thh[4]
-    fnt := (ovFont = "") ? "Consolas" : ovFont
-    qzGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-    qzGui.BackColor := ovBg
-    qzGui.MarginX := 14 + ovCorner // 3
-    qzGui.MarginY := 8 + ovCorner // 4
-    qzGui.SetFont("s" FS(15) " bold c" cTxt, fnt)
-    qzGui.Add("Text", "Center", l1 "`n" l2)
-    qzGui.Show("NA AutoSize x0 y0")
-    qzGui.GetPos(, , &w, &h)
-    MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
-    qzGui.Move(ml + (mr - ml - w) // 2, mt + 12 + ovBorder)
-    qzGui.GetPos(&px, &py, &pw, &ph)
-    dia := 2 * Min(ovCorner, ph // 2)
-    if (ovCorner > 0)
-        WinSetRegion("0-0 W" pw " H" ph " R" dia "-" dia, qzGui)
-    WinSetTransparent(ovOpacity, qzGui)
-    if IsObject(qzB) {
-        b := ovBorder
-        bw := pw + 2 * b
-        bh := ph + 2 * b
-        qzB.Show("NA x" (px - b) " y" (py - b) " w" bw " h" bh)
-        if (ovCorner > 0) {
-            bd := dia + 2 * b
-            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, qzB)
-        }
-        WinSetTransparent(ovOpacity, qzB)
-        DllCall("SetWindowPos", "Ptr", qzGui.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
-    }
-}
 
 QzHide() {
     global qzGui, qzB
@@ -3279,17 +3219,6 @@ MixHex(a, b, pct) {
     return Format("{:02X}{:02X}{:02X}", r, gg, bb)
 }
 
-SetList(lines, selIdx) {
-    Loop 13 {
-        i := A_Index
-        t := (i <= lines.Length) ? lines[i] : ""
-        isSel := (i = selIdx)
-        listRows[i].Text := t
-        listRowsS[i].Text := t
-        listRows[i].Visible := !isSel
-        listRowsS[i].Visible := isSel
-    }
-}
 
 ThemeById(id) {
     if (id = "")
@@ -3322,108 +3251,7 @@ InstalledFonts(cands) {
     return out
 }
 
-BuildOverlay() {
-    global g, gb, gs, titleCtl, infoCtl, hintCtl, statusCtl, ovBg, listRows, listRowsS
-    if IsObject(g)
-        g.Destroy()
-    if IsObject(gb) {
-        gb.Destroy()
-        gb := ""
-    }
-    if IsObject(gs) {
-        gs.Destroy()
-        gs := ""
-    }
-    W := Round(460 * ovScale / 100)
-    th := ThemeById(ovTheme)
-    if IsObject(th)
-        ovBg := th[3]
-    dark := (Lum(ovBg) < 140)
-    cTitle := dark ? "FFB000" : "8A4B00"
-    cList := dark ? "FFFFFF" : "111111"
-    cInfo := dark ? "FFD27A" : "6B4A00"
-    cStatus := dark ? "7CFC00" : "1B6E1B"
-    cHint := dark ? "FFFFFF" : "000000"
-    cFoot := dark ? "B4BAC2" : "444444"
-    cBrand := dark ? "7AD7FF" : "005A8C"
-    if IsObject(th) {
-        cBrand := th[5]
-        cTitle := th[6]
-        cList := th[4]
-        cInfo := th[6]
-        cStatus := th[5]
-        cHint := th[4]
-        cFoot := th[7]
-    }
-    fText := (ovFont = "") ? "Segoe UI" : ovFont
-    fList := (ovFont = "") ? "Consolas" : ovFont
-    g := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000")
-    g.BackColor := ovBg
-    if (ovTitle != "") {
-        g.SetFont("s" FS(12) " bold c" cBrand, fText)
-        g.Add("Text", "w" W " Center", ovTitle)
-    }
-    g.SetFont("s" FS(16) " bold c" cTitle, fText)
-    titleCtl := g.Add("Text", "w" W, "")
-    g.SetFont("s" FS(13) " norm c" cList, fList)
-    listRows := []
-    listRowsS := []
-    selCol := SelColor()
-    Loop 13 {
-        rowOpt := (A_Index = 1) ? "" : " y+0"
-        rn := g.Add("Text", "w" W " r1 0x4000" rowOpt, "")
-        rn.GetPos(&rx, &ry, &rw, &rh)
-        rs := g.Add("Text", "x" rx " y" ry " w" rw " h" rh " 0x4000 Background" selCol, "")
-        rs.Visible := false
-        if (ovCorner > 0) {
-            rr := Min(Max(4, Round(ovCorner * 0.9)), rh)
-            WinSetRegion("0-0 W" rw " H" rh " R" rr "-" rr, rs)
-        }
-        listRows.Push(rn)
-        listRowsS.Push(rs)
-    }
-    g.SetFont("s" FS(10) " c" cInfo, fText)
-    infoCtl := g.Add("Text", "w" W " r3", "")
-    g.SetFont("s" FS(9) " c" cStatus, fText)
-    statusCtl := g.Add("Text", "w" W " r2", "")
-    g.SetFont("s" FS(10) " bold c" cHint, fText)
-    hintCtl := g.Add("Text", "w" W " r3", "")
-    g.SetFont("s" FS(9) " norm c" cFoot, fText)
-    g.Add("Text", "w" W, "Haut/Bas : naviguer   Droite/Entrée : valider   Gauche : retour   Échap : fermer`n" MenuKey " : ouvrir / fermer le menu`n" FavKey " : favori   " LockKey " : cadenas   " AddKey " : nouveau stuff (menu des stuffs)`nCtrl+Z : annuler la dernière suppression de stuff`nSauvegarde, réglages, gestion, profils, exec : tout est dans le menu.")
-    if (ovBorder > 0) {
-        gb := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-        gb.BackColor := BorderColor()
-    }
-}
 
-ShowOverlay() {
-    vl := SysGet(76)
-    vt := SysGet(77)
-    vw := SysGet(78)
-    vh := SysGet(79)
-    x := Max(vl, Min(ovX, vl + vw - 100))
-    y := Max(vt, Min(ovY, vt + vh - 60))
-    g.Show("NA x" x " y" y " AutoSize")
-    g.GetPos(&gx, &gy, &gw, &gh)
-    dia := 2 * ovCorner
-    if (ovCorner > 0)
-        WinSetRegion("0-0 W" gw " H" gh " R" dia "-" dia, g)
-    WinSetTransparent(ovOpacity, g)
-    if IsObject(gb) {
-        b := ovBorder
-        bx := gx - b
-        by := gy - b
-        bw := gw + 2 * b
-        bh := gh + 2 * b
-        gb.Show("NA x" bx " y" by " w" bw " h" bh)
-        if (ovCorner > 0) {
-            bd := dia + 2 * b
-            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, gb)
-        }
-        WinSetTransparent(ovOpacity, gb)
-        DllCall("SetWindowPos", "Ptr", g.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
-    }
-}
 
 ShowPreview() {
     titleCtl.Text := "APERÇU DU MENU"
@@ -3508,7 +3336,7 @@ ShowSettings() {
 
     d := WinNew("Réglages du menu", "+AlwaysOnTop")
     pv := Map("g", "")
-    tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Aide"], 6, 8, 500)
+    tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Touches", "Aide"], 6, 8, 560)
     tabs.UseTab(1)
     y := 44
     ty := y + 4
@@ -3685,9 +3513,9 @@ ShowSettings() {
     txTmDur := d.Add("Text", "x406 y" ty " w70", "")
     y += 44
     chkFlAsk := d.Add("CheckBox", "x22 y" y " w460" (FlightAsk ? " Checked" : ""), "Proposer de mesurer le temps de vol après la création d'un stuff")
-    y += 30
-    chkBeep := d.Add("CheckBox", "x22 y" y " w460 Hidden" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
-    y += 6   ; la case du bip est masquée : le menu ne produit plus aucun son
+    y += 36
+    chkBeep := d.Add("CheckBox", "x-3000 y" y " w460 Hidden" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
+    ; la case du bip est repoussée hors de la fenêtre : le menu ne produit plus aucun son
     btnTmTest := d.Add("Button", "x22 y" y " w220", "Tester l'affichage")
     btnTmMeasure := d.Add("Button", "x250 y" y " w220", "Tester la mesure")
     y += 44
@@ -3742,8 +3570,82 @@ ShowSettings() {
     y += 100
     yEnd6 := y
 
-    ; ----- Onglet Aide -----
+    ; ----- Onglet Touches (touches à l'écran) -----
     tabs.UseTab(7)
+    y := 44
+    d.Add("Text", "x22 y" y " w500 r2", "Affiche les touches pressées en permanence, même en dehors de CS2 (comme les coordonnées). Les changements de cet onglet s'appliquent tout de suite.")
+    y += 50
+    chkK := d.Add("CheckBox", "x22 y" y " w500" (KeysOn ? " Checked" : ""), "Afficher les touches à l'écran")
+    y += 34
+    chkKG := d.Add("CheckBox", "x22 y" y " w500" (KeysFromGame ? " Checked" : ""), "Utiliser les touches de CS2 (déplacement, marche, accroupi, saut)")
+    y += 34
+    stKDet := d.Add("Text", "x22 y" y " w500 r2", KeysSummary())
+    y += 50
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Taille")
+    slKS := d.Add("Slider", "x140 y" y " w260 Range60-200 ToolTip", KeysSize)
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Opacité")
+    slKO := d.Add("Slider", "x140 y" y " w260 Range80-255 ToolTip", KeysOpacity)
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Position")
+    ddKP := d.Add("DropDownList", "x140 y" y " w260 Choose" (KeysAuto ? 1 : 2), ["À droite, au milieu de l'écran", "Libre (choisie avec la souris)"])
+    y += 44
+    btnKPick := d.Add("Button", "x22 y" y " w240", "Placer avec la souris")
+    btnKRe := d.Add("Button", "x+10 yp w240", "Relire les touches de CS2")
+    y += 50
+    yEnd7 := y
+
+    KSync(*) {
+        global KeysOn, KeysSize, KeysOpacity, KeysAuto, KeysFromGame
+        KeysOn := chkK.Value ? true : false
+        KeysFromGame := chkKG.Value ? true : false
+        KeysSize := slKS.Value
+        KeysOpacity := slKO.Value
+        KeysAuto := (ddKP.Value = 1)
+        IniWrite(KeysOn ? 1 : 0, IniFile, "Settings", "KeysOn")
+        IniWrite(KeysFromGame ? 1 : 0, IniFile, "Settings", "KeysFromGame")
+        IniWrite(KeysSize, IniFile, "Settings", "KeysSize")
+        IniWrite(KeysOpacity, IniFile, "Settings", "KeysOpacity")
+        IniWrite(KeysAuto ? 1 : 0, IniFile, "Settings", "KeysAuto")
+        KeysApply()
+        stKDet.Text := KeysSummary()
+    }
+    KPick(*) {
+        global KeysX, KeysY
+        d.Hide()
+        CoordMode("Mouse", "Screen")
+        ToolTip("Clique à l'endroit voulu (coin supérieur gauche des touches). Échap pour annuler.")
+        ok := false
+        Loop {
+            if GetKeyState("Escape")
+                break
+            if GetKeyState("LButton") {
+                ok := true
+                break
+            }
+            Sleep(20)
+        }
+        MouseGetPos(&mx, &my)
+        while GetKeyState("LButton")
+            Sleep(10)
+        ToolTip()
+        if ok {
+            KeysX := mx
+            KeysY := my
+            IniWrite(KeysX, IniFile, "Settings", "KeysX")
+            IniWrite(KeysY, IniFile, "Settings", "KeysY")
+            ddKP.Choose(2)
+            chkK.Value := 1
+            KSync()
+        }
+        d.Show()
+    }
+
+    ; ----- Onglet Aide -----
+    tabs.UseTab(8)
     y := 44
     btnChkS := d.Add("Button", "x22 y" y " w440", "Vérifier l'installation")
     y += 44
@@ -3755,9 +3657,9 @@ ShowSettings() {
     d.Add("Text", "x22 y" y " w440 r6", "Vérifier l'installation : contrôle le dossier cfg, console.log et la connexion directe.`n`nCopier le diagnostic : met dans le presse-papiers un rapport sans données personnelles, à coller quand tu demandes de l'aide.`n`nNettoyer : supprime les captures et temps de vol qui ne correspondent plus à aucun stuff.")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
     y += 120
-    yEnd7 := y
+    yEnd8 := y
     tabs.UseTab(0)
-    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4, yEnd5, yEnd6, yEnd7) + 6
+    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4, yEnd5, yEnd6, yEnd7, yEnd8) + 6
     tabs.Move(6, 6, 500, tabH)
     y := tabH + 18
     d.SetFont("s" WinSz() " bold")
@@ -3766,7 +3668,7 @@ ShowSettings() {
     y += 28
     btnReset := d.Add("Button", "x12 y" y " w150", "Réinitialiser")
     btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
-    btnSave := d.Add("Button", "x356 yp w150 Default", "Enregistrer")
+    btnSave := d.Add("Button", "x416 yp w150 Default", "Enregistrer")
 
     LedTick() {
         if !ProcessExist("cs2.exe") {
@@ -3951,6 +3853,14 @@ ShowSettings() {
             ddWF.Choose(1)
             slWS.Value := 100
             txWS.Text := "100 %"
+            return
+        } else if (tv = 7) {
+            chkK.Value := 0
+            chkKG.Value := 1
+            slKS.Value := 100
+            slKO.Value := 220
+            ddKP.Choose(1)
+            KSync()
             return
         } else {
             return
@@ -4159,6 +4069,13 @@ ShowSettings() {
     edBc.OnEvent("Change", BcEdit)
     btnSave.OnEvent("Click", Finish.Bind(true))
     btnReset.OnEvent("Click", ResetClick)
+    chkK.OnEvent("Click", KSync)
+    chkKG.OnEvent("Click", KSync)
+    slKS.OnEvent("Change", KSync)
+    slKO.OnEvent("Change", KSync)
+    ddKP.OnEvent("Change", KSync)
+    btnKPick.OnEvent("Click", KPick)
+    btnKRe.OnEvent("Click", KSync)
     btnChkS.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
     btnDiag.OnEvent("Click", (*) => CopyDiagnostic())
     btnClean.OnEvent("Click", (*) => CleanOrphans())
@@ -5352,68 +5269,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
 ; =====================================================================
 ;  Coordonnées en temps réel (coin inférieur gauche de l'écran)
 ; =====================================================================
-; Le script demande "getpos" au jeu à intervalle régulier (via le cfg) et lit
-; la réponse dans console.log. Aucune lecture de la mémoire du jeu.
-BuildHud() {
-    global hudGui, hudTxt, hudB
-    if IsObject(hudGui)
-        hudGui.Destroy()
-    if IsObject(hudB) {
-        hudB.Destroy()
-        hudB := ""
-    }
-    if (ovBorder > 0) {
-        hudB := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-        hudB.BackColor := BorderColor()
-    }
-    dark := (Lum(ovBg) < 140)
-    cTxt := dark ? "FFFFFF" : "111111"
-    thh := ThemeById(ovTheme)
-    if IsObject(thh)
-        cTxt := thh[4]
-    fnt := (ovFont = "") ? "Consolas" : ovFont
-    hudGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-    hudGui.BackColor := ovBg
-    hudGui.MarginX := 10 + ovCorner // 3
-    hudGui.MarginY := 6 + ovCorner // 4
-    hudGui.SetFont("s" FS(11) " bold c" cTxt, fnt)
-    hudTxt := hudGui.Add("Text", "w" Round(330 * ovScale / 100) " r3", hudLast)
-}
 
-ShowHud() {
-    MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
-    hx := ml + 12
-    hy := mt + 12
-    hudGui.Show("NA AutoSize x" hx " y" hy)
-    hudGui.GetPos(, , , &hh)
-    hudGui.GetPos(&hx0, &hy0, &hw0, &hh0)
-    if HudAuto {
-        hudGui.Move(ml + 12 + ovBorder, mb - hh - 12 - ovBorder)
-    } else {
-        vl := SysGet(76)
-        vt := SysGet(77)
-        vw := SysGet(78)
-        vh := SysGet(79)
-        hudGui.Move(Max(vl, Min(HudX, vl + vw - hw0)), Max(vt, Min(HudY, vt + vh - hh)))
-    }
-    hudGui.GetPos(&px, &py, &pw, &ph)
-    dia := 2 * Min(ovCorner, ph // 2)
-    if (ovCorner > 0)
-        WinSetRegion("0-0 W" pw " H" ph " R" dia "-" dia, hudGui)
-    WinSetTransparent(ovOpacity, hudGui)
-    if IsObject(hudB) {
-        b := ovBorder
-        bw := pw + 2 * b
-        bh := ph + 2 * b
-        hudB.Show("NA x" (px - b) " y" (py - b) " w" bw " h" bh)
-        if (ovCorner > 0) {
-            bd := dia + 2 * b
-            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, hudB)
-        }
-        WinSetTransparent(ovOpacity, hudB)
-        DllCall("SetWindowPos", "Ptr", hudGui.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
-    }
-}
 
 HudSetText(p) {
     global hudLast
@@ -5498,6 +5354,879 @@ HudToggle() {
 }
 
 ; =====================================================================
+;  Touches à l'écran (Maj, Ctrl, Espace, ZQSD et souris), par-dessus CS2
+; =====================================================================
+; Lit seulement l'état des touches de Windows (comme n'importe quel logiciel d'affichage de touches) : rien n'est lu dans le jeu.
+ShadeHex(hex, d) {
+    r := Min(255, Max(0, Integer("0x" SubStr(hex, 1, 2)) + d))
+    g := Min(255, Max(0, Integer("0x" SubStr(hex, 3, 2)) + d))
+    b := Min(255, Max(0, Integer("0x" SubStr(hex, 5, 2)) + d))
+    return Format("{:02X}{:02X}{:02X}", r, g, b)
+}
+
+; Code de position (scancode) d'une lettre ou d'un chiffre du clavier QWERTY
+CsScan(ch) {
+    static rows := Map("1234567890", 2, "QWERTYUIOP", 16, "ASDFGHJKL", 30, "ZXCVBNM", 44)
+    for r, sc in rows {
+        p := InStr(r, ch, true)
+        if p
+            return sc + p - 1
+    }
+    return 0
+}
+
+; Texte affiché pour une touche suivant la disposition réelle du clavier (AZERTY : Z, Q, S, D)
+KeyText(ak) {
+    t := StrUpper(GetKeyName(ak))
+    return (t = "") ? ak : t
+}
+
+; Touche de CS2 (nom du fichier de binds) -> nom AutoHotkey ("" si inutilisable)
+CsKeyToAhk(k) {
+    static m := Map("MOUSE1", "LButton", "MOUSE2", "RButton", "MOUSE3", "MButton", "MOUSE4", "XButton1", "MOUSE5", "XButton2"
+        , "SHIFT", "Shift", "CTRL", "Ctrl", "ALT", "Alt", "SPACE", "Space", "TAB", "Tab", "ENTER", "Enter", "CAPSLOCK", "CapsLock", "BACKSPACE", "Backspace")
+    u := StrUpper(k)
+    if m.Has(u)
+        return m[u]
+    if RegExMatch(u, "^[A-Z0-9]$") {
+        sc := CsScan(u)   ; CS2 note les touches par position (clavier QWERTY) : on suit la position, pas la lettre
+        return sc ? "SC" Format("{:03X}", sc) : StrLower(u)
+    }
+    if RegExMatch(u, "^F\d{1,2}$")
+        return u
+    return ""
+}
+
+; Touches enregistrées dans CS2 : action -> nom de la touche (ex. "+sprint" -> "MOUSE4")
+KeysBinds() {
+    binds := Map()
+    steam := ""
+    try steam := StrReplace(RegRead("HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath"), "/", "\")
+    best := ""
+    bt := ""
+    if (steam != "") {
+        Loop Files steam "\userdata\*", "D" {
+            f := A_LoopFilePath "\730\local\cfg\cs2_user_keys_0_slot0.vcfg"
+            if FileExist(f) {
+                t := FileGetTime(f)
+                if (best = "" || t > bt) {
+                    best := f
+                    bt := t
+                }
+            }
+        }
+    }
+    if (best = "" && FileExist(cfgDir "\cs2_user_keys_0_slot0.vcfg"))
+        best := cfgDir "\cs2_user_keys_0_slot0.vcfg"
+    if (best = "")
+        return binds
+    try {
+        for ln in StrSplit(FileRead(best, "UTF-8"), "`n", "`r") {
+            if !RegExMatch(ln, "^\s*`"([^`"]+)`"\s+`"(\+[a-z0-9]+)`"\s*$", &m)
+                continue
+            if (CsKeyToAhk(m[1]) = "")
+                continue
+            if !binds.Has(m[2])
+                binds[m[2]] := m[1]
+        }
+    }
+    return binds
+}
+
+; Emplacements de l'overlay : [touche AutoHotkey, texte] selon CS2 (ou les touches par défaut)
+KeysLayout() {
+    lay := Map("walk", ["Shift", "SHIFT"], "fwd", ["SC011", KeyText("SC011")], "duck", ["Ctrl", "CTRL"], "left", ["SC01E", KeyText("SC01E")]
+        , "back", ["SC01F", KeyText("SC01F")], "right", ["SC020", KeyText("SC020")], "jump", ["Space", "ESPACE"], "fire", ["LButton", ""], "alt", ["RButton", ""])
+    if !KeysFromGame
+        return lay
+    b := KeysBinds()
+    for slot, cmds in Map("walk", ["+sprint"], "fwd", ["+forward"], "duck", ["+duck"], "left", ["+left", "+moveleft"], "back", ["+back"]
+        , "right", ["+right", "+moveright"], "jump", ["+jump"], "fire", ["+attack"], "alt", ["+attack2"]) {
+        for cmd in cmds {
+            if b.Has(cmd) {
+                ak := CsKeyToAhk(b[cmd])
+                lbl := (SubStr(ak, 1, 2) = "SC") ? KeyText(ak) : StrUpper(b[cmd])
+                if (lbl = "SPACE")
+                    lbl := "ESPACE"
+                if (ak = "LButton" || ak = "RButton")
+                    lbl := ""
+                lay[slot] := [ak, lbl]
+                break
+            }
+        }
+    }
+    return lay
+}
+
+KeysSummary() {
+    if !KeysFromGame
+        return "Touches par défaut (Maj, Ctrl, Espace et les 4 touches de déplacement)."
+    if (KeysBinds().Count = 0)
+        return "Touches de CS2 introuvables : touches par défaut utilisées."
+    lay := KeysLayout()
+    return "Lues dans CS2 - Avant : " lay["fwd"][2] "   Gauche : " lay["left"][2] "   Marche : " lay["walk"][2] "   Accroupi : " lay["duck"][2] "   Saut : " lay["jump"][2]
+}
+
+; =====================================================================
+;  Panneaux lissés (GDI+) : menu, coordonnées, chrono, quiz et capture partagent le style de l'overlay des touches
+; =====================================================================
+; Petits objets qui remplacent les anciens contrôles : écrire .Text redessine le panneau
+class OvTextObj {
+    __New(k) {
+        this.k := k
+    }
+    Text {
+        get => ovSt[this.k]
+        set {
+            ovSt[this.k] := value
+            if (this.k = "status" && menuOpen)
+                ShowOverlay()   ; le message d'état s'affiche / disparaît tout de suite
+        }
+    }
+}
+
+class HudTxtObj {
+    Text {
+        get => hudSt["txt"]
+        set {
+            hudSt["txt"] := value
+            HudPaint()
+        }
+    }
+}
+
+class TmTxtObj {
+    Text {
+        get => tmSt["txt"]
+        set {
+            tmSt["txt"] := value
+            TmPaint()
+        }
+    }
+}
+
+PxOf(pt) {
+    return Round(pt * A_ScreenDPI / 72)
+}
+
+DpiK() {
+    return A_ScreenDPI / 96
+}
+
+NewLayered() {
+    return Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80000 +E0x08000000 +E0x20")   ; transparence par pixel, traversée par la souris
+}
+
+; Chemin d'un rectangle à coins arrondis
+GdipRoundPath(x, y, w, h, r) {
+    d := Min(2 * r, w, h)
+    if (d < 1)
+        d := 1
+    path := 0
+    DllCall("gdiplus\GdipCreatePath", "Int", 0, "Ptr*", &path)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x, "Float", y, "Float", d, "Float", d, "Float", 180, "Float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x + w - d, "Float", y, "Float", d, "Float", d, "Float", 270, "Float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x + w - d, "Float", y + h - d, "Float", d, "Float", d, "Float", 0, "Float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x, "Float", y + h - d, "Float", d, "Float", d, "Float", 90, "Float", 90)
+    DllCall("gdiplus\GdipClosePathFigure", "Ptr", path)
+    return path
+}
+
+; Liseré arrondi (trait de largeur wd tracé à l'intérieur du rectangle)
+GdipRoundStroke(g, argb, wd, x, y, w, h, r) {
+    path := GdipRoundPath(x + wd / 2, y + wd / 2, w - wd, h - wd, Max(1, r - wd / 2))
+    pen := 0
+    DllCall("gdiplus\GdipCreatePen1", "UInt", argb, "Float", wd, "Int", 2, "Ptr*", &pen)
+    DllCall("gdiplus\GdipDrawPath", "Ptr", g, "Ptr", pen, "Ptr", path)
+    DllCall("gdiplus\GdipDeletePen", "Ptr", pen)
+    DllCall("gdiplus\GdipDeletePath", "Ptr", path)
+}
+
+; Texte dans un rectangle : ha 0 gauche / 1 centre / 2 droite, va 0 haut / 1 milieu, wrap = retour à la ligne
+GdipText(g, argb, txt, fnt, px, bold, x, y, w, h, ha := 0, va := 0, wrap := true) {
+    fam := 0
+    font := 0
+    fmt := 0
+    br := 0
+    if (DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", fnt, "Ptr", 0, "Ptr*", &fam) != 0)
+        DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", "Segoe UI", "Ptr", 0, "Ptr*", &fam)
+    DllCall("gdiplus\GdipCreateFont", "Ptr", fam, "Float", px, "Int", bold ? 1 : 0, "Int", 2, "Ptr*", &font)
+    DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &fmt)
+    DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", fmt, "Int", ha)
+    DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", fmt, "Int", va)
+    if !wrap {
+        DllCall("gdiplus\GdipSetStringFormatFlags", "Ptr", fmt, "Int", 0x1000)   ; une seule ligne
+        DllCall("gdiplus\GdipSetStringFormatTrimming", "Ptr", fmt, "Int", 3)     ; coupe avec ...
+    }
+    DllCall("gdiplus\GdipCreateSolidFill", "UInt", argb, "Ptr*", &br)
+    rc := Buffer(16, 0)
+    NumPut("Float", x, rc, 0)
+    NumPut("Float", y, rc, 4)
+    NumPut("Float", w, rc, 8)
+    NumPut("Float", h, rc, 12)
+    DllCall("gdiplus\GdipDrawString", "Ptr", g, "WStr", txt, "Int", -1, "Ptr", font, "Ptr", rc, "Ptr", fmt, "Ptr", br)
+    DllCall("gdiplus\GdipDeleteBrush", "Ptr", br)
+    DllCall("gdiplus\GdipDeleteStringFormat", "Ptr", fmt)
+    DllCall("gdiplus\GdipDeleteFont", "Ptr", font)
+    DllCall("gdiplus\GdipDeleteFontFamily", "Ptr", fam)
+}
+
+; Taille [largeur, hauteur] d'un texte sur une ligne
+GdipMeasure(txt, fnt, px, bold) {
+    KeysGdiStart()
+    hdc := DllCall("user32\GetDC", "Ptr", 0, "Ptr")
+    g := 0
+    fam := 0
+    font := 0
+    DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc, "Ptr*", &g)
+    if (DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", fnt, "Ptr", 0, "Ptr*", &fam) != 0)
+        DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", "Segoe UI", "Ptr", 0, "Ptr*", &fam)
+    DllCall("gdiplus\GdipCreateFont", "Ptr", fam, "Float", px, "Int", bold ? 1 : 0, "Int", 2, "Ptr*", &font)
+    lay := Buffer(16, 0)
+    NumPut("Float", 10000, lay, 8)
+    NumPut("Float", 10000, lay, 12)
+    outr := Buffer(16, 0)
+    DllCall("gdiplus\GdipMeasureString", "Ptr", g, "WStr", txt, "Int", -1, "Ptr", font, "Ptr", lay, "Ptr", 0, "Ptr", outr, "Ptr", 0, "Ptr", 0)
+    w := Ceil(NumGet(outr, 8, "Float"))
+    h := Ceil(NumGet(outr, 12, "Float"))
+    DllCall("gdiplus\GdipDeleteFont", "Ptr", font)
+    DllCall("gdiplus\GdipDeleteFontFamily", "Ptr", fam)
+    DllCall("gdiplus\GdipDeleteGraphics", "Ptr", g)
+    DllCall("user32\ReleaseDC", "Ptr", 0, "Ptr", hdc)
+    return [w, h]
+}
+
+; Début d'un dessin : renvoie [bitmap, graphique]
+PanelBegin(W, H) {
+    KeysGdiStart()
+    bmp := 0
+    g := 0
+    DllCall("gdiplus\GdipCreateBitmapFromScan0", "Int", W, "Int", H, "Int", 0, "Int", 0xE200B, "Ptr", 0, "Ptr*", &bmp)   ; ARGB prémultiplié
+    DllCall("gdiplus\GdipGetImageGraphicsContext", "Ptr", bmp, "Ptr*", &g)
+    DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", g, "Int", 4)
+    DllCall("gdiplus\GdipSetTextRenderingHint", "Ptr", g, "Int", 4)
+    return [bmp, g]
+}
+
+; Fin d'un dessin : envoie l'image à la fenêtre (position et taille en pixels écran)
+PanelEnd(gui, bg, W, H, X, Y, ca := 255) {
+    bmp := bg[1]
+    g := bg[2]
+    hbm := 0
+    DllCall("gdiplus\GdipCreateHBITMAPFromBitmap", "Ptr", bmp, "Ptr*", &hbm, "UInt", 0)
+    hdc := DllCall("user32\GetDC", "Ptr", 0, "Ptr")
+    mdc := DllCall("gdi32\CreateCompatibleDC", "Ptr", hdc, "Ptr")
+    old := DllCall("gdi32\SelectObject", "Ptr", mdc, "Ptr", hbm, "Ptr")
+    sz := Buffer(8, 0)
+    NumPut("Int", W, sz, 0)
+    NumPut("Int", H, sz, 4)
+    src := Buffer(8, 0)
+    dst := Buffer(8, 0)
+    NumPut("Int", X, dst, 0)
+    NumPut("Int", Y, dst, 4)
+    bl := Buffer(4, 0)
+    NumPut("UChar", ca, bl, 2)
+    NumPut("UChar", 1, bl, 3)
+    DllCall("user32\UpdateLayeredWindow", "Ptr", gui.Hwnd, "Ptr", hdc, "Ptr", dst, "Ptr", sz, "Ptr", mdc, "Ptr", src, "UInt", 0, "Ptr", bl, "UInt", 2)
+    DllCall("gdi32\SelectObject", "Ptr", mdc, "Ptr", old)
+    DllCall("gdi32\DeleteObject", "Ptr", hbm)
+    DllCall("gdi32\DeleteDC", "Ptr", mdc)
+    DllCall("user32\ReleaseDC", "Ptr", 0, "Ptr", hdc)
+    DllCall("gdiplus\GdipDeleteGraphics", "Ptr", g)
+    DllCall("gdiplus\GdipDisposeImage", "Ptr", bmp)
+}
+
+; Fond du panneau : rectangle arrondi à la couleur du menu, avec le liseré réglé
+PanelBack(g, W, H) {
+    a := ovOpacity << 24
+    r := Min(ovCorner, H // 2)
+    GdipRoundFill(g, a | Integer("0x" ovBg), 0, 0, W, H, r)
+    if (ovBorder > 0)
+        GdipRoundStroke(g, a | Integer("0x" BorderColor()), ovBorder, 0, 0, W, H, r)
+}
+
+; Couleur du texte des petits panneaux (coordonnées, chrono, quiz)
+OvTextColor() {
+    thh := ThemeById(ovTheme)
+    if IsObject(thh)
+        return thh[4]
+    return (Lum(ovBg) < 140) ? "FFFFFF" : "111111"
+}
+
+; Fond d'une cellule (une ligne) : légèrement plus clair ou plus sombre que le fond
+OvCell() {
+    return MixHex(ovBg, (Lum(ovBg) < 140) ? "FFFFFF" : "000000", 6)
+}
+
+; ---------- Menu en jeu ----------
+BuildOverlay() {
+    global g, gb, gs, titleCtl, infoCtl, hintCtl, statusCtl, ovBg, ovCol, ovSt
+    if IsObject(g)
+        g.Destroy()
+    if IsObject(gb) {
+        gb.Destroy()
+        gb := ""
+    }
+    if IsObject(gs) {
+        gs.Destroy()
+        gs := ""
+    }
+    th := ThemeById(ovTheme)
+    if IsObject(th)
+        ovBg := th[3]
+    dark := (Lum(ovBg) < 140)
+    c := Map("title", dark ? "FFB000" : "8A4B00", "list", dark ? "FFFFFF" : "111111", "info", dark ? "FFD27A" : "6B4A00"
+        , "status", dark ? "7CFC00" : "1B6E1B", "hint", dark ? "FFFFFF" : "000000", "foot", dark ? "B4BAC2" : "444444", "brand", dark ? "7AD7FF" : "005A8C")
+    if IsObject(th) {
+        c["brand"] := th[5]
+        c["title"] := th[6]
+        c["list"] := th[4]
+        c["info"] := th[6]
+        c["status"] := th[5]
+        c["hint"] := th[4]
+        c["foot"] := th[7]
+    }
+    ovCol := c
+    ovSt := Map("title", "", "info", "", "hint", "", "status", "", "rows", [], "sel", 0
+        , "foot", "Haut/Bas : naviguer   Droite/Entrée : valider   Gauche : retour   Échap : fermer`n" MenuKey " : ouvrir / fermer le menu`n" FavKey " : favori`n" LockKey " : cadenas`n" AddKey " : nouveau stuff (menu des stuffs)`nCtrl+Z : annuler la dernière suppression de stuff")
+    titleCtl := OvTextObj("title")
+    infoCtl := OvTextObj("info")
+    hintCtl := OvTextObj("hint")
+    statusCtl := OvTextObj("status")
+    g := NewLayered()
+}
+
+SetList(lines, selIdx) {
+    rows := []
+    Loop Min(13, lines.Length)
+        rows.Push(lines[A_Index])
+    ovSt["rows"] := rows
+    ovSt["sel"] := selIdx
+}
+
+ShowOverlay() {
+    k := DpiK()
+    sc := ovScale / 100
+    pad := Max(8, Round(14 * sc * k))
+    cw := Round(460 * sc * k)
+    W := cw + 2 * pad
+    fText := (ovFont = "") ? "Segoe UI" : ovFont
+    fList := (ovFont = "") ? "Consolas" : ovFont
+    pBrand := PxOf(FS(12))
+    pTitle := PxOf(FS(16))
+    pList := PxOf(FS(13))
+    pInfo := PxOf(FS(10))
+    pSmall := PxOf(FS(9))
+    lhB := Round(pBrand * 1.5)
+    lhT := Round(pTitle * 1.45)
+    rowH := Round(pList * 1.6)
+    gap := Max(2, Round(pList * 0.12))
+    lhI := Round(pInfo * 1.45)
+    lhS := Round(pSmall * 1.45)
+    y := pad
+    yBrand := y
+    y += (ovTitle != "") ? lhB + 2 : 0
+    yTitle := y
+    y += lhT + 6
+    yRows := y
+    nRows := Max(1, ovSt["rows"].Length)
+    y += nRows * (rowH + gap) + 4
+    nInfo := (ovSt["info"] = "") ? 0 : Min(3, StrSplit(ovSt["info"], "`n").Length)
+    nStat := (ovSt["status"] = "") ? 0 : Min(2, StrSplit(ovSt["status"], "`n").Length)
+    yInfo := y
+    y += nInfo ? nInfo * lhI + 6 : 0
+    yStat := y
+    y += nStat ? nStat * lhS + 6 : 0
+    yFoot := y
+    y += 6 * lhS
+    H := y + pad
+    vl := SysGet(76)
+    vt := SysGet(77)
+    vw := SysGet(78)
+    vh := SysGet(79)
+    X := Max(vl, Min(ovX, vl + vw - 100))
+    Y := Max(vt, Min(ovY, vt + vh - 60))
+    g.Show("NA x" X " y" Y " w" W " h" H)
+    bg := PanelBegin(W, H)
+    gg := bg[2]
+    PanelBack(gg, W, H)
+    c := ovCol
+    opq := 0xFF000000
+    if (ovTitle != "")
+        GdipText(gg, opq | Integer("0x" c["brand"]), ovTitle, fText, pBrand, 1, pad, yBrand, cw, lhB, 1, 0, false)
+    GdipText(gg, opq | Integer("0x" c["title"]), ovSt["title"], fText, pTitle, 1, pad, yTitle, cw, lhT, 0, 0, false)
+    rr := Min(rowH // 2, Max(4, Round(ovCorner * 0.8)))
+    cellFill := Integer("0x" OvCell())
+    selFill := Integer("0x" SelColor())
+    sel := ovSt["sel"]
+    a := ovOpacity << 24
+    for i, t in ovSt["rows"] {
+        yy := yRows + (i - 1) * (rowH + gap)
+        isSel := (i = sel)
+        GdipRoundFill(gg, a | (isSel ? selFill : cellFill), pad, yy, cw, rowH, rr)
+        if isSel
+            GdipRoundFill(gg, opq | Integer("0x" c["title"]), pad + 4, yy + rowH * 0.2, 4, rowH * 0.6, 2)   ; repère de la ligne choisie
+        GdipText(gg, opq | Integer("0x" c["list"]), t, fList, pList, 0, pad + 14, yy, cw - 22, rowH, 0, 1, false)
+    }
+    if nInfo
+        GdipText(gg, opq | Integer("0x" c["info"]), ovSt["info"], fText, pInfo, 0, pad, yInfo, cw, nInfo * lhI)
+    if nStat
+        GdipText(gg, opq | Integer("0x" c["status"]), ovSt["status"], fText, pSmall, 0, pad, yStat, cw, nStat * lhS)
+    GdipText(gg, opq | Integer("0x" c["foot"]), ovSt["foot"], fText, pSmall, 0, pad, yFoot, cw, 6 * lhS)
+    PanelEnd(g, bg, W, H, X, Y)
+}
+
+; ---------- Coordonnées en temps réel ----------
+BuildHud() {
+    global hudGui, hudTxt, hudB, hudSt
+    if IsObject(hudGui)
+        hudGui.Destroy()
+    hudB := ""
+    hudSt := Map("txt", hudLast, "W", 0, "H", 0, "X", 0, "Y", 0)
+    hudGui := NewLayered()
+    hudTxt := HudTxtObj()
+}
+
+ShowHud() {
+    k := DpiK()
+    sc := ovScale / 100
+    px := PxOf(FS(11))
+    pad := Max(6, Round(8 * sc * k))
+    rowH := Round(px * 1.75)
+    gap := Max(2, Round(px * 0.18))
+    W := Round(330 * sc * k) + 2 * pad
+    H := 2 * pad + 3 * rowH + 2 * gap
+    MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+    if HudAuto {
+        X := ml + 12 + ovBorder
+        Y := mb - H - 12 - ovBorder
+    } else {
+        vl := SysGet(76)
+        vt := SysGet(77)
+        vw := SysGet(78)
+        vh := SysGet(79)
+        X := Max(vl, Min(HudX, vl + vw - W))
+        Y := Max(vt, Min(HudY, vt + vh - H))
+    }
+    hudSt["W"] := W
+    hudSt["H"] := H
+    hudSt["X"] := X
+    hudSt["Y"] := Y
+    hudGui.Show("NA x" X " y" Y " w" W " h" H)
+    HudPaint()
+}
+
+HudPaint() {
+    if (!IsObject(hudGui) || !hudSt["W"])
+        return
+    W := hudSt["W"]
+    H := hudSt["H"]
+    k := DpiK()
+    sc := ovScale / 100
+    px := PxOf(FS(11))
+    pad := Max(6, Round(8 * sc * k))
+    rowH := Round(px * 1.75)
+    gap := Max(2, Round(px * 0.18))
+    fnt := (ovFont = "") ? "Consolas" : ovFont
+    bg := PanelBegin(W, H)
+    gg := bg[2]
+    PanelBack(gg, W, H)
+    col := 0xFF000000 | Integer("0x" OvTextColor())
+    cell := (ovOpacity << 24) | Integer("0x" OvCell())
+    rr := Min(rowH // 2, Max(4, Round(ovCorner * 0.7)))
+    lines := StrSplit(hudSt["txt"], "`n", "`r")
+    Loop 3 {
+        yy := pad + (A_Index - 1) * (rowH + gap)
+        GdipRoundFill(gg, cell, pad, yy, W - 2 * pad, rowH, rr)
+        t := (A_Index <= lines.Length) ? lines[A_Index] : ""
+        GdipText(gg, col, t, fnt, px, 1, pad + 10, yy, W - 2 * pad - 14, rowH, 0, 1, false)
+    }
+    PanelEnd(hudGui, bg, W, H, hudSt["X"], hudSt["Y"])
+}
+
+; ---------- Chronomètre de grenade ----------
+TmShow(txt, hold := false) {
+    global tmGui, tmB, tmText, tmVisible, tmCtl, tmSt
+    tmText := txt
+    if IsObject(tmGui)
+        try tmGui.Destroy()
+    tmB := ""
+    px := PxOf(FS(16))
+    fnt := (ovFont = "") ? "Consolas" : ovFont
+    sm := GdipMeasure("Incendiaire : 99,9 s", fnt, px, true)   ; largeur fixe pour tous les textes
+    padX := Max(12, Round(px * 0.9))
+    padY := Max(7, Round(px * 0.5))
+    w := sm[1] + 2 * padX
+    h := Round(px * 1.5) + 2 * padY
+    vl := SysGet(76)
+    vt := SysGet(77)
+    vw := SysGet(78)
+    vh := SysGet(79)
+    if TimerAuto {
+        ; juste au-dessus des coordonnées
+        MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+        if (hudOn && IsObject(hudGui)) {
+            hudGui.GetPos(&cx, &cy)
+        } else if HudAuto {
+            estH := Round(5.9 * PxOf(FS(11))) + 2 * Max(6, Round(8 * ovScale / 100 * DpiK()))
+            cx := ml + 12 + ovBorder
+            cy := mb - estH - 12 - ovBorder
+        } else {
+            cx := HudX
+            cy := HudY
+        }
+        x := cx
+        y := cy - 2 * ovBorder - 8 - h
+    } else {
+        x := TimerX
+        y := TimerY
+    }
+    x := Max(vl, Min(x, vl + vw - w))
+    y := Max(vt, Min(y, vt + vh - h))
+    tmSt := Map("txt", txt, "W", w, "H", h, "X", x, "Y", y)
+    tmGui := NewLayered()
+    tmCtl := TmTxtObj()
+    tmGui.Show("NA x" x " y" y " w" w " h" h)
+    TmPaint()
+    tmVisible := true
+    if hold
+        SetTimer(TmHide, 0)
+    else
+        SetTimer(TmHide, -TimerDur * 1000)
+}
+
+TmPaint() {
+    if (!IsObject(tmGui) || !IsObject(tmSt))
+        return
+    W := tmSt["W"]
+    H := tmSt["H"]
+    px := PxOf(FS(16))
+    fnt := (ovFont = "") ? "Consolas" : ovFont
+    bg := PanelBegin(W, H)
+    gg := bg[2]
+    PanelBack(gg, W, H)
+    GdipText(gg, 0xFF000000 | Integer("0x" OvTextColor()), tmSt["txt"], fnt, px, 1, 0, 0, W, H, 1, 1, false)
+    PanelEnd(tmGui, bg, W, H, tmSt["X"], tmSt["Y"])
+}
+
+; ---------- Bandeau du quiz (haut de l'écran) ----------
+QzShow(l1, l2) {
+    global qzGui, qzB
+    QzHide()
+    qzB := ""
+    px := PxOf(FS(15))
+    fnt := (ovFont = "") ? "Consolas" : ovFont
+    m1 := GdipMeasure(l1, fnt, px, true)
+    m2 := GdipMeasure(l2, fnt, px, true)
+    padX := Max(14, Round(px * 1.1))
+    padY := Max(8, Round(px * 0.6))
+    lh := Round(px * 1.5)
+    W := Max(m1[1], m2[1]) + 2 * padX
+    H := 2 * lh + 2 * padY
+    MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+    X := ml + (mr - ml - W) // 2
+    Y := mt + 12 + ovBorder
+    qzGui := NewLayered()
+    qzGui.Show("NA x" X " y" Y " w" W " h" H)
+    bg := PanelBegin(W, H)
+    gg := bg[2]
+    PanelBack(gg, W, H)
+    col := 0xFF000000 | Integer("0x" OvTextColor())
+    GdipText(gg, col, l1, fnt, px, 1, 0, padY, W, lh, 1, 1, false)
+    GdipText(gg, col, l2, fnt, px, 1, 0, padY + lh, W, lh, 1, 1, false)
+    PanelEnd(qzGui, bg, W, H, X, Y)
+}
+
+; ---------- Capture du stuff sélectionné ----------
+; Affiche (ou cache) la capture du stuff sélectionné. preview = true : aperçu depuis les réglages
+UpdateShot(preview := false) {
+    global gs
+    if (!ShotOn || (!menuOpen && !preview)) {
+        HideShot()
+        return
+    }
+    path := ""
+    if preview {
+        Loop Files, ShotDir() "\*.bmp" {
+            if (SubStr(A_LoopFileName, 1, 1) != "_") {
+                path := A_LoopFileFullPath
+                break
+            }
+        }
+    } else {
+        cur := CurrentItem()
+        if IsObject(cur)
+            path := ShotPath(StrSplit(cur[5], "|")[1], cur[2])
+        if !ShotValid(path) {
+            HideShot()
+            return
+        }
+    }
+    if (preview && path != "" && !ShotValid(path))
+        path := ""
+    tw := Round(ShotZoom * DpiK())
+    vl := SysGet(76)
+    vt := SysGet(77)
+    vw := SysGet(78)
+    vh := SysGet(79)
+    if (ShotPlace = 1) {
+        MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+        px := mr - tw - 12
+        py := mt + 12
+    } else {
+        px := Max(vl, Min(ShotX, vl + vw - tw))
+        py := Max(vt, Min(ShotY, vt + vh - tw))
+    }
+    if !IsObject(gs)
+        gs := NewLayered()
+    gs.Show("NA x" px " y" py " w" tw " h" tw)
+    rr := Min(Round(ShotCorner * DpiK()), tw // 2)
+    bg := PanelBegin(tw, tw)
+    gg := bg[2]
+    drawn := false
+    if (path != "") {
+        img := 0
+        if (DllCall("gdiplus\GdipCreateBitmapFromFile", "WStr", path, "Ptr*", &img) = 0 && img) {
+            clip := GdipRoundPath(0, 0, tw, tw, rr)
+            DllCall("gdiplus\GdipSetClipPath", "Ptr", gg, "Ptr", clip, "Int", 0)
+            DllCall("gdiplus\GdipSetInterpolationMode", "Ptr", gg, "Int", 7)
+            DllCall("gdiplus\GdipDrawImageRectI", "Ptr", gg, "Ptr", img, "Int", 0, "Int", 0, "Int", tw, "Int", tw)
+            DllCall("gdiplus\GdipResetClip", "Ptr", gg)
+            DllCall("gdiplus\GdipDeletePath", "Ptr", clip)
+            DllCall("gdiplus\GdipDisposeImage", "Ptr", img)
+            drawn := true
+        }
+    }
+    if !drawn {
+        GdipRoundFill(gg, 0xFF000000 | Integer("0x" SelColor()), 0, 0, tw, tw, rr)
+        GdipText(gg, 0xFFA0A6AE, "Aperçu de la capture", (ovFont = "") ? "Segoe UI" : ovFont, PxOf(FS(10)), 0, 0, 0, tw, tw, 1, 1, false)
+    }
+    if (ovBorder > 0)
+        GdipRoundStroke(gg, 0xFF000000 | Integer("0x" BorderColor()), ovBorder, 0, 0, tw, tw, rr)
+    PanelEnd(gs, bg, tw, tw, px, py, Max(ovOpacity, 200))
+}
+
+; ---- Dessin lissé (GDI+) : une seule fenêtre à transparence par pixel, bords et textes sans effet d'escalier ----
+KeysGdiStart() {
+    global keysTok
+    if keysTok
+        return
+    DllCall("LoadLibrary", "Str", "gdiplus")
+    si := Buffer(24, 0)
+    NumPut("UInt", 1, si, 0)
+    tok := 0
+    DllCall("gdiplus\GdiplusStartup", "Ptr*", &tok, "Ptr", si, "Ptr", 0)
+    keysTok := tok
+}
+
+KeysGdiStop() {
+    global keysTok
+    if keysTok
+        DllCall("gdiplus\GdiplusShutdown", "Ptr", keysTok)
+    keysTok := 0
+}
+
+; Rectangle à coins arrondis rempli (couleur ARGB)
+GdipRoundFill(g, argb, x, y, w, h, r) {
+    d := Min(2 * r, w, h)
+    if (d < 1)
+        d := 1
+    path := 0
+    br := 0
+    DllCall("gdiplus\GdipCreatePath", "Int", 0, "Ptr*", &path)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x, "Float", y, "Float", d, "Float", d, "Float", 180, "Float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x + w - d, "Float", y, "Float", d, "Float", d, "Float", 270, "Float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x + w - d, "Float", y + h - d, "Float", d, "Float", d, "Float", 0, "Float", 90)
+    DllCall("gdiplus\GdipAddPathArc", "Ptr", path, "Float", x, "Float", y + h - d, "Float", d, "Float", d, "Float", 90, "Float", 90)
+    DllCall("gdiplus\GdipClosePathFigure", "Ptr", path)
+    DllCall("gdiplus\GdipCreateSolidFill", "UInt", argb, "Ptr*", &br)
+    DllCall("gdiplus\GdipFillPath", "Ptr", g, "Ptr", br, "Ptr", path)
+    DllCall("gdiplus\GdipDeleteBrush", "Ptr", br)
+    DllCall("gdiplus\GdipDeletePath", "Ptr", path)
+}
+
+; Texte centré dans un rectangle
+GdipCenterText(g, argb, txt, fnt, px, x, y, w, h) {
+    fam := 0
+    font := 0
+    fmt := 0
+    br := 0
+    if (DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", fnt, "Ptr", 0, "Ptr*", &fam) != 0)
+        DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", "Segoe UI", "Ptr", 0, "Ptr*", &fam)
+    DllCall("gdiplus\GdipCreateFont", "Ptr", fam, "Float", px, "Int", 1, "Int", 2, "Ptr*", &font)   ; gras, taille en pixels
+    DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &fmt)
+    DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", fmt, "Int", 1)
+    DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", fmt, "Int", 1)
+    DllCall("gdiplus\GdipCreateSolidFill", "UInt", argb, "Ptr*", &br)
+    rc := Buffer(16, 0)
+    NumPut("Float", x, rc, 0)
+    NumPut("Float", y, rc, 4)
+    NumPut("Float", w, rc, 8)
+    NumPut("Float", h, rc, 12)
+    DllCall("gdiplus\GdipDrawString", "Ptr", g, "WStr", txt, "Int", -1, "Ptr", font, "Ptr", rc, "Ptr", fmt, "Ptr", br)
+    DllCall("gdiplus\GdipDeleteBrush", "Ptr", br)
+    DllCall("gdiplus\GdipDeleteStringFormat", "Ptr", fmt)
+    DllCall("gdiplus\GdipDeleteFont", "Ptr", font)
+    DllCall("gdiplus\GdipDeleteFontFamily", "Ptr", fam)
+}
+
+; Redessine tout l'overlay et l'envoie à la fenêtre
+KeysRender() {
+    if (!IsObject(keysGui) || !keysTok)
+        return
+    c := keysCfg
+    W := c["W"]
+    H := c["H"]
+    bmp := 0
+    g := 0
+    DllCall("gdiplus\GdipCreateBitmapFromScan0", "Int", W, "Int", H, "Int", 0, "Int", 0xE200B, "Ptr", 0, "Ptr*", &bmp)   ; ARGB prémultiplié
+    DllCall("gdiplus\GdipGetImageGraphicsContext", "Ptr", bmp, "Ptr*", &g)
+    DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", g, "Int", 4)
+    DllCall("gdiplus\GdipSetTextRenderingHint", "Ptr", g, "Int", 4)
+    a := KeysOpacity << 24
+    GdipRoundFill(g, a | Integer("0x" ovBg), 0, 0, W, H, Min(ovCorner, H // 2))
+    if (ovBorder > 0)
+        GdipRoundStroke(g, a | Integer("0x" BorderColor()), ovBorder, 0, 0, W, H, Min(ovCorner, H // 2))   ; même liseré que le reste du menu
+    for it in keysCtl {
+        fill := it[8] ? c["act"] : c["idle"]
+        GdipRoundFill(g, a | Integer("0x" fill), it[3], it[4], it[5], it[6], c["rr"])
+        if (it[2] != "")
+            GdipCenterText(g, 0xFF000000 | Integer("0x" (it[8] ? c["actTxt"] : c["idleTxt"])), it[2], c["fnt"], c["px"], it[3], it[4], it[5], it[6])
+    }
+    hbm := 0
+    DllCall("gdiplus\GdipCreateHBITMAPFromBitmap", "Ptr", bmp, "Ptr*", &hbm, "UInt", 0)
+    hdc := DllCall("user32\GetDC", "Ptr", 0, "Ptr")
+    mdc := DllCall("gdi32\CreateCompatibleDC", "Ptr", hdc, "Ptr")
+    old := DllCall("gdi32\SelectObject", "Ptr", mdc, "Ptr", hbm, "Ptr")
+    sz := Buffer(8, 0)
+    NumPut("Int", W, sz, 0)
+    NumPut("Int", H, sz, 4)
+    src := Buffer(8, 0)
+    dst := Buffer(8, 0)
+    NumPut("Int", c["X"], dst, 0)
+    NumPut("Int", c["Y"], dst, 4)
+    bl := Buffer(4, 0)
+    NumPut("UChar", 255, bl, 2)   ; opacité globale (celle du réglage est déjà dans chaque pixel)
+    NumPut("UChar", 1, bl, 3)     ; AC_SRC_ALPHA
+    DllCall("user32\UpdateLayeredWindow", "Ptr", keysGui.Hwnd, "Ptr", hdc, "Ptr", dst, "Ptr", sz, "Ptr", mdc, "Ptr", src, "UInt", 0, "Ptr", bl, "UInt", 2)
+    DllCall("gdi32\SelectObject", "Ptr", mdc, "Ptr", old)
+    DllCall("gdi32\DeleteObject", "Ptr", hbm)
+    DllCall("gdi32\DeleteDC", "Ptr", mdc)
+    DllCall("user32\ReleaseDC", "Ptr", 0, "Ptr", hdc)
+    DllCall("gdiplus\GdipDeleteGraphics", "Ptr", g)
+    DllCall("gdiplus\GdipDisposeImage", "Ptr", bmp)
+}
+
+KeysApply() {
+    global keysGui, keysCtl, keysShown
+    SetTimer(KeysTick, 0)
+    if IsObject(keysGui) {
+        try keysGui.Destroy()
+        keysGui := ""
+    }
+    keysCtl := []
+    keysShown := false
+    if !KeysOn {
+        KeysGdiStop()
+        return
+    }
+    KeysGdiStart()
+    BuildKeys()
+    SetTimer(KeysTick, 40)
+}
+
+BuildKeys() {
+    global keysGui, keysCtl, keysShown, keysCfg
+    u := Max(20, Round(34 * KeysSize / 100))     ; côté d'une touche
+    g := Max(3, u // 8)                          ; espace entre les touches
+    pad := Max(6, u // 4)
+    dark := (Lum(ovBg) < 140)
+    actFill := WinAccent
+    cfg := Map("idle", ShadeHex(ovBg, dark ? 26 : -26), "idleTxt", dark ? "B4BAC2" : "555555"
+        , "act", actFill, "actTxt", (Lum(actFill) < 140) ? "FFFFFF" : "111111"
+        , "fnt", (ovFont = "") ? "Segoe UI" : ovFont, "px", Max(9, Round(u * 0.36)), "rr", Max(5, u // 3))
+    lay := KeysLayout()
+    items := []
+    KeyBox(id, label, x, y, w, h) {
+        key := lay.Has(id) ? lay[id][1] : id
+        label := lay.Has(id) ? lay[id][2] : label
+        if (w < 1.5 * u && StrLen(label) > 3)
+            label := RegExMatch(label, "^MOUSE(\d)$", &mm) ? "M" mm[1] : SubStr(label, 1, 3)
+        else if RegExMatch(label, "^MOUSE(\d)$", &mm)
+            label := "SOURIS " mm[1]
+        items.Push([id, label, x, y, w, h, key, 0])
+    }
+    wSh := Round(2.2 * u)
+    x0 := pad
+    y0 := pad
+    xQ := x0 + wSh + g
+    xS := xQ + u + g
+    xD := xS + u + g
+    y1 := y0 + u + g
+    y2 := y1 + u + g
+    KeyBox("walk", "SHIFT", x0, y0, wSh, u)
+    KeyBox("fwd", "Z", xS, y0, u, u)
+    KeyBox("duck", "CTRL", x0, y1, wSh, u)
+    KeyBox("left", "Q", xQ, y1, u, u)
+    KeyBox("back", "S", xS, y1, u, u)
+    KeyBox("right", "D", xD, y1, u, u)
+    KeyBox("jump", "ESPACE", xQ, y2, 3 * u + 2 * g, u)
+    xm := xD + u + 3 * g
+    bw := Round(0.7 * u)
+    hTop := Round(1.4 * u)
+    hAll := 3 * u + 2 * g
+    KeyBox("fire", "", xm, y0, bw, hTop)
+    KeyBox("alt", "", xm + bw + g // 2, y0, bw, hTop)
+    KeyBox("MButton", "", xm, y0 + hTop + g // 2, 2 * bw + g // 2, hAll - hTop - g // 2)
+    W := xm + 2 * bw + g // 2 + pad
+    H := y0 + hAll + pad
+    MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+    if KeysAuto {
+        X := mr - W - 12
+        Y := mt + (mb - mt - H) // 2   ; à droite, au milieu de l'écran
+    } else {
+        vl := SysGet(76)
+        vt := SysGet(77)
+        vw := SysGet(78)
+        vh := SysGet(79)
+        X := Max(vl, Min(KeysX, vl + vw - W))
+        Y := Max(vt, Min(KeysY, vt + vh - H))
+    }
+    cfg["W"] := W
+    cfg["H"] := H
+    cfg["X"] := X
+    cfg["Y"] := Y
+    keysCfg := cfg
+    keysCtl := items
+    keysGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80000 +E0x08000000 +E0x20")   ; fenêtre à transparence par pixel, traversée par la souris
+    keysGui.Show("NA w" W " h" H " x" X " y" Y)
+    KeysRender()
+    keysShown := true
+}
+
+KeysTick() {
+    global keysShown
+    if !IsObject(keysGui) {
+        SetTimer(KeysTick, 0)
+        return
+    }
+    if !keysShown {
+        try keysGui.Show("NA")
+        keysShown := true
+    }
+    dirty := false
+    for it in keysCtl {
+        down := GetKeyState(it[7]) ? 1 : 0
+        if (down != it[8]) {
+            it[8] := down
+            dirty := true
+        }
+    }
+    if dirty
+        KeysRender()
+}
+
+; =====================================================================
 ;  Chronomètre de grenade
 ; =====================================================================
 ; Mesure le temps entre le lâcher (clic gauche relâché, ou relance sv_throw_...) et l'explosion.
@@ -5522,12 +6251,14 @@ TmApply() {
         tmSentSock := 0
         tmPos := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : 0
         SetTimer(TmTick, 50)
+        if TimerOn
+            TmShow("Chrono : --", true)
     } else if (!want && tmRunning) {
         tmRunning := false
         tmLive := false
         SetTimer(TmTick, 0)
         SetTimer(TmLiveTick, 0)
-        TmHide()
+        TmHide(true)
     }
 }
 
@@ -5741,92 +6472,18 @@ TmLiveTick() {
     try tmCtl.Text := tmLiveLabel " : " StrReplace(Format("{:.1f}", el / 1000), ".", ",") " s"
 }
 
-TmHide() {
+TmHide(force := false) {
     global tmVisible
     SetTimer(TmHide, 0)
+    if (!force && TimerOn && tmRunning) {
+        TmShow("Chrono : --", true)   ; reste affiché en permanence : retour à l'affichage d'attente
+        return
+    }
     tmVisible := false
     try tmGui.Hide()
     try tmB.Hide()
 }
 
-; Affiche le texte avec le même style que les coordonnées (police, couleurs, liseré, coins, opacité)
-TmShow(txt, hold := false) {
-    global tmGui, tmB, tmText, tmVisible, tmCtl
-    tmText := txt
-    if IsObject(tmGui)
-        try tmGui.Destroy()
-    if IsObject(tmB) {
-        try tmB.Destroy()
-        tmB := ""
-    }
-    if (ovBorder > 0) {
-        tmB := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-        tmB.BackColor := BorderColor()
-    }
-    dark := (Lum(ovBg) < 140)
-    cTxt := dark ? "FFFFFF" : "111111"
-    thh := ThemeById(ovTheme)
-    if IsObject(thh)
-        cTxt := thh[4]
-    fnt := (ovFont = "") ? "Consolas" : ovFont
-    tmGui := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x08000000 +E0x20")
-    tmGui.BackColor := ovBg
-    tmGui.MarginX := 12 + ovCorner // 3
-    tmGui.MarginY := 6 + ovCorner // 4
-    tmGui.SetFont("s" FS(16) " bold c" cTxt, fnt)
-    tmCtl := tmGui.Add("Text", "Center", "Incendiaire : 99,9 s")   ; largeur fixe pour tous les textes
-    tmCtl.Text := txt
-    tmGui.Show("NA AutoSize x0 y0")
-    tmGui.GetPos(, , &w, &h)
-    vl := SysGet(76)
-    vt := SysGet(77)
-    vw := SysGet(78)
-    vh := SysGet(79)
-    if TimerAuto {
-        ; juste au-dessus des coordonnées
-        MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
-        if (hudOn && IsObject(hudGui)) {
-            hudGui.GetPos(&cx, &cy)
-        } else if HudAuto {
-            estH := Round(5.2 * FS(11)) + 2 * (6 + ovCorner // 4)
-            cx := ml + 12 + ovBorder
-            cy := mb - estH - 12 - ovBorder
-        } else {
-            cx := HudX
-            cy := HudY
-        }
-        x := cx
-        y := cy - 2 * ovBorder - 8 - h
-    } else {
-        x := TimerX
-        y := TimerY
-    }
-    x := Max(vl, Min(x, vl + vw - w))
-    y := Max(vt, Min(y, vt + vh - h))
-    tmGui.Move(x, y)
-    tmGui.GetPos(&px, &py, &pw, &ph)
-    dia := 2 * Min(ovCorner, ph // 2)
-    if (ovCorner > 0)
-        WinSetRegion("0-0 W" pw " H" ph " R" dia "-" dia, tmGui)
-    WinSetTransparent(ovOpacity, tmGui)
-    if IsObject(tmB) {
-        b := ovBorder
-        bw := pw + 2 * b
-        bh := ph + 2 * b
-        tmB.Show("NA x" (px - b) " y" (py - b) " w" bw " h" bh)
-        if (ovCorner > 0) {
-            bd := dia + 2 * b
-            WinSetRegion("0-0 W" bw " H" bh " R" bd "-" bd, tmB)
-        }
-        WinSetTransparent(ovOpacity, tmB)
-        DllCall("SetWindowPos", "Ptr", tmGui.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x13)
-    }
-    tmVisible := true
-    if hold
-        SetTimer(TmHide, 0)
-    else
-        SetTimer(TmHide, -TimerDur * 1000)
-}
 
 ; =====================================================================
 ;  Profils et partage de stuffs (fichier .stuffpack ou code à coller)
@@ -6279,6 +6936,7 @@ SaveImportedShot(imgs, e, cmd, prof, overwrite, tmpImg, stats) {
 ; policy : 1 = ignorer les doublons, 2 = garder les deux, 3 = remplacer
 ApplyImport(rows, prof, zdelta, policy, imgs := "", tms := "") {
     stats := Map("add", 0, "rep", 0, "skip", 0, "img", 0, "time", 0)
+    BackupProfile(prof, "avant-import-" FormatTime(, "yyyy-MM-dd_HHmmss"), "avant-import-*", 5)   ; sauvegarde complète du profil avant tout import
     tmpImg := A_Temp "\stuffshot_import.jpg"
     mdir := ProfMaps(prof)
     DirCreate(mdir)
@@ -6934,7 +7592,7 @@ AutoBackup() {
 ProfSettingKeys() {
     return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
         , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
-        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk"]
+        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
 }
 
 ExportProfile(prof, ownerHwnd) {
@@ -7439,33 +8097,39 @@ CheckTick() {
 ; =====================================================================
 ;  Sauvegarde manuelle, mise à jour : outils communs
 ; =====================================================================
-; Copie les maps et les données (temps, favoris, cadenas) de chaque profil dans backup\auto\<stamp>. Renvoie le nombre de profils sauvegardés.
+; Copie les maps et les données (temps, favoris, cadenas) d'un profil dans backup\auto\<stamp>. Renvoie true si la copie est faite.
+BackupProfile(pn, stamp, pattern, keep) {
+    mdir := ProfMaps(pn)
+    if !DirExist(mdir)
+        return false
+    root := ProfData(pn) "\backup\auto"
+    dest := root "\" stamp
+    try {
+        DirCreate(dest "\data")
+        Loop Files mdir "\*.txt"
+            FileCopy(A_LoopFileFullPath, dest "\" A_LoopFileName, 1)
+        Loop Files ProfData(pn) "\*.txt"
+            FileCopy(A_LoopFileFullPath, dest "\data\" A_LoopFileName, 1)
+    } catch {
+        return false
+    }
+    names := []
+    Loop Files root "\" pattern, "D"
+        names.Push(A_LoopFileName)
+    SortNames(names)
+    while (names.Length > keep) {
+        try DirDelete(root "\" names[1], true)
+        names.RemoveAt(1)
+    }
+    return true
+}
+
+; Même chose pour chaque profil. Renvoie le nombre de profils sauvegardés.
 BackupNow(stamp, pattern, keep) {
     saved := 0
     for pn in ListProfiles() {
-        mdir := ProfMaps(pn)
-        if !DirExist(mdir)
-            continue
-        root := ProfData(pn) "\backup\auto"
-        dest := root "\" stamp
-        try {
-            DirCreate(dest "\data")
-            Loop Files mdir "\*.txt"
-                FileCopy(A_LoopFileFullPath, dest "\" A_LoopFileName, 1)
-            Loop Files ProfData(pn) "\*.txt"
-                FileCopy(A_LoopFileFullPath, dest "\data\" A_LoopFileName, 1)
-        } catch {
-            continue
-        }
-        saved += 1
-        names := []
-        Loop Files root "\" pattern, "D"
-            names.Push(A_LoopFileName)
-        SortNames(names)
-        while (names.Length > keep) {
-            try DirDelete(root "\" names[1], true)
-            names.RemoveAt(1)
-        }
+        if BackupProfile(pn, stamp, pattern, keep)
+            saved += 1
     }
     return saved
 }
@@ -7655,7 +8319,7 @@ PackUrl(file) {
     return "https://raw.githubusercontent.com/" UPDATE_REPO "/main/packs/" file
 }
 
-; Liste [fichier, titre, description] depuis packs\index.txt ; false si injoignable
+; Liste [fichier, titre, description, version, date, nb de stuffs, maps] depuis packs\index.txt ; false si injoignable
 FetchPackIndex() {
     tmp := A_Temp "\cs2stuff_packs.txt"
     try FileDelete(tmp)
@@ -7671,10 +8335,36 @@ FetchPackIndex() {
         if (ln = "" || SubStr(ln, 1, 1) = "#")
             continue
         parts := StrSplit(ln, "|", " `t")
-        if (parts.Length >= 2 && RegExMatch(parts[1], "i)^[\w\-\.]+\.stuffpack$"))
-            rows.Push([parts[1], parts[2], (parts.Length >= 3) ? parts[3] : ""])
+        if (parts.Length >= 2 && RegExMatch(parts[1], "i)^[\w\-\.]+\.stuffpack$")) {
+            ver := (parts.Length >= 4 && RegExMatch(parts[4], "^\d+$")) ? Number(parts[4]) : 1
+            rows.Push([parts[1], parts[2], (parts.Length >= 3) ? parts[3] : "", ver
+                , (parts.Length >= 5) ? parts[5] : "", (parts.Length >= 6) ? parts[6] : "", (parts.Length >= 7) ? parts[7] : ""])
+        }
     }
     return rows
+}
+
+; Version d'un pack déjà vue dans la liste / déjà importée (0 = jamais)
+PackSeen(file) {
+    return ToInt(IniRead(IniFile, "PacksSeen", file, "0"), 0)
+}
+PackGot(file) {
+    return ToInt(IniRead(IniFile, "PacksImported", file, "0"), 0)
+}
+; Nombre de packs nouveaux ou mis à jour depuis la dernière ouverture de la liste
+PacksUnseenCount(rows) {
+    n := 0
+    for r in rows {
+        if (r[4] > PackSeen(r[1]))
+            n += 1
+    }
+    return n
+}
+PackState(file, ver) {
+    got := PackGot(file)
+    if (got = 0)
+        return "Nouveau"
+    return (ver > got) ? "Mis à jour" : "Importé"
 }
 
 ShowPacks(ownerHwnd := 0) {
@@ -7687,12 +8377,18 @@ ShowPacks(ownerHwnd := 0) {
     }
     d := WinNew("Packs de stuffs", "+OwnDialogs")
     open := d
-    d.Add("Text", "x12 y12 w560", "Packs de stuffs prêts à l'emploi, publiés par ProToxEU. Choisis-en un pour l'importer (tu décides quoi garder et où le ranger).")
-    lv := d.Add("ListView", "x12 y+10 w560 r9 NoSort -Multi", ["Pack", "Description", "Fichier"])
+    d.Add("Text", "x12 y12 w660", "Packs de stuffs prêts à l'emploi, publiés par ProToxEU. Choisis-en un pour l'importer (tu décides quoi garder et où le ranger).")
+    lv := d.Add("ListView", "x12 y+10 w660 r9 NoSort -Multi", ["Pack", "État", "Stuffs", "Maps", "Mis à jour", "Fichier", "Version", "Description"])
     lv.ModifyCol(1, 190)
-    lv.ModifyCol(2, 360)
-    lv.ModifyCol(3, 0)
-    stT := d.Add("Text", "x12 y+8 w560", "Chargement de la liste...")
+    lv.ModifyCol(2, 90)
+    lv.ModifyCol(3, 60)
+    lv.ModifyCol(4, 220)
+    lv.ModifyCol(5, 90)
+    lv.ModifyCol(6, 0)
+    lv.ModifyCol(7, 0)
+    lv.ModifyCol(8, 0)
+    stD := d.Add("Text", "x12 y+8 w660 r2", "Choisis un pack pour voir son contenu.")
+    stT := d.Add("Text", "x12 y+6 w660", "Chargement de la liste...")
     btnImp := d.Add("Button", "x12 y+10 w200 Default", "Importer ce pack")
     btnRef := d.Add("Button", "x+8 yp w120", "Actualiser")
     btnX := d.Add("Button", "x+8 yp w100", "Fermer")
@@ -7706,9 +8402,17 @@ ShowPacks(ownerHwnd := 0) {
             stT.Text := "Impossible de joindre GitHub. Vérifie ta connexion puis clique sur Actualiser."
             return
         }
-        for r in rows
-            lv.Add("", r[2], r[3], r[1])
+        for r in rows {
+            lv.Add("", r[2], PackState(r[1], r[4]), (r[6] != "") ? r[6] : "?", (r[7] != "") ? r[7] : "-", (r[5] != "") ? r[5] : "-", r[1], r[4], r[3])
+            IniWrite(r[4], IniFile, "PacksSeen", r[1])   ; vu : le point ● du launcher disparaît
+        }
         stT.Text := (rows.Length = 0) ? "Aucun pack publié pour le moment." : rows.Length " pack(s) disponible(s)."
+    }
+    ShowDesc(ctrl, item, selected) {
+        if !selected
+            return
+        ds := lv.GetText(item, 8)
+        stD.Text := lv.GetText(item, 1) " : " lv.GetText(item, 3) " stuff(s) sur " lv.GetText(item, 4) ((ds != "") ? "`n" ds : "")
     }
     ImportSel(*) {
         r := lv.GetNext(0)
@@ -7727,8 +8431,11 @@ ShowPacks(ownerHwnd := 0) {
             stT.Text := "Téléchargement impossible. Réessaie plus tard."
             return
         }
-        if ShowImport(txt, d.Hwnd)
+        if ShowImport(txt, d.Hwnd) {
             LoadMaps()
+            IniWrite(lv.GetText(r, 7), IniFile, "PacksImported", f)
+            lv.Modify(r, "Col2", "Importé")
+        }
     }
     AdminAdd(*) {
         global PackRepoDir
@@ -7747,6 +8454,22 @@ ShowPacks(ownerHwnd := 0) {
         safe := RegExReplace(fn, "[^\w\-\.]", "_")
         if !RegExMatch(safe, "i)\.stuffpack$")
             safe .= ".stuffpack"
+        pk := ParsePack(FileRead(f, "UTF-8"))
+        if (!IsObject(pk) || pk["ents"].Length = 0) {
+            MsgBox("Ce fichier ne contient aucun stuff valide.", "Packs", 0x40030)
+            return
+        }
+        mset := Map()
+        for e in pk["ents"]
+            mset[e[1]] := 1
+        mlist := []
+        for mn in mset
+            mlist.Push(mn)
+        SortNames(mlist)
+        mtxt := ""
+        for mn in mlist
+            mtxt .= (mtxt != "" ? ", " : "") mn
+        nver := 1
         title := Trim(AskText("Titre du pack", "Titre affiché aux joueurs :", base, "ahk_id " d.Hwnd))
         if (title = "")
             return
@@ -7763,18 +8486,21 @@ ShowPacks(ownerHwnd := 0) {
             for ln in StrSplit(old, "`n", "`r") {
                 if (ln = "")
                     continue
-                if (StrLower(StrSplit(ln, "|", " `t")[1]) = StrLower(safe))
+                oldp := StrSplit(ln, "|", " `t")
+                if (StrLower(oldp[1]) = StrLower(safe)) {
+                    nver := (oldp.Length >= 4 && RegExMatch(oldp[4], "^\d+$")) ? Number(oldp[4]) + 1 : 2   ; pack republié : version suivante
                     continue
+                }
                 out .= ln "`n"
             }
-            out .= safe " | " title " | " desc "`n"
+            out .= safe " | " title " | " desc " | " nver " | " FormatTime(, "yyyy-MM-dd") " | " pk["ents"].Length " | " mtxt "`n"
             try FileDelete(idx)
             FileAppend(out, idx, "UTF-8-RAW")
         } catch as err {
             MsgBox("Publication impossible : " err.Message, "Packs", 0x40010)
             return
         }
-        MsgBox("Pack ajouté dans " pdir ".`n`nPour le publier, dans ce dossier :`ngit add .`ngit commit -m `"Pack " title "`"`ngit push", "Packs", 0x40040)
+        MsgBox("Pack ajouté dans " pdir " (version " nver ", " pk["ents"].Length " stuff(s)).`n`nPour le publier, dans ce dossier :`ngit add .`ngit commit -m `"Pack " title "`"`ngit push", "Packs", 0x40040)
         Refresh()
     }
     Shut(*) {
@@ -7783,6 +8509,7 @@ ShowPacks(ownerHwnd := 0) {
     }
     btnImp.OnEvent("Click", ImportSel)
     lv.OnEvent("DoubleClick", ImportSel)
+    lv.OnEvent("ItemSelect", ShowDesc)
     btnRef.OnEvent("Click", Refresh)
     btnX.OnEvent("Click", Shut)
     if IsObject(btnAdm)
@@ -7842,6 +8569,20 @@ BuildReport() {
             Loop lines.Length - i0 + 1 {
                 if (lines[i0 + A_Index - 1] != "")
                     r .= ScrubPath(lines[i0 + A_Index - 1]) nl
+            }
+        } else {
+            r .= "(aucune)" nl
+        }
+    }
+    r .= nl "--- Map automatique (dernières étapes) ---" nl
+    try {
+        af := A_ScriptDir "\data\auto_debug.txt"
+        if FileExist(af) {
+            al := StrSplit(FileRead(af, "UTF-8"), "`n", "`r")
+            a0 := Max(1, al.Length - 12)
+            Loop al.Length - a0 + 1 {
+                if (al[a0 + A_Index - 1] != "")
+                    r .= al[a0 + A_Index - 1] nl
             }
         } else {
             r .= "(aucune)" nl
@@ -8046,6 +8787,7 @@ CleanLegacy()
 if HudAtStart
     HudToggle()
 TmApply()
+KeysApply()
 ; Après une mise à jour : fenêtre des nouveautés (première installation : la dernière version seulement)
 lastSeen := IniRead(IniFile, "State", "LastSeenVersion", "")
 if (lastSeen != APP_VERSION) {
