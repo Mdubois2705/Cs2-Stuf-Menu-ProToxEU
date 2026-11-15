@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.26.6
+
+- Version de test de la mise à jour automatique (aucun changement).
+
 ## v2.26.5
 
 - Launcher : bouton « Vérifier les mises à jour » (propose l'installation si une version plus récente existe, sinon confirme que tu es à jour).
