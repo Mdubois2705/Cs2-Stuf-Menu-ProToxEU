@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.26.3"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.26.4"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -8024,6 +8024,9 @@ if (IniRead(IniFile, "State", "SkipCheck", "0") != "1") {
         OpenLauncher()
     else
         LaunchFlow()
+}
+else if LauncherOn {
+    OpenLauncher()   ; après un redémarrage du menu (mise à jour, retour arrière, changement de touche) : le launcher se rouvre, sans relancer le jeu
 }
 CleanLegacy()
 if HudAtStart

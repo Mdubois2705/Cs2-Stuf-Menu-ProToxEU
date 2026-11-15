@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.26.4
+
+- Après un redémarrage du menu (mise à jour, retour à la version précédente, changement de touche), le launcher se rouvre tout seul. Le jeu n'est pas relancé.
+
 ## v2.26.3
 
 - Plus aucun son : le bip d'anticipation du chronomètre est retiré (la case de l'onglet Chrono disparaît).
