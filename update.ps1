@@ -18,7 +18,7 @@ try {
     $old = Join-Path $dst 'stuff_menu.ahk'
     if (Test-Path $old) { Copy-Item $old (Join-Path $bk 'stuff_menu.ahk.bak') -Force }
 
-    foreach ($f in 'stuff_menu.ahk','README.md','CHANGELOG.md','LICENSE','config.example.ini','cs2_practice.cfg','VERSION') {
+    foreach ($f in 'stuff_menu.ahk','README.md','CHANGELOG.md','LICENSE','config.example.ini','cs2_practice.cfg','VERSION','menu_stuf.ico','install.bat','install.ps1','uninstall.bat','uninstall.ps1') {
         $p = Join-Path $src $f
         if (Test-Path $p) { Copy-Item $p (Join-Path $dst $f) -Force }
     }

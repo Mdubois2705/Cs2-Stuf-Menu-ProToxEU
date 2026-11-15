@@ -1,5 +1,38 @@
 # Changelog
 
+## v2.25.2
+
+- **Installateur** : il cherche ton ancienne installation et te propose de reprendre tes stuffs, favoris, temps de vol, profils et réglages dans le nouveau dossier. L'ancien dossier n'est jamais modifié ni supprimé. Un dossier qui contient déjà des stuffs n'est jamais écrasé.
+
+## v2.25.1
+
+- `build_exe.bat` retiré : le raccourci créé par l'installateur suffit (même icône, mises à jour automatiques).
+
+## v2.25.0
+
+- **Installateur** : `install.bat` copie le menu dans le dossier de ton choix (refuse `C:\Program Files`), installe AutoHotkey v2 si besoin et crée un raccourci « Menu Stuf » avec icône sur le bureau et dans le menu Démarrer. `uninstall.bat` retire les raccourcis.
+- **Launcher** : fenêtre d'accueil avec « Lancer CS2 », « Nouveautés », « Vérification », « Réglages », « Ouvrir le dossier » et un voyant d'état de CS2. Fermer la fenêtre laisse le menu actif ; l'icône près de l'horloge la rouvre. `Launcher=0` rétablit l'ancien démarrage.
+- **Icône** : nouvelle icône du menu (raccourci, barre des tâches, icône près de l'horloge).
+- Le menu ne lance plus CS2 tout seul au démarrage tant que le launcher est actif : clique sur « Lancer CS2 ».
+
+## v2.24.2
+
+- Sauvegarde et modification d'un stuff : le champ des tags prend toute la largeur, les boutons « Ajouter », « Retirer » et « → Info » sont dessous.
+
+## v2.24.1
+
+- Correction du thème sombre : les listes déroulantes modifiables (par exemple « Catégorie ») avaient un fond blanc avec un texte clair, donc illisible. Fond et texte sont maintenant sombres. Si une liste reste blanche, choisis le thème « Clair » dans l'onglet Fenêtres des réglages (ou `WinTheme=light` dans `config.ini`).
+
+## v2.24.0
+
+- **Dernier lancer en stuff** : nouvelle entrée « Enregistrer le dernier lancer comme stuff ». Position, angle, type de grenade et temps de vol du dernier lancer au clic sont déjà remplis dans la fenêtre de sauvegarde (chronomètre actif requis).
+- **Tester la mesure** : bouton dans l'onglet Chrono des réglages, qui affiche le temps lu et d'où part le chrono.
+- **Aperçu du style** : l'onglet Fenêtres ouvre un aperçu en direct à chaque changement.
+- **Boutons alignés** : bouton principal à droite, secondaires à gauche, dans toutes les fenêtres.
+- **Sauvegarder la position** : zone « Détails : position » repliable, nom déjà pris signalé en rouge sous le champ (aussi dans « Modifier le stuff »).
+- **Fenêtre de gestion** : taille et position mémorisées.
+- **Nouveautés** : titres de version en gras et en couleur d'accent.
+
 ## v2.23.0
 
 - **Fenêtres plus modernes** : thème sombre par défaut sur toutes les fenêtres du menu (barre de titre, listes, champs, boutons), onglets plats avec une couleur d'accent à la place des onglets Windows.

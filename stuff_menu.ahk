@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.23.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.25.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -58,6 +58,7 @@ TimerX := ToInt(IniRead(IniFile, "Settings", "TimerX", "12"), 12)
 TimerY := ToInt(IniRead(IniFile, "Settings", "TimerY", "820"), 820)
 TimerDur := Max(2, Min(20, ToInt(IniRead(IniFile, "Settings", "TimerDur", "6"), 6)))   ; secondes d'affichage du résultat
 ShowChangelogOn := (IniRead(IniFile, "Settings", "ShowChangelog", "1") = "1")   ; fenêtre « Nouveautés » après chaque mise à jour
+LauncherOn := (IniRead(IniFile, "Settings", "Launcher", "1") = "1")   ; fenêtre d'accueil au démarrage
 WinThemeSel := IniRead(IniFile, "Settings", "WinTheme", "dark")   ; dark, light ou menu
 if !RegExMatch(WinThemeSel, "^(dark|light|menu)$")
     WinThemeSel := "dark"
@@ -220,6 +221,11 @@ tmPos := 0          ; position de lecture dans console.log
 tmClicks := []      ; moments où le clic gauche a été relâché
 tmStarts := []      ; file des départs de grenades en vol : [instant, confirmé par le journal]
 tmLastK := 0
+tmLastThrow := ""   ; dernier lancer : Map(kind, pos, secs)
+tmPosWait := 0
+tmLineWasK := false
+tmTesting := false  ; test de la mesure (réglages)
+tmTestCb := ""
 tmExpect := ""      ; temps de vol attendu (stuff lancé par le menu)
 tmBeeped := false
 tmLastLabel := ""   ; type de la dernière grenade vue (pour le chrono en direct des relances)
@@ -686,6 +692,140 @@ OnExit((*) => NetClose())
 ; Lance CS2 par Steam avec les options nécessaires à la connexion directe, sans toucher aux options enregistrées dans Steam.
 ; Méthode fiable : steam.exe -applaunch 730 <options> (le lien steam://rungameid ignore souvent les options).
 launchWatch := 0
+; Lance CS2 avec la connexion directe (ou propose de le relancer s'il est déjà ouvert sans elle)
+LaunchFlow() {
+    if !ProcessExist("cs2.exe") {
+        if (IniRead(IniFile, "State", "LaunchInfo", "") != "1") {
+            MsgBox("Le menu va lancer CS2 avec les options " StrReplace(LaunchArgs, "{port}", NetconPort) ".`n`n-netconport permet au menu d'envoyer les commandes directement au jeu.`n-insecure désactive VAC pour cette session : pas de matchmaking, Premier ni FACEIT. Pour jouer en ligne, ferme le jeu et lance-le normalement depuis Steam, sans le menu.`n`nTes options de lancement Steam ne sont pas modifiées.", "Menu Stuf - lancement de CS2", 0x40040)
+            IniWrite("1", IniFile, "State", "LaunchInfo")
+        }
+        if !LaunchGame()
+            MsgBox("Steam n'a pas pu être lancé : démarre CS2 toi-même avec les options " StrReplace(LaunchArgs, "{port}", NetconPort) " dans les options de lancement de Steam.", "Menu Stuf", 0x40030)
+    } else if !NetOpen() {
+        if (MsgBox("CS2 est déjà lancé sans la connexion directe : le menu ne peut pas lui envoyer de commandes.`n`nFermer CS2 et le relancer avec les bonnes options ?", "Menu Stuf - CS2 déjà ouvert", 0x40024) = "Yes") {
+            try WinClose("ahk_exe cs2.exe")
+            ProcessWaitClose("cs2.exe", 10)
+            if ProcessExist("cs2.exe") {
+                try ProcessClose("cs2.exe")
+                ProcessWaitClose("cs2.exe", 5)
+            }
+            Sleep(1500)
+            LaunchGame()
+        }
+    }
+}
+
+; Icône près de l'horloge : ouvre le launcher
+TraySetup() {
+    ico := A_ScriptDir "\menu_stuf.ico"
+    if FileExist(ico) {
+        try TraySetIcon(ico)
+    }
+    A_IconTip := "Menu Stuf V." APP_VERSION
+    try {
+        A_TrayMenu.Insert("1&", "Ouvrir le launcher", (*) => OpenLauncher())
+        A_TrayMenu.Default := "Ouvrir le launcher"
+        A_TrayMenu.ClickCount := 1
+    }
+}
+
+; Fenêtre d'accueil : lancer le jeu, nouveautés, vérification, réglages
+OpenLauncher() {
+    static lg := ""
+    static st := ""
+    if IsObject(lg) {
+        try {
+            lg.Show()
+            LauncherTick()
+            return
+        }
+    }
+    p := WinPal()
+    lg := WinNew("Menu Stuf", "")
+    lg.MarginX := 24
+    lg.MarginY := 20
+    lg.SetFont("s" Round(WinSz() * 2) " bold c" p["accent"], WinFontName)
+    lg.Add("Text", "x24 y18 w372", "MENU STUF")
+    lg.SetFont("s" Max(8, WinSz() - 1) " norm c" p["dim"], WinFontName)
+    lg.Add("Text", "x26 y+0 w372", "V." APP_VERSION " ProToxEU - lineups et entraînement CS2")
+    lg.Add("Text", "x24 y+14 w372 h2 Background" p["accent"])
+    lg.SetFont("s" WinSz() " bold c" p["txt"], WinFontName)
+    st := lg.Add("Text", "x24 y+14 w372", "")
+    lg.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
+    btnGo := lg.Add("Button", "x24 y+16 w372 h46 Default", "Lancer CS2")
+    btnNews := lg.Add("Button", "x24 y+12 w180 h36", "Nouveautés")
+    btnChk := lg.Add("Button", "x+12 yp w180 h36", "Vérification")
+    btnSet := lg.Add("Button", "x24 y+10 w180 h36", "Réglages")
+    btnDir := lg.Add("Button", "x+12 yp w180 h36", "Ouvrir le dossier")
+    lg.SetFont("s" Max(8, WinSz() - 1) " norm c" p["dim"], WinFontName)
+    lg.Add("Text", "x24 y+16 w372 r2", "Fermer cette fenêtre laisse le menu actif (icône près de l'horloge). Dans CS2, appuie sur " MenuKey " pour ouvrir le menu.")
+    lg.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
+    btnQuit := lg.Add("Button", "x24 y+12 w140", "Quitter le menu")
+    GoClick(*) {
+        LaunchFlow()
+        if AutoCheck
+            SetTimer(StartCheck, -1500)
+        LauncherTick()
+    }
+    NewsClick(*) {
+        ShowNews("", 5)
+    }
+    ChkClick(*) {
+        SetTimer(StartCheck, -50)
+    }
+    SetClick(*) {
+        ShowSettings()
+    }
+    DirClick(*) {
+        Run('explorer "' A_ScriptDir '"')
+    }
+    QuitClick(*) {
+        ExitApp()
+    }
+    Hide(*) {
+        SetTimer(LauncherTick, 0)
+        lg.Hide()
+        TrayTip("Le menu reste actif. Clique sur l'icône près de l'horloge pour rouvrir le launcher.", "Menu Stuf")
+    }
+    LauncherTick() {
+        if !IsObject(lg)
+            return
+        if !ProcessExist("cs2.exe") {
+            st.SetFont("c" WinPal()["dim"])
+            st.Text := "● CS2 n'est pas lancé"
+            btnGo.Text := "Lancer CS2"
+        } else if NetOpen() {
+            st.SetFont("c" WinPal()["ok"])
+            st.Text := "● CS2 lancé et connecté au menu"
+            btnGo.Text := "CS2 est prêt"
+        } else {
+            st.SetFont("c" WinPal()["bad"])
+            st.Text := "● CS2 lancé sans connexion directe"
+            btnGo.Text := "Relancer CS2 avec le menu"
+        }
+    }
+    btnGo.OnEvent("Click", GoClick)
+    btnNews.OnEvent("Click", NewsClick)
+    btnChk.OnEvent("Click", ChkClick)
+    btnSet.OnEvent("Click", SetClick)
+    btnDir.OnEvent("Click", DirClick)
+    btnQuit.OnEvent("Click", QuitClick)
+    lg.OnEvent("Close", Hide)
+    ico := A_ScriptDir "\menu_stuf.ico"
+    if FileExist(ico) {
+        try {
+            hIc := LoadPicture(ico, "w32 h32", &imgType)
+            SendMessage(0x80, 1, hIc, lg)
+            hIs := LoadPicture(ico, "w16 h16", &imgType)
+            SendMessage(0x80, 0, hIs, lg)
+        }
+    }
+    LauncherTick()
+    SetTimer(LauncherTick, 1500)
+    WinStyle(lg)
+    lg.Show("AutoSize Center")
+}
+
 LaunchGame() {
     global launchWatch
     args := StrReplace(LaunchArgs, "{port}", NetconPort)
@@ -1058,6 +1198,7 @@ MainItems() {
     if IsObject(quizCur)
         out.Push(["quizans", "Quiz : voir la réponse"])
     out.Push(["sep", "- - - - - - - - - - - -"]
+        , ["savelast", "Enregistrer le dernier lancer comme stuff"]
         , ["save", "Sauvegarder la position actuelle"]
         , ["manage", "Gérer les stuffs et les catégories"]
         , ["share", "Profils et partage de stuffs"]
@@ -1097,6 +1238,8 @@ MainSelect() {
         RepeatLast()
     else if (id = "changemap")
         ShowMapChange()
+    else if (id = "savelast")
+        SaveLastThrow()
     else if (id = "quiz")
         QuizStart()
     else if (id = "quizans")
@@ -1220,7 +1363,18 @@ WinStyle(g) {
                 c.Opt("+Background" p["edit"])
                 DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_CFD", "Ptr", 0)
             } else if (t = "ComboBox" || t = "DDL") {
+                try c.Opt("+Background" p["edit"])   ; zone de saisie / liste en sombre
                 DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_CFD", "Ptr", 0)
+                ; le champ de saisie interne d'une liste modifiable (ComboBox) a son propre fond
+                if (t = "ComboBox") {
+                    cbi := Buffer(A_PtrSize = 8 ? 64 : 52, 0)
+                    NumPut("UInt", cbi.Size, cbi, 0)
+                    if DllCall("user32\GetComboBoxInfo", "Ptr", c.Hwnd, "Ptr", cbi) {
+                        hEd := NumGet(cbi, A_PtrSize = 8 ? 48 : 44, "Ptr")
+                        if hEd
+                            DllCall("uxtheme\SetWindowTheme", "Ptr", hEd, "Str", "DarkMode_CFD", "Ptr", 0)
+                    }
+                }
             } else if (t = "ListView") {
                 DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
                 SendMessage(0x1001, 0, BgrOf(p["edit"]), c)   ; fond
@@ -1304,6 +1458,21 @@ WinTabs(g, names, x, y, w) {
     return t
 }
 
+; Ouvre la fenêtre de sauvegarde avec la position, le type et le temps du dernier lancer mesuré par le chrono
+SaveLastThrow() {
+    if !(TimerOn || tmMeasuring) {
+        MsgBox("Active d'abord le chronomètre (Réglages, onglet Chrono) : c'est lui qui mémorise tes lancers.", "Dernier lancer", 0x40040)
+        return
+    }
+    if (!IsObject(tmLastThrow) || tmLastThrow["pos"] = "") {
+        MsgBox("Aucun lancer mémorisé.`n`nLance une grenade au clic (pas avec la touche de relance), puis rouvre cette entrée.", "Dernier lancer", 0x40040)
+        return
+    }
+    k := tmLastThrow["kind"]
+    typ := (k = "Smoke") ? "Smoke" : (k = "Flash") ? "Flash" : (k = "HE") ? "HE" : (k = "Molotov" || k = "Incendiaire") ? "Molotov" : "Autre"
+    ShowSaveDialog("", "", Map("pos", tmLastThrow["pos"], "type", typ, "secs", tmLastThrow["secs"]))
+}
+
 ; Changement de map : envoie « map <nom> » au jeu (le cfg d'entraînement se relance tout seul à la détection de la nouvelle map)
 ShowMapChange() {
     static open := ""
@@ -1338,8 +1507,8 @@ ShowMapChange() {
     lb.Choose(cur)
     d.Add("Text", "x12 y+10 w300", "Ou tape un nom de map (ex. de_mirage, cs_office) :")
     ed := d.Add("Edit", "x12 y+4 w300")
-    btnGo := d.Add("Button", "x12 y+12 w180 Default", "Changer de map")
-    btnNo := d.Add("Button", "x+8 yp w112", "Fermer")
+    btnNo := d.Add("Button", "x12 y+12 w112", "Fermer")
+    btnGo := d.Add("Button", "x132 yp w180 Default", "Changer de map")
     Go(*) {
         nm := Trim(ed.Value)
         if (nm = "")
@@ -1366,6 +1535,43 @@ ShowMapChange() {
     d.Show("AutoSize Center")
 }
 
+; Zone de texte des nouveautés : RichEdit (titres en gras, couleur d'accent) ou simple champ si indisponible
+NewsBox(g, txt) {
+    try {
+        p := WinPal()
+        DllCall("LoadLibrary", "Str", "Msftedit.dll")
+        rc := g.Add("Custom", "ClassRICHEDIT50W x12 y+8 w620 h380 +0x200000 +0x800 +0x4 +0x40 +Border")
+        rc.Text := txt
+        SendMessage(0x443, 0, BgrOf(p["edit"]), rc)   ; fond
+        cf := Buffer(92, 0)
+        NumPut("UInt", 92, cf, 0)
+        NumPut("UInt", 0x40000000, cf, 4)              ; CFM_COLOR
+        NumPut("UInt", BgrOf(p["txt"]), cf, 20)
+        SendMessage(0x444, 4, cf, rc)                  ; texte par défaut (tout)
+        pos := 0
+        for ln in StrSplit(txt, "`n", "`r") {
+            ln := RTrim(ln, "`r")
+            if (SubStr(ln, 1, 8) = "VERSION ") {
+                cr := Buffer(8, 0)
+                NumPut("Int", pos, cr, 0)
+                NumPut("Int", pos + StrLen(ln), cr, 4)
+                SendMessage(0x437, 0, cr, rc)          ; sélection de la ligne
+                cf2 := Buffer(92, 0)
+                NumPut("UInt", 92, cf2, 0)
+                NumPut("UInt", 0x40000001, cf2, 4)     ; CFM_COLOR | CFM_BOLD
+                NumPut("UInt", 1, cf2, 8)              ; CFE_BOLD
+                NumPut("UInt", BgrOf(p["accent"]), cf2, 20)
+                SendMessage(0x444, 1, cf2, rc)         ; applique à la sélection
+            }
+            pos += StrLen(ln) + 1
+        }
+        cr0 := Buffer(8, 0)
+        SendMessage(0x437, 0, cr0, rc)                 ; curseur au début
+        return rc
+    }
+    return g.Add("Edit", "x12 y+8 w620 r20 ReadOnly +VScroll", txt)
+}
+
 ShowNews(sinceVer := "", maxN := 5) {
     global clGui
     txt := ""
@@ -1388,7 +1594,7 @@ ShowNews(sinceVer := "", maxN := 5) {
         try clGui.Destroy()
     clGui := WinNew("Nouveautés - Menu Stuf V." APP_VERSION, "+AlwaysOnTop")
     clGui.Add("Text", "x12 y12 w620", "Voici ce qui a changé dans le menu :")
-    ed := clGui.Add("Edit", "x12 y+8 w620 r20 ReadOnly +VScroll", RTrim(txt, "`r`n"))
+    ed := NewsBox(clGui, RTrim(txt, "`r`n"))
     chk := clGui.Add("CheckBox", "x12 y+10 w620" (ShowChangelogOn ? "" : " Checked"), "Ne plus afficher cette fenêtre après les mises à jour (réglage ShowChangelog)")
     btn := clGui.Add("Button", "x12 y+10 w160 Default", "Fermer")
     NewsToggle(*) {
@@ -2101,7 +2307,7 @@ CatNameTaken(path, name, exCat := "") {
     return ""
 }
 
-ShowSaveDialog(presetCat := "", presetMap := "") {
+ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     global dlgOpen, dlgHwnd
     if dlgOpen {
         ; déjà ouverte : on la remet devant. Si elle n'existe plus, l'indicateur était resté bloqué : on le remet à zéro
@@ -2125,7 +2331,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     tmpShot := ShotDir() "\_pending.bmp"
     shotPending := false
     chkShot := ""
-    if (ShotOn && WinActive("ahk_exe cs2.exe")) {
+    if (ShotOn && !IsObject(preset) && WinActive("ahk_exe cs2.exe")) {
         Sleep(100)
         shotPending := CaptureShot(tmpShot)
     }
@@ -2133,7 +2339,11 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     ; Position + map actuelles (via console.log)
     posCaptured := ""
     detected := ""
-    if FileExist(ConsoleLog) {
+    if IsObject(preset) {
+        posCaptured := preset["pos"]
+        if (AutoDetect && presetMap = "" && FileExist(ConsoleLog))
+            detected := DetectMap()
+    } else if FileExist(ConsoleLog) {
         posCaptured := CapturePos()
         if (AutoDetect && presetMap = "")
             detected := DetectMap()
@@ -2157,20 +2367,19 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     btnCatAdd := d.Add("Button", "x+6 yp w78", "Nouvelle")
     d.Add("Text", "xm y+14 w95", "Nom")
     edName := d.Add("Edit", "x110 yp-3 w340")
-    d.Add("Text", "xm y+14 w95", "Tags")
-    cbTag := d.Add("ComboBox", "x110 yp-3 w110", [])
-    btnTagAdd := d.Add("Button", "x+6 yp w64", "Ajouter")
-    btnTagDel := d.Add("Button", "x+6 yp w64", "Retirer")
-    btnTagInfo := d.Add("Button", "x+6 yp w84", "→ Info")
+    d.SetFont("s9 c" WinPal()["bad"])
+    txNameErr := d.Add("Text", "x110 y+2 w340 h16", "")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
+    d.Add("Text", "xm y+8 w95", "Tags")
+    cbTag := d.Add("ComboBox", "x110 yp-3 w340", [])
+    btnTagAdd := d.Add("Button", "x110 y+6 w104", "Ajouter")
+    btnTagDel := d.Add("Button", "x+6 yp w104", "Retirer")
+    btnTagInfo := d.Add("Button", "x+6 yp w116", "→ Info")
     d.SetFont("s9 c8A8F96")
     txTags := d.Add("Text", "x110 y+4 w340 r2", "")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
     d.Add("Text", "xm y+10 w95", "Info chat")
     edInfo := d.Add("Edit", "x110 yp-3 w340 r3")
-    d.Add("Text", "xm y+14 w95", "Position")
-    edPos := d.Add("Edit", "x110 yp-3 w340 r2", posCaptured)
-    if (posCaptured = "")
-        d.Add("Text", "xm y+8 w450 c" WinPal()["bad"], "Position non capturée : lance le jeu avec -condebug, ou colle ici la sortie de getpos.")
     giveY := "y+14"
     if shotPending {
         d.Add("Text", "xm y+14 w95", "Capture")
@@ -2183,8 +2392,32 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     }
     chkGive := d.Add("CheckBox", "xm " giveY, "Donner la grenade du type choisi (give)")
     chkFav := d.Add("CheckBox", "xm y+6", "Ajouter aux favoris")
-    btnSave := d.Add("Button", "xm y+14 w170 Default", "Enregistrer")
-    btnCancel := d.Add("Button", "x+10 yp w170", "Annuler")
+    btnCancel := d.Add("Button", "xm y+14 w170", "Annuler")
+    btnSave := d.Add("Button", "x280 yp w170 Default", "Enregistrer")
+    btnDet := d.Add("Button", "xm y+16 w200", (posCaptured = "") ? "Détails : position ▴" : "Détails : position ▾")
+    lblPos := d.Add("Text", "xm y+10 w95", "Position")
+    edPos := d.Add("Edit", "x110 yp-3 w340 r2", posCaptured)
+    d.SetFont("s9 c" WinPal()["bad"])
+    txPosWarn := d.Add("Text", "xm y+6 w450 r2", (posCaptured = "") ? "Position non capturée : lance le jeu avec -condebug, ou colle ici la sortie de getpos." : "")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
+    detOpen := Map("v", (posCaptured = ""))
+    ShowDet(on, show := true) {
+        detOpen["v"] := on
+        lblPos.Visible := on
+        edPos.Visible := on
+        txPosWarn.Visible := on
+        btnDet.Text := on ? "Détails : position ▴" : "Détails : position ▾"
+        if show
+            d.Show("AutoSize")
+    }
+    DetClick(*) {
+        ShowDet(!detOpen["v"])
+    }
+    NameCheck(*) {
+        ncN := CleanField(edName.Value)
+        ncD := (ncN = "") ? "" : StuffNameTaken(mapFiles[ddMap.Value], ncN)
+        txNameErr.Text := (ncD != "") ? "Ce nom est déjà pris (catégorie « " ncD " »)." : ""
+    }
 
     FillCats(*) {
         fcTxt := cbCat.Text
@@ -2198,7 +2431,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     ; Tags du stuff en cours de création
     tagSel := []
     ShowTags() {
-        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur +" : "Tags : " TagsDisp(TagsToStr(tagSel))
+        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur Ajouter" : "Tags : " TagsDisp(TagsToStr(tagSel))
     }
     FillTags() {
         ftTxt := cbTag.Text
@@ -2302,7 +2535,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     TagInfoClick(*) {
         tiTxt := TagsToStr(tagSel)
         if (tiTxt = "") {
-            MsgBox("Ajoute d'abord un tag avec le bouton +.", "Tags", 0x40030)
+            MsgBox("Ajoute d'abord un tag avec le bouton Ajouter.", "Tags", 0x40030)
             return
         }
         tiCur := Trim(edInfo.Value)
@@ -2312,7 +2545,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
             edInfo.Value := tiCur " - " tiTxt
     }
 
-    ; « + » : crée une catégorie vide (nom tel quel, sans préfixe de type) dans la map choisie et la sélectionne
+    ; « Nouvelle » : crée une catégorie vide (nom tel quel, sans préfixe de type) dans la map choisie et la sélectionne
     CatAddClick(*) {
         caName := CleanField(AskText("Nouvelle catégorie", "Nom de la nouvelle catégorie :", "", "ahk_id " d.Hwnd))
         if (caName = "")
@@ -2370,9 +2603,9 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
         }
         if (catFull = "") {
             if (sub = "")
-                MsgBox("Choisis une catégorie dans la liste, ou crée-la avec le bouton +.", "Sauvegarde", 0x40030)
+                MsgBox("Choisis une catégorie dans la liste, ou crée-la avec le bouton Nouvelle.", "Sauvegarde", 0x40030)
             else
-                MsgBox("La catégorie « " sub " » n'existe pas.`n`nChoisis une catégorie dans la liste (tu peux taper pour la chercher), ou crée-la avec le bouton +.", "Sauvegarde", 0x40030)
+                MsgBox("La catégorie « " sub " » n'existe pas.`n`nChoisis une catégorie dans la liste (tu peux taper pour la chercher), ou crée-la avec le bouton Nouvelle.", "Sauvegarde", 0x40030)
             return
         }
         dupCat := StuffNameTaken(mapFiles[ddMap.Value], nm)
@@ -2404,7 +2637,13 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
         CloseDlg()
         ToolTip("Stuff enregistré dans " mapName)
         SetTimer(() => ToolTip(), -2500)
-        OfferFlight(cmdFull, typ)
+        if (IsObject(preset) && preset["secs"] != "") {
+            SetFlightTime(cmdFull, preset["secs"])
+            ToolTip("Stuff enregistré dans " mapName " (temps de vol : " FlightText(preset["secs"]) ")")
+            SetTimer(() => ToolTip(), -3000)
+        } else {
+            OfferFlight(cmdFull, typ)
+        }
     }
 
     FillCats()
@@ -2420,7 +2659,19 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     }
     FillTags()
     ShowTags()
-    ddMap.OnEvent("Change", FillCats)
+    if IsObject(preset) {
+        pt := preset["type"]
+        for ptT in Types {
+            if (ptT = pt) {
+                ddType.Choose(ptT)
+                chkGive.Value := (GiveMap.Get(ptT, "") != "") ? 1 : 0
+            }
+        }
+    }
+    ShowDet(detOpen["v"], false)
+    btnDet.OnEvent("Click", DetClick)
+    edName.OnEvent("Change", NameCheck)
+    ddMap.OnEvent("Change", (*) => (FillCats(), NameCheck()))
     cbCat.OnEvent("Change", CatChange)
     btnCatAdd.OnEvent("Click", CatAddClick)
     btnTagAdd.OnEvent("Click", TagAddClick)
@@ -2549,8 +2800,8 @@ AskText(title, prompt, defVal := "", back := "ahk_exe cs2.exe") {
     d := WinNew(title, "+AlwaysOnTop")
     d.Add("Text", "w340", prompt)
     ed := d.Add("Edit", "w340", defVal)
-    btnOk := d.Add("Button", "Default w165", "OK")
-    btnNo := d.Add("Button", "x+10 yp w165", "Annuler")
+    btnNo := d.Add("Button", "w165", "Annuler")
+    btnOk := d.Add("Button", "x+10 yp w165 Default", "OK")
     Done(ok, *) {
         if ok
             res["v"] := ed.Value
@@ -3046,6 +3297,7 @@ ShowSettings() {
     y0 := Max(0, Min(ovY - vt, yr))
 
     d := WinNew("Réglages du menu", "+AlwaysOnTop")
+    pv := Map("g", "")
     tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Aide"], 6, 8, 500)
     tabs.UseTab(1)
     y := 44
@@ -3227,6 +3479,9 @@ ShowSettings() {
     chkBeep := d.Add("CheckBox", "x22 y" y " w460" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
     y += 36
     btnTmTest := d.Add("Button", "x22 y" y " w220", "Tester l'affichage")
+    btnTmMeasure := d.Add("Button", "x250 y" y " w220", "Tester la mesure")
+    y += 44
+    txTmTest := d.Add("Text", "x22 y" y " w460 r2", "")
     y += 50
     d.SetFont("s9 c8A8F96")
     d.Add("Text", "x22 y" y " w460 r9", "Mesure le temps entre le moment où tu lâches la grenade (clic gauche relâché, ou relance avec la touche de sv_rethrow_last_grenade) et son explosion, lue dans console.log. Le menu active tout seul le journal du serveur (log on, mp_logdetail 3).`n`nFonctionne pour la smoke, la flash, la HE, le molotov, l'incendiaire et le leurre. Le résultat reste affiché le nombre de secondes choisi ci-dessus. La police, les couleurs, le liseré, les coins et l'opacité suivent le menu. Si tu tires avec une arme pendant que la grenade vole, le temps affiché peut être faux.")
@@ -3266,7 +3521,10 @@ ShowSettings() {
     d.Add("Text", "x22 y" ty " w110", "Taille du texte")
     slWS := d.Add("Slider", "x140 y" y " w260 Range90-120 ToolTip", WinScale)
     txWS := d.Add("Text", "x406 y" ty " w70", WinScale " %")
-    slWS.OnEvent("Change", (*) => txWS.Text := slWS.Value " %")
+    slWS.OnEvent("Change", (*) => (txWS.Text := slWS.Value " %", PreviewStyle()))
+    ddWT.OnEvent("Change", PreviewStyle)
+    ddWA.OnEvent("Change", PreviewStyle)
+    ddWF.OnEvent("Change", PreviewStyle)
     y += 50
     d.SetFont("s9 c" WinPal()["dim"])
     d.Add("Text", "x22 y" y " w460 r5", "Ces réglages concernent les fenêtres du menu (réglages, gestion, profils...). Ils s'appliquent à la prochaine ouverture d'une fenêtre, après « Enregistrer ». « Comme le menu en jeu » reprend le fond et le thème de l'overlay. Si les fenêtres sont illisibles, choisis « Clair », ou mets WinTheme=light dans config.ini.")
@@ -3296,9 +3554,9 @@ ShowSettings() {
     ledTx := d.Add("Text", "x14 y" y " w466", "")
     d.SetFont("s" WinSz() " norm")
     y += 28
-    btnSave := d.Add("Button", "x12 y" y " w150 Default", "Enregistrer")
-    btnReset := d.Add("Button", "x+8 yp w150", "Réinitialiser")
+    btnReset := d.Add("Button", "x12 y" y " w150", "Réinitialiser")
     btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
+    btnSave := d.Add("Button", "x356 yp w150 Default", "Enregistrer")
 
     LedTick() {
         if !ProcessExist("cs2.exe") {
@@ -3490,6 +3748,62 @@ ShowSettings() {
         Sync()
     }
 
+    ; Aperçu du style choisi dans une petite fenêtre à côté (rien n'est enregistré avant « Enregistrer »)
+    PreviewStyle(*) {
+        global WinThemeSel, WinAccent, WinFontName, WinScale
+        o1 := WinThemeSel
+        o2 := WinAccent
+        o3 := WinFontName
+        o4 := WinScale
+        try {
+            WinThemeSel := (ddWT.Value = 2) ? "light" : (ddWT.Value = 3) ? "menu" : "dark"
+            WinAccent := waHex[ddWA.Value]
+            WinFontName := (ddWF.Value = 1) ? "Segoe UI" : ddWF.Text
+            WinScale := slWS.Value
+            try pv["g"].Destroy()
+            g := WinNew("Aperçu du style")
+            pv["g"] := g
+            pp := WinPal()
+            g.Add("Text", "x16 y14 w280 h24 +0x200", "Aperçu des fenêtres")
+            g.Add("Text", "x16 y40 w280 h3 Background" pp["accent"])
+            g.Add("Edit", "x16 y54 w280", "Un champ de saisie")
+            g.Add("DropDownList", "x16 y+8 w280 Choose1", ["Une liste déroulante", "Autre choix"])
+            g.Add("CheckBox", "x16 y+10 w280 Checked", "Une case à cocher")
+            lvp := g.Add("ListView", "x16 y+10 w280 r3 -Multi", ["Nom", "Info"])
+            lvp.Add("", "Smoke A", "depuis le T")
+            lvp.Add("", "Flash B", "2,3 s")
+            g.Add("Button", "x16 y+10 w130", "Annuler")
+            g.Add("Button", "x166 yp w130 Default", "Enregistrer")
+            WinStyle(g)
+            d.GetPos(&sx, &sy)
+            g.Show("NA AutoSize x" Max(0, sx - 340) " y" sy)
+        }
+        WinThemeSel := o1
+        WinAccent := o2
+        WinFontName := o3
+        WinScale := o4
+    }
+
+    ; Test de la mesure : 60 s pendant lesquelles chaque grenade est mesurée et le résultat détaillé ici
+    StopTest(*) {
+        global tmTesting, tmTestCb
+        if !tmTesting
+            return
+        tmTesting := false
+        tmTestCb := ""
+        SetTimer(StopTest, 0)
+        TmApply()
+        try txTmTest.Text := "Test terminé."
+    }
+    TestMeasure(*) {
+        global tmTesting, tmTestCb
+        tmTesting := true
+        tmTestCb := (msg) => (txTmTest.Text := "Dernière mesure : " msg)
+        TmApply()
+        txTmTest.Text := "Test actif pendant 60 s : va dans CS2 et lance une grenade (clic ou touche de relance). Le résultat s'affiche ici et à l'écran."
+        SetTimer(StopTest, -60000)
+    }
+
     ; Place un élément à l'endroit où l'on clique à l'écran
     PickPos(slx, sly, ddPlace := "", *) {
         CoordMode("Mouse", "Screen")
@@ -3585,6 +3899,8 @@ ShowSettings() {
             }
         }
         setOpen := false
+        StopTest()
+        try pv["g"].Destroy()
         SetTimer(LedTick, 0)
         d.Destroy()
         BuildOverlay()
@@ -3617,6 +3933,7 @@ ShowSettings() {
     slTmY.OnEvent("Change", Sync)
     slTmDur.OnEvent("Change", Sync)
     btnTmTest.OnEvent("Click", (*) => TmShow("Smoke : 2,9 s"))
+    btnTmMeasure.OnEvent("Click", TestMeasure)
     btnPickM.OnEvent("Click", PickPos.Bind(slX, slY, ""))
     btnPickS.OnEvent("Click", PickPos.Bind(slShotX, slShotY, ddShotPos))
     btnPickH.OnEvent("Click", PickPos.Bind(slHudX, slHudY, ddHudPos))
@@ -4358,6 +4675,15 @@ ShowManager() {
             Hotkey("^z", "Off")
             HotIf()
         }
+        try {
+            if (WinGetMinMax("ahk_id " d.Hwnd) = 0) {
+                WinGetPos(&gx, &gy, &gw, &gh, "ahk_id " d.Hwnd)
+                IniWrite(gx, IniFile, "State", "MgrX")
+                IniWrite(gy, IniFile, "State", "MgrY")
+                IniWrite(gw, IniFile, "State", "MgrW")
+                IniWrite(gh, IniFile, "State", "MgrH")
+            }
+        }
         d.Destroy()
         WinActivate("ahk_exe cs2.exe")
     }
@@ -4402,6 +4728,22 @@ ShowManager() {
         ys[c] := cy
     }
     ui["ys"] := ys
+    ; retrouve la taille et la place de la dernière fois (si elles sont encore à l'écran)
+    mw := ToInt(IniRead(IniFile, "State", "MgrW", "0"), 0)
+    mh := ToInt(IniRead(IniFile, "State", "MgrH", "0"), 0)
+    mx := ToInt(IniRead(IniFile, "State", "MgrX", "0"), 0)
+    my := ToInt(IniRead(IniFile, "State", "MgrY", "0"), 0)
+    if (mw >= 780 && mh >= 540) {
+        vl := SysGet(76)
+        vt := SysGet(77)
+        vw := SysGet(78)
+        vh := SysGet(79)
+        mw := Min(mw, vw)
+        mh := Min(mh, vh)
+        mx := Max(vl, Min(mx, vl + vw - 200))
+        my := Max(vt, Min(my, vt + vh - 100))
+        try d.Move(mx, my, mw, mh)
+    }
 }
 
 ; =====================================================================
@@ -4449,6 +4791,9 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     cbCat := d.Add("ComboBox", "x130 yp-3 w380", [])
     d.Add("Text", "xm y+14 w110", "Nom")
     edName := d.Add("Edit", "x130 yp-3 w380", oldName)
+    d.SetFont("s9 c" WinPal()["bad"])
+    txNameErr := d.Add("Text", "x130 y+2 w380 h16", "")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     fl := Map("v", "")
     flOld := FlightTime(cmd)
     d.Add("Text", "xm y+10 w110", "Temps de vol")
@@ -4457,10 +4802,10 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     btnFlightDel := d.Add("Button", "x+8 yp w90", "Supprimer")
     btnFlightDel.Enabled := (flOld != "")
     d.Add("Text", "xm y+14 w110", "Tags")
-    cbTag := d.Add("ComboBox", "x130 yp-3 w150", [])
-    btnTagAdd := d.Add("Button", "x+6 yp w64", "Ajouter")
-    btnTagDel := d.Add("Button", "x+6 yp w64", "Retirer")
-    btnTagInfo := d.Add("Button", "x+6 yp w84", "→ Info")
+    cbTag := d.Add("ComboBox", "x130 yp-3 w380", [])
+    btnTagAdd := d.Add("Button", "x130 y+6 w120", "Ajouter")
+    btnTagDel := d.Add("Button", "x+6 yp w120", "Retirer")
+    btnTagInfo := d.Add("Button", "x+6 yp w128", "→ Info")
     d.SetFont("s9 c8A8F96")
     txTags := d.Add("Text", "x130 y+4 w380 r2", "")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
@@ -4494,8 +4839,8 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     picShot.GetPos(, &pY0, , &pH0)
     btnShotDel.GetPos(, &bY0, , &bH0)
     saveTop := Max(pY0 + pH0, bY0 + bH0) + 16
-    btnSave := d.Add("Button", "xm y" saveTop " w180 Default", "Enregistrer")
-    btnCancel := d.Add("Button", "x+10 yp w180", "Annuler")
+    btnCancel := d.Add("Button", "xm y" saveTop " w180", "Annuler")
+    btnSave := d.Add("Button", "x330 y" saveTop " w180 Default", "Enregistrer")
 
     for ec in AllCategories(path)
         cbCat.Add([ec])
@@ -4505,7 +4850,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     ; Tags du stuff (déjà présents + ceux qu'on ajoute ici)
     tagSel := TagList(SplitInfo(ent[4])[2])
     ShowTags() {
-        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur +" : "Tags : " TagsDisp(TagsToStr(tagSel))
+        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur Ajouter" : "Tags : " TagsDisp(TagsToStr(tagSel))
     }
     FillTags() {
         ftTxt := cbTag.Text
@@ -4552,7 +4897,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     TagInfoClick(*) {
         tiTxt := TagsToStr(tagSel)
         if (tiTxt = "") {
-            MsgBox("Ajoute d'abord un tag avec le bouton +.", "Tags", 0x40030)
+            MsgBox("Ajoute d'abord un tag avec le bouton Ajouter.", "Tags", 0x40030)
             return
         }
         tiCur := Trim(edInfo.Value)
@@ -4566,6 +4911,13 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     btnTagAdd.OnEvent("Click", TagAddClick)
     btnTagDel.OnEvent("Click", TagDelClick)
     btnTagInfo.OnEvent("Click", TagInfoClick)
+
+    NameCheck(*) {
+        ncN := CleanField(edName.Value)
+        ncD := (ncN = "" || ncN = oldName) ? "" : StuffNameTaken(path, ncN, oldCat, oldName)
+        txNameErr.Text := (ncD != "") ? "Ce nom est déjà pris (catégorie « " ncD " »)." : ""
+    }
+    edName.OnEvent("Change", NameCheck)
 
     CatSync(*) {
         tx2 := Trim(cbCat.Text)
@@ -4943,7 +5295,7 @@ HudToggle() {
 ; « threw smokegrenade [x y z] » quand la grenade a explosé.
 TmClick() {
     global tmClicks
-    if !(TimerOn || tmMeasuring)
+    if !(TimerOn || tmMeasuring || tmTesting)
         return
     tmClicks.Push(A_TickCount)
     TmDbg("clic relâché")
@@ -4954,7 +5306,7 @@ TmClick() {
 ; Active ou arrête la lecture du journal selon le réglage
 TmApply() {
     global tmRunning, tmPos, tmSentSock, tmLive
-    want := (TimerOn || tmMeasuring)
+    want := (TimerOn || tmMeasuring || tmTesting)
     if (want && !tmRunning) {
         tmRunning := true
         tmSentSock := 0
@@ -4970,8 +5322,8 @@ TmApply() {
 }
 
 TmTick() {
-    global tmPos, tmSentSock, tmStarts
-    if (!(TimerOn || tmMeasuring) || !FileExist(ConsoleLog))
+    global tmPos, tmSentSock, tmStarts, tmLastThrow, tmPosWait, tmLineWasK
+    if (!(TimerOn || tmMeasuring || tmTesting) || !FileExist(ConsoleLog))
         return
     sz := FileGetSize(ConsoleLog)
     if (sz < tmPos)
@@ -5003,6 +5355,11 @@ TmTick() {
         pos += StrLen(m[0])
         if (m[2] = "") {
             st := TmThrowLine(now)
+            if !tmLineWasK {
+                tmLastThrow := Map("kind", TmName(m[1]), "pos", "", "secs", "")
+                tmPosWait := now
+                NetSend("sv_cheats 1; getpos")
+            }
             TmDbg("ligne sv_throw_" m[1] " -> départ il y a " (now - st) " ms")
             if TimerOn
                 TmLiveStart(TmName(m[1]), st)
@@ -5011,14 +5368,32 @@ TmTick() {
             TmFinish(m[2], now)
         }
     }
+    if (tmPosWait != 0) {
+        if (now - tmPosWait > 3000) {
+            tmPosWait := 0
+        } else if IsObject(tmLastThrow) {
+            lp := ""
+            q := 1
+            while (q := RegExMatch(txt, "i)setpos\s+" NUM "\s+" NUM "\s+" NUM "\s*;\s*setang\s+" NUM "\s+" NUM, &pm, q)) {
+                lp := NormalizePos(pm[0])
+                q += StrLen(pm[0])
+            }
+            if (lp != "") {
+                tmLastThrow["pos"] := lp
+                tmPosWait := 0
+            }
+        }
+    }
 }
 
 ; Une ligne sv_throw_... apparaît : elle confirme la relance (touche K) en attente, sinon c'est un lancer normal
 TmThrowLine(now) {
-    global tmStarts
+    global tmStarts, tmLineWasK
+    tmLineWasK := false
     for e in tmStarts {
         if (!e[2] && now - e[1] < 1500) {
             e[2] := true
+            tmLineWasK := true
             return e[1]
         }
     }
@@ -5028,7 +5403,7 @@ TmThrowLine(now) {
         st := tmClicks[i]
         tmClicks.RemoveAt(i)
     }
-    tmStarts.Push([st, true])
+    tmStarts.Push([st, true, (st = now) ? "journal" : "clic"])
     return st
 }
 
@@ -5038,8 +5413,10 @@ TmFinish(kind, now) {
     while (tmStarts.Length >= 1 && now - tmStarts[1][1] > 9000)
         tmStarts.RemoveAt(1)
     start := 0
+    src := "clic (secours)"
     if (tmStarts.Length >= 1) {
         start := tmStarts[1][1]   ; la plus ancienne en vol explose en premier
+        src := tmStarts[1][3]
         tmStarts.RemoveAt(1)
     } else {
         i := tmClicks.Length
@@ -5060,6 +5437,8 @@ TmFinish(kind, now) {
     TmDbg("explosion " kind " -> " Round(secs, 2) " s")
     if (secs < 0.2)
         return
+    if (IsObject(tmLastThrow) && tmLastThrow["kind"] = TmName(kind))
+        tmLastThrow["secs"] := Round(secs, 2)
     if (TimerBeep && TimerOn && !(tmLive && tmBeeped))
         SoundBeep(1250, 70)
     tmLastLabel := TmName(kind)
@@ -5067,8 +5446,10 @@ TmFinish(kind, now) {
     SetTimer(TmLiveTick, 0)
     if tmMeasuring
         tmMeasured := secs
-    if TimerOn
+    if (TimerOn || tmTesting)
         TmShow(TmName(kind) " : " StrReplace(Format("{:.1f}", secs), ".", ",") " s")
+    if (tmTesting && IsObject(tmTestCb))
+        tmTestCb.Call(TmName(kind) " : " StrReplace(Format("{:.2f}", secs), ".", ",") " s (départ : " src ")")
 }
 
 TmDbg(msg) {
@@ -5102,15 +5483,15 @@ TmName(kind) {
 ; Relance avec la touche de sv_rethrow_last_grenade : le chrono part tout de suite (la ligne du journal n'est pas toujours écrite)
 TmRethrow() {
     global tmStarts, tmLastK
-    if !(TimerOn || tmMeasuring)
+    if !(TimerOn || tmMeasuring || tmTesting)
         return
-    if (menuOpen || dlgOpen || mgrOpen || setOpen)
+    if (!tmTesting && (menuOpen || dlgOpen || mgrOpen || setOpen))
         return
     now := A_TickCount
     if (now - tmLastK < 250)   ; répétition automatique de la touche maintenue
         return
     tmLastK := now
-    tmStarts.Push([now, false])
+    tmStarts.Push([now, false, "touche relance"])
     if (tmStarts.Length > 20)
         tmStarts.RemoveAt(1)
     TmDbg("touche relance")
@@ -5790,10 +6171,10 @@ ShowImport(txt, ownerHwnd) {
         note .= "`nHauteur : les coordonnées sont ajustées de " zdelta " pour correspondre à ton réglage TpZOffset."
     d.Add("Text", "x12 y+8 w720 r3", note)
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
-    btnOk := d.Add("Button", "x12 y+10 w200 Default", "Importer la sélection")
-    btnAll := d.Add("Button", "x+10 yp w140", "Tout cocher")
+    btnAll := d.Add("Button", "x12 y+10 w140", "Tout cocher")
     btnNone := d.Add("Button", "x+10 yp w140", "Tout décocher")
-    btnNo := d.Add("Button", "x+10 yp w140", "Annuler")
+    btnNo := d.Add("Button", "x382 yp w140", "Annuler")
+    btnOk := d.Add("Button", "x532 yp w200 Default", "Importer la sélection")
     cbTarget.Text := curProfile
 
     Refill(*) {
@@ -6571,8 +6952,8 @@ ShowRestore(ownerHwnd) {
     lv.ModifyCol(2, 150)
     lv.ModifyCol(3, 60)
     lv.ModifyCol(4, 0)
-    btnOk := d.Add("Button", "x12 y+12 w200 Default", "Restaurer")
-    btnNo := d.Add("Button", "x+10 yp w120", "Annuler")
+    btnNo := d.Add("Button", "x12 y+12 w120", "Annuler")
+    btnOk := d.Add("Button", "x282 yp w200 Default", "Restaurer")
 
     DoRestore(*) {
         r := lv.GetNext(0)
@@ -6897,7 +7278,7 @@ InstallUpdate() {
     try FileCopy(A_ScriptFullPath, DataDir "\backup\stuff_menu.ahk.bak", 1)
     PreUpdateBackup()
     try {
-        for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1"] {
+        for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1", "menu_stuf.ico", "install.bat", "install.ps1", "uninstall.bat", "uninstall.ps1"] {
             if FileExist(src "\" fn)
                 FileCopy(src "\" fn, A_ScriptDir "\" fn, 1)
         }
@@ -6962,26 +7343,12 @@ if (LogMaxMB > 0 && FileExist(ConsoleLog) && !ProcessExist("cs2.exe")) {
 }
 
 ; Le menu doit être lancé AVANT CS2 : c'est lui qui démarre le jeu avec la connexion directe (seul moyen d'envoyer les commandes)
+TraySetup()
 if (IniRead(IniFile, "State", "SkipCheck", "0") != "1") {
-    if !ProcessExist("cs2.exe") {
-        if (IniRead(IniFile, "State", "LaunchInfo", "") != "1") {
-            MsgBox("Le menu va lancer CS2 avec les options " StrReplace(LaunchArgs, "{port}", NetconPort) ".`n`n-netconport permet au menu d'envoyer les commandes directement au jeu.`n-insecure désactive VAC pour cette session : pas de matchmaking, Premier ni FACEIT. Pour jouer en ligne, ferme le jeu et lance-le normalement depuis Steam, sans le menu.`n`nTes options de lancement Steam ne sont pas modifiées.", "Menu Stuf - lancement de CS2", 0x40040)
-            IniWrite("1", IniFile, "State", "LaunchInfo")
-        }
-        if !LaunchGame()
-            MsgBox("Steam n'a pas pu être lancé : démarre CS2 toi-même avec les options " StrReplace(LaunchArgs, "{port}", NetconPort) " dans les options de lancement de Steam.", "Menu Stuf", 0x40030)
-    } else if !NetOpen() {
-        if (MsgBox("CS2 est déjà lancé sans la connexion directe : le menu ne peut pas lui envoyer de commandes.`n`nFermer CS2 et le relancer avec les bonnes options ?", "Menu Stuf - CS2 déjà ouvert", 0x40024) = "Yes") {
-            try WinClose("ahk_exe cs2.exe")
-            ProcessWaitClose("cs2.exe", 10)
-            if ProcessExist("cs2.exe") {
-                try ProcessClose("cs2.exe")
-                ProcessWaitClose("cs2.exe", 5)
-            }
-            Sleep(1500)
-            LaunchGame()
-        }
-    }
+    if LauncherOn
+        OpenLauncher()
+    else
+        LaunchFlow()
 }
 CleanLegacy()
 if HudAtStart
@@ -6999,7 +7366,7 @@ if AutoBackupOn
 skipCheck := (IniRead(IniFile, "State", "SkipCheck", "0") = "1")
 if skipCheck
     IniWrite(0, IniFile, "State", "SkipCheck")
-if (AutoCheck && !skipCheck)
+if (AutoCheck && !skipCheck && !LauncherOn)
     SetTimer(StartCheck, -1500)
 if AutoUpdate
     SetTimer(CheckUpdate, -4000)

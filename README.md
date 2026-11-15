@@ -21,26 +21,46 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 
 ## Prérequis
 
-- Windows, [Steam](https://store.steampowered.com/) et [AutoHotkey v2](https://www.autohotkey.com/)
+- Windows, [Steam](https://store.steampowered.com/) et [AutoHotkey v2](https://www.autohotkey.com/) (installé automatiquement par `install.bat` s'il manque)
 - Counter-Strike 2
 - L'option de lancement Steam **`-condebug`** (obligatoire : le menu lit `console.log` pour détecter la map et ta position). Aucune autre option de lancement n'est à ajouter : `-netconport` et `-insecure` sont ajoutées par le menu lui-même.
 
 ## Installation
 
-1. Installe [AutoHotkey v2](https://www.autohotkey.com/).
-2. Télécharge ce dépôt (bouton vert **Code > Download ZIP**) et extrais-le où tu veux, ou clone-le.
+### Avec l'installateur (recommandé)
+
+1. Télécharge ce dépôt (bouton vert **Code > Download ZIP**) et extrais-le n'importe où (Bureau, Téléchargements...).
+2. Double-clique sur **`install.bat`**. Une fenêtre te demande le dossier d'installation (par exemple `D:\Jeux`, avec tes autres jeux) : un sous-dossier **Menu Stuf** y est créé.
+   - **N'installe pas dans `C:\Program Files`** (ni `C:\Windows`) : le menu y enregistre tes stuffs et Windows l'en empêche. L'installateur refuse ces dossiers.
+   - Si AutoHotkey v2 manque, l'installateur l'installe avec `winget` ; sinon il ouvre la page de téléchargement et tu relances `install.bat` ensuite.
+   - Il crée un raccourci **Menu Stuf** (avec son icône) sur le **Bureau** et dans le **menu Démarrer**.
 3. Dans Steam, clic droit sur Counter-Strike 2 > **Propriétés** > **Options de lancement**, et ajoute **`-condebug`** (une seule fois). Garde tes autres options si tu en as.
-4. **Ferme CS2**, puis double-clique sur `stuff_menu.ahk`. Au premier lancement, **tout se configure tout seul** :
+4. **Ferme CS2**, puis ouvre le raccourci **Menu Stuf**. Le **launcher** s'ouvre : clique sur **Lancer CS2**. Au premier lancement, **tout se configure tout seul** :
    - `config.ini` est créé à partir de `config.example.ini` ;
    - le dossier cfg de CS2 est trouvé automatiquement (Steam et ses bibliothèques). S'il n'est pas trouvé, une fenêtre te demande de le choisir : `...\Counter-Strike Global Offensive\game\csgo\cfg` ;
    - `cs2_practice.cfg` est copié dans ce dossier cfg (un fichier existant n'est jamais écrasé) ;
    - une fenêtre t'explique que le menu va lancer CS2 avec `-netconport 2121 -insecure`, puis il **démarre le jeu lui-même** (par Steam, sans modifier tes options de lancement).
-5. Attends que CS2 soit chargé et lance une **map d'entraînement locale**. Une petite infobulle « Connexion directe à CS2 active » confirme que tout est prêt.
-6. Appuie sur `F1` en jeu pour ouvrir le menu. Une fenêtre de vérification contrôle l'installation et se ferme toute seule si tout est bon.
+5. Attends que CS2 soit chargé et lance une **map d'entraînement locale**. Le voyant du launcher passe au vert (« CS2 lancé et connecté au menu »).
+6. Appuie sur `F1` en jeu pour ouvrir le menu.
 
-**Règle à retenir : lance toujours le script (`stuff_menu.ahk`) avant CS2.** C'est lui qui démarre le jeu avec la connexion directe, le seul moyen d'envoyer les commandes. Si CS2 est déjà ouvert quand tu lances le script, il te propose de le fermer et de le relancer avec les bonnes options.
+**Tu utilisais déjà le menu ?** Ferme-le avant de lancer `install.bat`. L'installateur cherche ton ancienne installation (dossier du menu en cours d'exécution, Bureau, Documents, Téléchargements, disques) et te propose de **reprendre tes stuffs, favoris, temps de vol, profils et réglages** dans le nouveau dossier. Rien n'est supprimé ni modifié dans l'ancien dossier : supprime-le toi-même quand tout fonctionne. Si tu installes dans le même dossier que l'ancien, tes fichiers restent en place. Si l'installateur ne trouve rien, copie à la main `maps`, `data`, `profiles` et `config.ini` de l'ancien dossier vers le nouveau.
+
+Pour désinstaller : ferme le menu, puis `uninstall.bat` (supprime les raccourcis ; ton dossier, avec tes stuffs, est conservé).
+
+### À la main
+
+1. Installe [AutoHotkey v2](https://www.autohotkey.com/).
+2. Télécharge ce dépôt, extrais-le où tu veux (hors `C:\Program Files`), ou clone-le.
+3. Ajoute **`-condebug`** dans les options de lancement de CS2 (Steam).
+4. **Ferme CS2**, puis double-clique sur `stuff_menu.ahk` : le launcher s'ouvre, clique sur **Lancer CS2**.
+
+**Règle à retenir : lance toujours le menu avant CS2.** C'est lui qui démarre le jeu avec la connexion directe, le seul moyen d'envoyer les commandes. Si CS2 est déjà ouvert quand tu cliques sur « Lancer », le menu te propose de le fermer et de le relancer avec les bonnes options.
 
 Le menu est vide au départ : sauvegarde tes stuffs avec « Sauvegarder la position actuelle » (voir plus bas) ou importe ceux d'un ami avec « Profils et partage de stuffs ».
+
+## Launcher
+
+Au démarrage du menu, une fenêtre d'accueil propose : **Lancer CS2**, **Nouveautés**, **Vérification** (de l'installation), **Réglages**, **Ouvrir le dossier** et **Quitter le menu**. Un voyant indique l'état de CS2 (non lancé, lancé et connecté, lancé sans connexion directe). Fermer la fenêtre laisse le menu actif : l'icône près de l'horloge la rouvre (clic). `Launcher=0` dans `config.ini` supprime la fenêtre et rétablit l'ancien comportement : le menu lance CS2 tout seul au démarrage.
 
 ## Raccourcis
 
@@ -98,6 +118,16 @@ Le menu envoie toutes ses commandes (téléportation, give, bots, god mode, coor
 - **Menu principal** : trois blocs séparés par des tirets, « Quiz : voir la réponse » n'apparaît que pendant un quiz.
 - **Vérification de l'installation** : boutons pour copier `cs2_practice.cfg` dans le cfg de CS2 et ouvrir ce dossier.
 
+- **Boutons** : le bouton principal est toujours à droite (Enregistrer, Importer, Restaurer, Changer de map), les boutons secondaires à gauche.
+- **Sauvegarder la position** : la position est dans une zone « Détails : position » repliable (ouverte automatiquement si la position n'a pas pu être lue) ; un message rouge sous le champ Nom signale tout de suite un nom déjà pris (aussi dans « Modifier le stuff »).
+- **Aperçu du style** : dans l'onglet Fenêtres des réglages, chaque changement ouvre une petite fenêtre d'aperçu à côté.
+- **Fenêtre de gestion** : elle se rouvre à la taille et à la place où tu l'as laissée.
+- **Nouveautés** : titres de version en gras et en couleur d'accent.
+
+## Dernier lancer en stuff
+
+Entrée « Enregistrer le dernier lancer comme stuff » du menu principal : le menu retient, à chaque grenade lancée au clic, ta position et ton angle (envoyés au moment du lancer) ainsi que le temps mesuré par le chronomètre. L'entrée ouvre la fenêtre de sauvegarde déjà remplie : position, type de grenade, « give » coché et temps de vol enregistré avec le stuff, sans nouvelle mesure. Il suffit de choisir la catégorie et le nom. Le chronomètre doit être actif. Les relances avec la touche K ne changent pas le lancer mémorisé (elles relancent la même trajectoire) mais mettent à jour son temps. Pas de capture d'écran dans ce cas.
+
 ## Changer de map
 
 L'entrée « Changer de map » du menu principal ouvre une liste (tes maps, plus les maps de compétition). Double-clic ou « Changer de map » : le menu envoie `map <nom>` au jeu. Tu peux aussi taper un nom à la main (ex. `cs_office`). Le cfg d'entraînement se relance tout seul sur la nouvelle map si l'exec automatique est activé.
@@ -133,6 +163,7 @@ Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu 
 - **Précision** : de l'ordre d'un dixième de seconde (le menu lit le fichier toutes les 50 ms).
 - **Limite** : le menu ne sait pas quelle arme tu tiens. Si tu tires avec une arme pendant que la grenade vole, le temps affiché peut être faux.
 - **Réglages** : « Réglages du menu », onglet **Chrono** : activer, placement (par défaut **juste au-dessus des coordonnées**, ou libre avec position X / Y), durée d'affichage, et bouton « Tester l'affichage ». La police, les couleurs, le liseré, les coins arrondis et l'opacité suivent ceux du menu et des coordonnées. Équivalents dans `config.ini` : `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
+- **Tester la mesure** : bouton dans l'onglet Chrono des réglages. Pendant 60 s, chaque grenade lancée dans CS2 est mesurée et le résultat s'affiche dans les réglages avec l'origine du départ (clic, touche de relance, journal), même si le chronomètre est désactivé.
 - **Bip d'arrivée** : si le temps de vol du stuff lancé par le menu est connu, un court bip retentit 0,5 s avant l'explosion prévue ; sinon il retentit à l'explosion. Case dans l'onglet Chronomètre, `TimerBeep=0` pour le couper.
 
 - **Chrono en direct** : quand le jeu écrit la ligne de lancer (`sv_throw_...`) au moment où la grenade part, le type est connu tout de suite : le compteur tourne à l'écran jusqu'à l'explosion, puis s'arrête sur le temps final. Avec la touche de relance, le compteur démarre aussi tout de suite, avec le type de la dernière grenade vue.
