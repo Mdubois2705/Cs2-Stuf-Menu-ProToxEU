@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.26.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.26.3"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3672,8 +3672,8 @@ ShowSettings() {
     y += 44
     chkFlAsk := d.Add("CheckBox", "x22 y" y " w460" (FlightAsk ? " Checked" : ""), "Proposer de mesurer le temps de vol après la création d'un stuff")
     y += 30
-    chkBeep := d.Add("CheckBox", "x22 y" y " w460" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
-    y += 36
+    chkBeep := d.Add("CheckBox", "x22 y" y " w460 Hidden" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
+    y += 6   ; la case du bip est masquée : le menu ne produit plus aucun son
     btnTmTest := d.Add("Button", "x22 y" y " w220", "Tester l'affichage")
     btnTmMeasure := d.Add("Button", "x250 y" y " w220", "Tester la mesure")
     y += 44
@@ -5635,8 +5635,6 @@ TmFinish(kind, now) {
         return
     if (IsObject(tmLastThrow) && tmLastThrow["kind"] = TmName(kind))
         tmLastThrow["secs"] := Round(secs, 2)
-    if (TimerBeep && TimerOn && !(tmLive && tmBeeped))
-        SoundBeep(1250, 70)
     tmLastLabel := TmName(kind)
     tmLive := false
     SetTimer(TmLiveTick, 0)
@@ -5720,10 +5718,6 @@ TmLiveTick() {
         return
     }
     el := A_TickCount - tmLiveT0
-    if (TimerBeep && tmExpect != "" && !tmBeeped && el >= tmExpect * 1000 - 500) {
-        tmBeeped := true
-        SoundBeep(1250, 70)
-    }
     if (el > ((tmExpect != "") ? tmExpect * 1000 + 3000 : 15000)) {
         tmLive := false
         SetTimer(TmLiveTick, 0)

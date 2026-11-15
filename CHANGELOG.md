@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.26.3
+
+- Plus aucun son : le bip d'anticipation du chronomètre est retiré (la case de l'onglet Chrono disparaît).
+
+## v2.26.2
+
+- Plus de bip à l'explosion de la grenade. Seul le bip d'anticipation (0,5 s avant, quand le temps de vol du stuff est connu) reste ; `TimerBeep=0` le coupe aussi.
+
 ## v2.26.1
 
 - Correction : avec la map automatique, le cfg d'entraînement (bots, argent, cheats...) n'était pas exécuté tant que tu n'ouvrais pas le menu. Il s'exécute maintenant tout seul dès que la map est chargée (`AutoExec=0` pour l'éviter).

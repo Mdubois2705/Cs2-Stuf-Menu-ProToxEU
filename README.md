@@ -242,7 +242,6 @@ Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu 
 - **Départ** : le relâchement du clic gauche, ou la touche de relance `sv_rethrow_last_grenade` (touche `K` du cfg d'entraînement ; si tu l'as changée, mets la même dans `RethrowKey`). Chaque grenade en vol garde son propre départ.
 - **Fin** : la ligne `threw smokegrenade [x y z]` écrite dans `console.log` à l'explosion. Le menu active tout seul le journal du serveur (`log on`, `mp_logdetail 3`), ce qui crée aussi des fichiers dans `game\csgo\logs\` ; pour l'éviter, désactive le chronomètre.
 - **Chrono en direct** : le compteur tourne à l'écran dès le lâcher (type connu par la ligne `sv_throw_...`), puis s'arrête sur le temps final. Avec la touche de relance, il démarre avec le type de la dernière grenade vue.
-- **Bip d'arrivée** : si le temps de vol du stuff est connu, un bip retentit 0,5 s avant l'explosion prévue ; sinon à l'explosion. `TimerBeep=0` pour le couper.
 - **Précision** : environ un dixième de seconde (lecture du fichier toutes les 50 ms).
 - **Limite** : le menu ne sait pas quelle arme tu tiens ; un tir pendant que la grenade vole peut fausser le temps.
 - **Réglages** (onglet Chrono) : activer, placement (par défaut au-dessus des coordonnées, ou libre), durée d'affichage, « Tester l'affichage ». L'apparence suit celle du menu. Équivalents : `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
