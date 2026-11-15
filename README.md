@@ -57,7 +57,7 @@ Une seule touche en jeu : **`F1`** ouvre le **menu principal**. Tout le reste s'
 | Gérer les stuffs et les catégories | Fenêtre de gestion (déplacer, renommer, supprimer, modifier) |
 | Profils et partage de stuffs | Profils, export et import |
 | Nouveautés | Historique des dernières versions (le CHANGELOG) |
-| Réglages du menu | Thème, police, liseré, captures, coordonnées, chronomètre |
+| Réglages du menu | Sept onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Aide |
 | Relancer l'exec de cs2_practice | Relance le cfg d'entraînement |
 | Vérifier l'installation | Contrôle de l'installation |
 
@@ -88,6 +88,16 @@ Le menu envoie toutes ses commandes (téléportation, give, bots, god mode, coor
 - Le port se règle avec `NetconPort` dans `config.ini` (2121 par défaut) ; les options données au jeu avec `LaunchArgs` (`{port}` est remplacé par `NetconPort`). Si le port est déjà pris par un autre programme, change `NetconPort`.
 - Si le lancement par le menu ne fonctionne pas chez toi, ajoute `-netconport 2121 -insecure` dans les options de lancement de CS2 sur Steam, à côté de `-condebug`. Le menu se connecte alors au jeu lancé de cette façon.
 
+## Ergonomie des fenêtres
+
+- **Style des fenêtres** : onglet **Fenêtres** des réglages. Thème sombre (par défaut), clair ou « comme le menu en jeu », couleur d'accent (onglets), police et taille du texte (90 à 120 %). Les changements s'appliquent à la prochaine ouverture d'une fenêtre. Équivalents dans `config.ini` : `WinTheme` (`dark`, `light`, `menu`), `WinAccent`, `WinFont`, `WinScale`. Les petites boîtes de message de Windows (confirmations, sélecteurs de fichier) gardent le style de Windows. Si les fenêtres sont illisibles chez toi, mets `WinTheme=light`.
+- **Réglages** : sept onglets (Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Aide). Chaque position (menu, capture, coordonnées, chrono) a un bouton **Placer avec la souris** : tu cliques à l'endroit voulu à l'écran. « Réinitialiser » ne remet à zéro que l'onglet affiché.
+- **Gestion des stuffs** : champ de recherche (nom ou info), colonne du temps de vol, clic droit sur un stuff (modifier, renommer, info, cadenas, supprimer), fenêtre redimensionnable. Clique sur un titre de colonne pour trier.
+- **Profils et partage** : trois onglets (Profils, Partager des stuffs, Sauvegardes) et un compteur de stuffs cochés.
+- **Restaurer une sauvegarde** : les sauvegardes sont décrites en clair (« Avant la mise à jour 2.22.0, le 15/11/2026 à 09 h 18 »).
+- **Menu principal** : trois blocs séparés par des tirets, « Quiz : voir la réponse » n'apparaît que pendant un quiz.
+- **Vérification de l'installation** : boutons pour copier `cs2_practice.cfg` dans le cfg de CS2 et ouvrir ce dossier.
+
 ## Changer de map
 
 L'entrée « Changer de map » du menu principal ouvre une liste (tes maps, plus les maps de compétition). Double-clic ou « Changer de map » : le menu envoie `map <nom>` au jeu. Tu peux aussi taper un nom à la main (ex. `cs_office`). Le cfg d'entraînement se relance tout seul sur la nouvelle map si l'exec automatique est activé.
@@ -106,7 +116,7 @@ L'entrée « Gérer les stuffs et les catégories » du menu ouvre une fenêtre 
 
 ## Coordonnées en temps réel
 
-L'affichage s'active dans « Réglages du menu », onglet **Coordonnées** (pas de raccourci clavier). Une fois activé et enregistré, il reste actif à chaque lancement du script, jusqu'à ce que tu le désactives. Il se place par défaut dans le **coin inférieur gauche** de l'écran, ou où tu veux (position X / Y dans le même onglet). Il affiche la map, ta position (X, Y, Z) et ton angle de vue (pitch, yaw), mises à jour plusieurs fois par seconde. Le texte suit l'apparence réglée dans « Réglages du menu ».
+L'affichage s'active dans « Réglages du menu », onglet **Coords** (pas de raccourci clavier). Une fois activé et enregistré, il reste actif à chaque lancement du script, jusqu'à ce que tu le désactives. Il se place par défaut dans le **coin inférieur gauche** de l'écran, ou où tu veux (position X / Y dans le même onglet). Il affiche la map, ta position (X, Y, Z) et ton angle de vue (pitch, yaw), mises à jour plusieurs fois par seconde. Le texte suit l'apparence réglée dans « Réglages du menu ».
 
 Le script demande `getpos` au jeu à intervalle régulier et lit la réponse dans `console.log` (option `-condebug`). Il ne lit pas la mémoire du jeu.
 
@@ -122,7 +132,7 @@ Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu 
 - **Fin du chrono** : la ligne `threw smokegrenade [x y z]` que le jeu écrit dans `console.log` quand la grenade explose. Le menu active tout seul le journal du serveur (`log on` et `mp_logdetail 3`) ; la mesure demande donc `-condebug`, comme le reste du menu.
 - **Précision** : de l'ordre d'un dixième de seconde (le menu lit le fichier toutes les 50 ms).
 - **Limite** : le menu ne sait pas quelle arme tu tiens. Si tu tires avec une arme pendant que la grenade vole, le temps affiché peut être faux.
-- **Réglages** : « Réglages du menu », onglet **Chronomètre** : activer, placement (par défaut **juste au-dessus des coordonnées**, ou libre avec position X / Y), durée d'affichage, et bouton « Tester l'affichage ». La police, les couleurs, le liseré, les coins arrondis et l'opacité suivent ceux du menu et des coordonnées. Équivalents dans `config.ini` : `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
+- **Réglages** : « Réglages du menu », onglet **Chrono** : activer, placement (par défaut **juste au-dessus des coordonnées**, ou libre avec position X / Y), durée d'affichage, et bouton « Tester l'affichage ». La police, les couleurs, le liseré, les coins arrondis et l'opacité suivent ceux du menu et des coordonnées. Équivalents dans `config.ini` : `TimerOn`, `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
 - **Bip d'arrivée** : si le temps de vol du stuff lancé par le menu est connu, un court bip retentit 0,5 s avant l'explosion prévue ; sinon il retentit à l'explosion. Case dans l'onglet Chronomètre, `TimerBeep=0` pour le couper.
 
 - **Chrono en direct** : quand le jeu écrit la ligne de lancer (`sv_throw_...`) au moment où la grenade part, le type est connu tout de suite : le compteur tourne à l'écran jusqu'à l'explosion, puis s'arrête sur le temps final. Avec la touche de relance, le compteur démarre aussi tout de suite, avec le type de la dernière grenade vue.
@@ -133,7 +143,7 @@ Le journal du serveur crée aussi des fichiers dans `game\csgo\logs\`. Pour ne p
 
 Le temps de vol d'un stuff (du lâcher à l'explosion) peut être mémorisé et affiché dans le menu, sous l'info du stuff : `Temps de vol : 2,9 s`.
 
-- **Rien n'est obligatoire** : le temps de vol est facultatif pour chaque stuff. Tu peux répondre « Non » à la proposition, ne jamais mesurer un stuff, ou désactiver la proposition dans « Réglages du menu », onglet **Chronomètre** (case « Proposer de mesurer le temps de vol après la création d'un stuff », ou `FlightAsk=0` dans `config.ini`).
+- **Rien n'est obligatoire** : le temps de vol est facultatif pour chaque stuff. Tu peux répondre « Non » à la proposition, ne jamais mesurer un stuff, ou désactiver la proposition dans « Réglages du menu », onglet **Chrono** (case « Proposer de mesurer le temps de vol après la création d'un stuff », ou `FlightAsk=0` dans `config.ini`).
 - **À la création** : après l'enregistrement d'un stuff de grenade (fenêtre « Sauvegarder la position actuelle » ou `F4`), le menu propose de mesurer son temps de vol. Si tu acceptes, tu es téléporté au repère (avec la grenade), tu la lances, et le menu mesure le temps. **Tu valides le résultat** : « Oui » l'enregistre, « Non » te laisse refaire le lancer (si tu as raté), « Annuler » abandonne. `Échap` annule l'attente, et au bout de 30 secondes sans explosion, le menu propose de réessayer.
 - **Pour un stuff existant** : fenêtre « Modifier le stuff » (double-clic dans la fenêtre de gestion), ligne « Temps de vol », bouton **Mesurer...** (ou **Supprimer** pour retirer le temps), puis « Enregistrer ». Cela marche aussi pour les stuffs créés avant cette version.
 - Le temps est enregistré dans `data\times.txt`, lié à la position et à la visée du stuff : il suit le stuff quand tu le renommes ou le déplaces. Si tu changes la position ou la visée, l'ancien temps est supprimé (il n'est plus valable). Il est **inclus dans les exports** (fichier ou code) et repris à l'import, sauf si tu décoches **Importer les temps de vol** dans la fenêtre d'import : le temps est lié au stuff importé, sans écraser un temps que tu as déjà mesuré (sauf si tu choisis « Remplacer le mien »).
@@ -187,7 +197,7 @@ L'exec est envoyé à CS2 par la connexion directe : tu n'as rien à taper dans 
 
 Quand tu sauvegardes un stuff (entrée « Sauvegarder la position actuelle » du menu, ou `F4` dans le menu des stuffs), le script prend une petite capture de 100 x 100 px au centre du jeu (autour du réticule) et la propose dans la fenêtre. Si la case est cochée, elle est liée au stuff. Dans le menu, la capture du stuff sélectionné s'affiche dans le coin supérieur droit de l'écran (placement réglable). Pour la refaire : « Gérer les stuffs et les catégories » du menu, double-clic sur le stuff, bouton « Refaire la capture (en jeu) » (place-toi au point du stuff : les fenêtres se masquent et la capture se fait 3 secondes plus tard). Les captures sont dans `data\shots\`. Elles peuvent être jointes à un export vers un fichier `.stuffpack` (case « Inclure les captures » dans « Profils et partage de stuffs ») : l'import les restaure. Le code copié ne les contient pas (trop lourd).
 
-Les captures qui ne correspondent plus à aucun stuff (stuff supprimé ou déplacé) peuvent être supprimées avec le bouton **Nettoyer les captures et temps orphelins** de l'onglet « Captures » (il nettoie aussi les temps de vol orphelins du profil actif).
+Les captures qui ne correspondent plus à aucun stuff (stuff supprimé ou déplacé) peuvent être supprimées (onglet Aide des réglages) avec le bouton **Nettoyer les captures et temps orphelins** de l'onglet « Captures » (il nettoie aussi les temps de vol orphelins du profil actif).
 
 Tout se règle dans « Réglages du menu », onglet « Captures » : activer, zone capturée, taille affichée, placement (coin supérieur droit par défaut, ou libre avec position X/Y), arrondi des coins (3 px par défaut). Le liseré de la capture reprend celui du menu et se dessine par-dessus l'image. Équivalents dans `config.ini` : `Shot`, `ShotSize`, `ShotZoom`, `ShotPos`, `ShotCorner`, `ShotX`, `ShotY`. Le jeu doit être en fenêtré ou en plein écran fenêtré.
 
@@ -262,13 +272,13 @@ Si tu modifies ensuite le fond (préréglage ou curseurs), le menu repasse en «
 
 ## Vérification de l'installation
 
-En bas de « Réglages du menu », un voyant indique en direct si CS2 est connecté au menu (vert) ou non (rouge).
+Sous les onglets de « Réglages du menu », un voyant indique en direct si CS2 est connecté au menu (vert) ou non (rouge).
 
 Au lancement, le script vérifie ce qui peut l'être sans CS2 : dossier cfg, `cs2_practice.cfg`, tes maps, droits d'écriture, présence de `console.log`. Une petite fenêtre affiche le résultat avec ✔, ⚠ ou ✘ et la solution de chaque problème.
 
 Dès que CS2 est lancé et au premier plan dans une map locale, le script teste la connexion directe, l'envoi d'une commande (via `console.log`), les cheats et la détection de la map. S'il n'y a aucun problème, la fenêtre se ferme toute seule.
 
-- Pour relancer la vérification : bouton « Vérifier l'installation » dans les réglages du menu (visible sous tous les onglets).
+- Pour relancer la vérification : bouton « Vérifier l'installation » dans les réglages du menu (onglet « Aide »).
 - Pour demander de l'aide : bouton **Copier le diagnostic** juste en dessous. Il copie dans le presse-papiers la version, l'état de la connexion directe, les chemins et les dernières lignes utiles de `console.log` (identifiants Steam masqués). Colle-le dans ton message.
 - Pour la désactiver : `AutoCheck=0` dans `config.ini`.
 - Le test d'envoi passe par la connexion directe. Si elle échoue, la ligne « Connexion directe à CS2 impossible » indique quoi faire.

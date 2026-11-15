@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.23.0
+
+- **Fenêtres plus modernes** : thème sombre par défaut sur toutes les fenêtres du menu (barre de titre, listes, champs, boutons), onglets plats avec une couleur d'accent à la place des onglets Windows.
+- **Nouvel onglet « Fenêtres »** dans les réglages : thème (sombre, clair, comme le menu en jeu), couleur d'accent, police et taille du texte. Appliqué à la prochaine ouverture d'une fenêtre.
+- En cas de souci d'affichage : `WinTheme=light` dans `config.ini` remet un style clair.
+
+## v2.22.1
+
+- Correction : la fenêtre « Gérer les stuffs et les catégories » ne s'ouvrait plus (erreur « Gui.Edit has no method named SetCue »). Si tu es sur la 2.22.0, mets à jour : l'ancienne version peut quand même télécharger la mise à jour.
+
+## v2.22.0
+
+- **Réglages** : six onglets (Menu, Couleurs, Captures, Coords, Chrono, Aide), fenêtre plus courte. Bouton « Placer avec la souris » pour chaque position, « Réinitialiser » limité à l'onglet affiché. « Vérifier l'installation », le diagnostic et le nettoyage sont dans l'onglet Aide.
+- **Gestion des stuffs** : recherche, colonne du temps de vol, clic droit, fenêtre redimensionnable.
+- **Profils et partage** : trois onglets (Profils, Partager des stuffs, Sauvegardes) et compteur de stuffs cochés.
+- **Restaurer une sauvegarde** : descriptions en clair (type et date).
+- **Menu principal** : blocs séparés, « voir la réponse » du quiz affiché seulement pendant un quiz, entrée « Fermer » retirée (Échap suffit).
+- **Sauvegarde et modification d'un stuff** : boutons de tags « Ajouter » / « Retirer » et « Nouvelle » (catégorie) plus clairs, temps de vol juste sous le nom, titre harmonisé.
+- **Vérification de l'installation** : boutons pour copier `cs2_practice.cfg` et ouvrir le dossier cfg.
+- **Changer de map** : la map détectée en dernier est présélectionnée.
+
 ## v2.21.0
 
 - **Changer de map** : nouvelle entrée « Changer de map » dans le menu principal. Liste de tes maps et des maps de compétition, ou nom saisi à la main ; le menu envoie `map <nom>` au jeu et l'exec du cfg d'entraînement se relance tout seul sur la nouvelle map.

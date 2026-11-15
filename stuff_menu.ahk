@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.21.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.23.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -58,6 +58,14 @@ TimerX := ToInt(IniRead(IniFile, "Settings", "TimerX", "12"), 12)
 TimerY := ToInt(IniRead(IniFile, "Settings", "TimerY", "820"), 820)
 TimerDur := Max(2, Min(20, ToInt(IniRead(IniFile, "Settings", "TimerDur", "6"), 6)))   ; secondes d'affichage du résultat
 ShowChangelogOn := (IniRead(IniFile, "Settings", "ShowChangelog", "1") = "1")   ; fenêtre « Nouveautés » après chaque mise à jour
+WinThemeSel := IniRead(IniFile, "Settings", "WinTheme", "dark")   ; dark, light ou menu
+if !RegExMatch(WinThemeSel, "^(dark|light|menu)$")
+    WinThemeSel := "dark"
+WinAccent := StrUpper(IniRead(IniFile, "Settings", "WinAccent", "5B9BFF"))
+if !RegExMatch(WinAccent, "^[0-9A-F]{6}$")
+    WinAccent := "5B9BFF"
+WinFontName := IniRead(IniFile, "Settings", "WinFont", "Segoe UI")
+WinScale := Max(90, Min(120, ToInt(IniRead(IniFile, "Settings", "WinScale", "100"), 100)))
 TimerBeep := (IniRead(IniFile, "Settings", "TimerBeep", "1") = "1")   ; bip avant l'arrivée de la grenade
 RethrowKey := Trim(IniRead(IniFile, "Settings", "RethrowKey", "k"))   ; touche liée à sv_rethrow_last_grenade (chrono : départ de la relance)
 FlightAsk := (IniRead(IniFile, "Settings", "FlightAsk", "1") = "1")   ; proposer de mesurer le temps de vol après la création d'un stuff
@@ -1042,20 +1050,23 @@ DispName(it, withCat) {
 
 ; Entrées du menu principal (ouvert par la touche MenuKey)
 MainItems() {
-    return [["stuffs", "Stuffs (maps et catégories)"]
+    out := [["stuffs", "Stuffs (maps et catégories)"]
         , ["util", "Utilitaires (bots, god mode, noclip...)"]
-        , ["changemap", "Changer de map"]
         , ["last", "Relancer le dernier stuff"]
-        , ["quiz", "Quiz : stuff au hasard (sans les infos)"]
-        , ["quizans", "Quiz : voir la réponse"]
+        , ["changemap", "Changer de map"]
+        , ["quiz", "Quiz : stuff au hasard (sans les infos)"]]
+    if IsObject(quizCur)
+        out.Push(["quizans", "Quiz : voir la réponse"])
+    out.Push(["sep", "- - - - - - - - - - - -"]
         , ["save", "Sauvegarder la position actuelle"]
         , ["manage", "Gérer les stuffs et les catégories"]
         , ["share", "Profils et partage de stuffs"]
-        , ["news", "Nouveautés (historique des versions)"]
+        , ["sep", "- - - - - - - - - - - -"]
         , ["settings", "Réglages du menu"]
+        , ["news", "Nouveautés (historique des versions)"]
         , ["exec", "Relancer l'exec de " PracticeCfg]
-        , ["check", "Vérifier l'installation"]
-        , ["close", "Fermer"]]
+        , ["check", "Vérifier l'installation"])
+    return out
 }
 
 MainLabels() {
@@ -1068,6 +1079,8 @@ MainLabels() {
 MainSelect() {
     global level
     id := MainItems()[mainIdx][1]
+    if (id = "sep")
+        return
     if (id = "stuffs") {
         OpenStuffs()
         return
@@ -1140,6 +1153,157 @@ CleanLogText(txt) {
 }
 
 ; Affiche les versions plus récentes que sinceVer (toutes si vide), jusqu'à maxN versions, sans dépasser la version actuelle
+; =====================================================================
+;  Style des fenêtres (thème, couleur d'accent, police) - réglable dans l'onglet « Fenêtres »
+; =====================================================================
+Shade(hex, d) {
+    r := Max(0, Min(255, Integer("0x" SubStr(hex, 1, 2)) + d))
+    g := Max(0, Min(255, Integer("0x" SubStr(hex, 3, 2)) + d))
+    b := Max(0, Min(255, Integer("0x" SubStr(hex, 5, 2)) + d))
+    return Format("{:02X}{:02X}{:02X}", r, g, b)
+}
+
+; Palette courante : fond, champs, texte, texte discret, accent, ok, erreur, sombre ou non
+WinPal() {
+    dark := (WinThemeSel = "dark")
+    bg := ""
+    if (WinThemeSel = "menu") {
+        bg := ovBg
+        dark := (Lum(ovBg) < 140)
+    } else if dark {
+        bg := "1B1F26"
+    } else {
+        bg := "F3F4F6"
+    }
+    p := Map()
+    p["dark"] := dark
+    p["bg"] := bg
+    p["edit"] := dark ? Shade(bg, 16) : (WinThemeSel = "menu" ? Shade(bg, 14) : "FFFFFF")
+    p["txt"] := dark ? "E6E9EE" : "1B1F26"
+    p["dim"] := dark ? "8A8F98" : "6B7280"
+    p["accent"] := WinAccent
+    p["ok"] := dark ? "4FD17A" : "1B6E1B"
+    p["bad"] := dark ? "FF6B6B" : "C0392B"
+    return p
+}
+
+WinSz() {
+    return Round(10 * WinScale / 100)
+}
+
+; Nouvelle fenêtre aux couleurs et à la police choisies
+WinNew(title, opts := "+AlwaysOnTop") {
+    p := WinPal()
+    g := Gui(opts, title)
+    g.BackColor := p["bg"]
+    g.SetFont("s" WinSz() " c" p["txt"], WinFontName)
+    return g
+}
+
+BgrOf(hex) {
+    r := Integer("0x" SubStr(hex, 1, 2))
+    g := Integer("0x" SubStr(hex, 3, 2))
+    b := Integer("0x" SubStr(hex, 5, 2))
+    return (b << 16) | (g << 8) | r
+}
+
+; À appeler avant g.Show() : barre de titre et contrôles Windows en mode sombre quand le thème l'est
+WinStyle(g) {
+    p := WinPal()
+    if !p["dark"]
+        return
+    try DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", g.Hwnd, "Int", 20, "Int*", 1, "Int", 4)
+    for hw, c in g {
+        t := c.Type
+        try {
+            if (t = "Edit") {
+                c.Opt("+Background" p["edit"])
+                DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_CFD", "Ptr", 0)
+            } else if (t = "ComboBox" || t = "DDL") {
+                DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_CFD", "Ptr", 0)
+            } else if (t = "ListView") {
+                DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+                SendMessage(0x1001, 0, BgrOf(p["edit"]), c)   ; fond
+                SendMessage(0x1026, 0, BgrOf(p["edit"]), c)   ; fond du texte
+                SendMessage(0x1024, 0, BgrOf(p["txt"]), c)    ; texte
+            } else if (t = "ListBox") {
+                c.Opt("+Background" p["edit"])
+                DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+            } else if (t = "CheckBox" || t = "Radio") {
+                c.Opt("-Theme")
+            } else if (t = "Button" || t = "Slider") {
+                DllCall("uxtheme\SetWindowTheme", "Ptr", c.Hwnd, "Str", "DarkMode_Explorer", "Ptr", 0)
+            }
+        }
+    }
+}
+
+; Onglets sans le contrôle Tab de Windows (qui ne se colore pas) : même interface (UseTab, Move, Value)
+; names = noms des onglets ; x, y, w = position et largeur de la barre d'onglets
+WinTabs(g, names, x, y, w) {
+    p := WinPal()
+    st := Map("cur", 1, "start", Map(), "groups", [], "hdr", [])
+    n := names.Length
+    cw := w // n
+    CountCtrls() {
+        k := 0
+        for hw, c in g
+            k += 1
+        return k
+    }
+    TabPick(i, *) {
+        st["cur"] := i
+        for k, grp in st["groups"] {
+            for c in grp
+                c.Visible := (k = i)
+        }
+        for k, h in st["hdr"] {
+            h.SetFont((k = i) ? "bold c" p["accent"] : "norm c" p["txt"])
+            h.Redraw()
+        }
+        st["ul"].Move(x + (i - 1) * cw + 6, y + 30, cw - 12)
+    }
+    for i, nm in names {
+        h := g.Add("Text", "x" (x + (i - 1) * cw) " y" y " w" cw " h28 Center +0x200 +0x100", nm)
+        h.SetFont("s" Max(8, WinSz() - 1))
+        h.OnEvent("Click", TabPick.Bind(i))
+        st["hdr"].Push(h)
+    }
+    g.Add("Text", "x" x " y" (y + 31) " w" w " h1 Background" p["dim"])
+    st["ul"] := g.Add("Text", "x" (x + 6) " y" (y + 30) " w" (cw - 12) " h3 Background" p["accent"])
+    Use(this, i) {
+        if (i >= 1) {
+            st["start"][i] := CountCtrls()
+            return
+        }
+        all := []
+        for hw, c in g
+            all.Push(c)
+        st["groups"] := []
+        k := 1
+        while (k <= n) {
+            a := st["start"].Has(k) ? st["start"][k] : all.Length
+            b := st["start"].Has(k + 1) ? st["start"][k + 1] : all.Length
+            grp := []
+            Loop (b - a)
+                grp.Push(all[a + A_Index])
+            st["groups"].Push(grp)
+            k += 1
+        }
+        TabPick(1)
+    }
+    GetV(this) {
+        return st["cur"]
+    }
+    NoMove(this, *) {
+    }
+    t := Object()
+    t.DefineProp("UseTab", {Call: Use})
+    t.DefineProp("Move", {Call: NoMove})
+    t.DefineProp("Value", {Get: GetV})
+    return t
+}
+
 ; Changement de map : envoie « map <nom> » au jeu (le cfg d'entraînement se relance tout seul à la détection de la nouvelle map)
 ShowMapChange() {
     static open := ""
@@ -1162,12 +1326,16 @@ ShowMapChange() {
         if !has
             names.Push(n)
     }
-    d := Gui("+AlwaysOnTop", "Changer de map")
+    d := WinNew("Changer de map")
     open := d
-    d.SetFont("s10", "Segoe UI")
-    d.Add("Text", "x12 y12 w300", "Choisis la map à charger (double-clic ou bouton) :")
+    d.Add("Text", "x12 y12 w300", "Choisis la map à charger (sélection = map détectée en dernier) :")
     lb := d.Add("ListBox", "x12 y+8 w300 r12", names)
-    lb.Choose(1)
+    cur := 1
+    for k, n in names {
+        if (n = LastMap)
+            cur := k
+    }
+    lb.Choose(cur)
     d.Add("Text", "x12 y+10 w300", "Ou tape un nom de map (ex. de_mirage, cs_office) :")
     ed := d.Add("Edit", "x12 y+4 w300")
     btnGo := d.Add("Button", "x12 y+12 w180 Default", "Changer de map")
@@ -1194,6 +1362,7 @@ ShowMapChange() {
     btnNo.OnEvent("Click", Shut)
     d.OnEvent("Close", Shut)
     d.OnEvent("Escape", Shut)
+    WinStyle(d)
     d.Show("AutoSize Center")
 }
 
@@ -1217,8 +1386,7 @@ ShowNews(sinceVer := "", maxN := 5) {
     }
     if IsObject(clGui)
         try clGui.Destroy()
-    clGui := Gui("+AlwaysOnTop", "Nouveautés - Menu Stuf V." APP_VERSION)
-    clGui.SetFont("s10", "Segoe UI")
+    clGui := WinNew("Nouveautés - Menu Stuf V." APP_VERSION, "+AlwaysOnTop")
     clGui.Add("Text", "x12 y12 w620", "Voici ce qui a changé dans le menu :")
     ed := clGui.Add("Edit", "x12 y+8 w620 r20 ReadOnly +VScroll", RTrim(txt, "`r`n"))
     chk := clGui.Add("CheckBox", "x12 y+10 w620" (ShowChangelogOn ? "" : " Checked"), "Ne plus afficher cette fenêtre après les mises à jour (réglage ShowChangelog)")
@@ -1237,6 +1405,7 @@ ShowNews(sinceVer := "", maxN := 5) {
     btn.OnEvent("Click", NewsClose)
     clGui.OnEvent("Close", NewsClose)
     clGui.OnEvent("Escape", NewsClose)
+    WinStyle(clGui)
     clGui.Show("AutoSize Center")
     btn.Focus()
     return true
@@ -1517,7 +1686,12 @@ Move(d) {
     if (n = 0)
         return
     if (level = 4) {
-        mainIdx := Mod(mainIdx - 1 + d + n, n) + 1
+        items4 := MainItems()
+        Loop n {
+            mainIdx := Mod(mainIdx - 1 + d + n, n) + 1
+            if (items4[mainIdx][1] != "sep")
+                break
+        }
     } else if (level = 0) {
         mapIdx := Mod(mapIdx - 1 + d + n, n) + 1
     } else if (level = 1) {
@@ -1972,32 +2146,31 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     }
 
     dlgOpen := true
-    d := Gui("+AlwaysOnTop", "Sauvegarder un repère")
+    d := WinNew("Sauvegarder la position actuelle")
     dlgHwnd := d.Hwnd
-    d.SetFont("s10", "Segoe UI")
     d.Add("Text", "xm w95", "Map")
     ddMap := d.Add("DropDownList", "x110 yp-3 w340 Choose" mapSel, mapNames)
     d.Add("Text", "xm y+14 w95", "Type")
     ddType := d.Add("DropDownList", "x110 yp-3 w340 Choose1", Types)
     d.Add("Text", "xm y+14 w95", "Catégorie")
-    cbCat := d.Add("ComboBox", "x110 yp-3 w296", [])
-    btnCatAdd := d.Add("Button", "x+6 yp w38", "+")
+    cbCat := d.Add("ComboBox", "x110 yp-3 w256", [])
+    btnCatAdd := d.Add("Button", "x+6 yp w78", "Nouvelle")
     d.Add("Text", "xm y+14 w95", "Nom")
     edName := d.Add("Edit", "x110 yp-3 w340")
     d.Add("Text", "xm y+14 w95", "Tags")
-    cbTag := d.Add("ComboBox", "x110 yp-3 w166", [])
-    btnTagAdd := d.Add("Button", "x+6 yp w36", "+")
-    btnTagDel := d.Add("Button", "x+6 yp w36", "-")
+    cbTag := d.Add("ComboBox", "x110 yp-3 w110", [])
+    btnTagAdd := d.Add("Button", "x+6 yp w64", "Ajouter")
+    btnTagDel := d.Add("Button", "x+6 yp w64", "Retirer")
     btnTagInfo := d.Add("Button", "x+6 yp w84", "→ Info")
     d.SetFont("s9 c8A8F96")
     txTags := d.Add("Text", "x110 y+4 w340 r2", "")
-    d.SetFont("s10 cDefault")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     d.Add("Text", "xm y+10 w95", "Info chat")
     edInfo := d.Add("Edit", "x110 yp-3 w340 r3")
     d.Add("Text", "xm y+14 w95", "Position")
     edPos := d.Add("Edit", "x110 yp-3 w340 r2", posCaptured)
     if (posCaptured = "")
-        d.Add("Text", "xm y+8 w450 cC0392B", "Position non capturée : lance le jeu avec -condebug, ou colle ici la sortie de getpos.")
+        d.Add("Text", "xm y+8 w450 c" WinPal()["bad"], "Position non capturée : lance le jeu avec -condebug, ou colle ici la sortie de getpos.")
     giveY := "y+14"
     if shotPending {
         d.Add("Text", "xm y+14 w95", "Capture")
@@ -2010,7 +2183,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     }
     chkGive := d.Add("CheckBox", "xm " giveY, "Donner la grenade du type choisi (give)")
     chkFav := d.Add("CheckBox", "xm y+6", "Ajouter aux favoris")
-    btnSave := d.Add("Button", "xm y+14 w170", "Enregistrer")
+    btnSave := d.Add("Button", "xm y+14 w170 Default", "Enregistrer")
     btnCancel := d.Add("Button", "x+10 yp w170", "Annuler")
 
     FillCats(*) {
@@ -2257,6 +2430,7 @@ ShowSaveDialog(presetCat := "", presetMap := "") {
     btnCancel.OnEvent("Click", CloseDlg)
     d.OnEvent("Close", CloseDlg)
     d.OnEvent("Escape", CloseDlg)
+    WinStyle(d)
     d.Show("AutoSize Center")
     edName.Focus()
 }
@@ -2372,8 +2546,7 @@ ReloadKeep() {
 ; Petite fenêtre de saisie (reste au-dessus du jeu)
 AskText(title, prompt, defVal := "", back := "ahk_exe cs2.exe") {
     res := Map("v", "")
-    d := Gui("+AlwaysOnTop", title)
-    d.SetFont("s10", "Segoe UI")
+    d := WinNew(title, "+AlwaysOnTop")
     d.Add("Text", "w340", prompt)
     ed := d.Add("Edit", "w340", defVal)
     btnOk := d.Add("Button", "Default w165", "OK")
@@ -2387,6 +2560,7 @@ AskText(title, prompt, defVal := "", back := "ahk_exe cs2.exe") {
     btnNo.OnEvent("Click", Done.Bind(false))
     d.OnEvent("Close", Done.Bind(false))
     d.OnEvent("Escape", Done.Bind(false))
+    WinStyle(d)
     d.Show("AutoSize Center")
     ed.Focus()
     hwnd := d.Hwnd
@@ -2871,9 +3045,8 @@ ShowSettings() {
     x0 := Max(0, Min(ovX - vl, xr))
     y0 := Max(0, Min(ovY - vt, yr))
 
-    d := Gui("+AlwaysOnTop", "Réglages du menu")
-    d.SetFont("s10", "Segoe UI")
-    tabs := d.Add("Tab3", "x6 y6 w500 h700", ["Menu", "Captures", "Coordonnées", "Chronomètre"])
+    d := WinNew("Réglages du menu", "+AlwaysOnTop")
+    tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Aide"], 6, 8, 500)
     tabs.UseTab(1)
     y := 44
     ty := y + 4
@@ -2898,12 +3071,19 @@ ShowSettings() {
     d.Add("Text", "x22 y" ty " w110", "Position Y")
     slY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", y0)
     txY := d.Add("Text", "x406 y" ty " w70", "")
-    y += 40
+    y += 36
+    btnPickM := d.Add("Button", "x140 y" y " w260", "Placer avec la souris")
+    y += 44
     ty := y + 4
     d.Add("Text", "x22 y" ty " w110", "Opacité")
     slOp := d.Add("Slider", "x140 y" y " w260 Range80-255 ToolTip", ovOpacity)
     txOp := d.Add("Text", "x406 y" ty " w70", "")
     y += 46
+    yEnd1 := y
+
+    ; ----- Onglet Couleurs -----
+    tabs.UseTab(2)
+    y := 44
     ty := y + 4
     d.Add("Text", "x22 y" ty " w110", "Couleur de fond")
     ddPreset := d.Add("DropDownList", "x140 y" y " w260 Choose" pSel, pNames)
@@ -2940,10 +3120,10 @@ ShowSettings() {
     edBc := d.Add("Edit", "x140 y" y " w100 Limit7", (ovBorderCol != "") ? ovBorderCol : "")
     d.Add("Text", "x250 y" ty " w230", "ex : FF8800 (6 caractères)")
     y += 46
-    yEnd1 := y
+    yEnd2 := y
 
     ; ----- Onglet Captures -----
-    tabs.UseTab(2)
+    tabs.UseTab(3)
     y := 44
     ty := y + 4
     shotChk := ShotOn ? " Checked" : ""
@@ -2978,17 +3158,17 @@ ShowSettings() {
     d.Add("Text", "x22 y" ty " w110", "Position Y")
     slShotY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", Max(0, Min(ShotY - vt, yr)))
     txShotY := d.Add("Text", "x406 y" ty " w70", "")
+    y += 36
+    btnPickS := d.Add("Button", "x140 y" y " w260", "Placer avec la souris")
     y += 46
     d.SetFont("s9 c8A8F96")
     d.Add("Text", "x22 y" y " w460 r4", "Le liseré de la capture (épaisseur et couleur) suit automatiquement celui du menu (onglet Menu) et se dessine par-dessus l'image. La zone capturée s'applique aux prochaines captures. Pour refaire la capture d'un stuff : « Gérer les stuffs et les catégories » du menu, double-clic sur le stuff, bouton « Refaire la capture ».")
-    d.SetFont("s10 cDefault")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     y += 80
-    btnClean := d.Add("Button", "x22 y" y " w300", "Nettoyer les captures et temps orphelins")
-    y += 46
-    yEnd2 := y
+    yEnd3 := y
 
     ; ----- Onglet Coordonnées -----
-    tabs.UseTab(3)
+    tabs.UseTab(4)
     y := 44
     hudChk := hudOn ? " Checked" : ""
     chkHud := d.Add("CheckBox", "x22 y" y " w460" hudChk, "Afficher les coordonnées en temps réel")
@@ -3007,15 +3187,17 @@ ShowSettings() {
     d.Add("Text", "x22 y" ty " w110", "Position Y")
     slHudY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", Max(0, Min(HudY - vt, yr)))
     txHudY := d.Add("Text", "x406 y" ty " w70", "")
+    y += 36
+    btnPickH := d.Add("Button", "x140 y" y " w260", "Placer avec la souris")
     y += 46
     d.SetFont("s9 c8A8F96")
     d.Add("Text", "x22 y" y " w460 r8", "Affiche la map, ta position (X, Y, Z) et ton angle de vue dans le coin inférieur gauche de l'écran.`n`nSi tu l'actives puis cliques sur Enregistrer, il reste activé à chaque lancement du script, jusqu'à ce que tu le désactives ici.`n`nLes coordonnées sont demandées au jeu par la connexion directe, sans aucune touche : elles ne gênent ni les stuffs ni le chat.")
-    d.SetFont("s10 cDefault")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     y += 150
-    yEnd3 := y
+    yEnd4 := y
 
     ; ----- Onglet Chronomètre -----
-    tabs.UseTab(4)
+    tabs.UseTab(5)
     y := 44
     chkTm := d.Add("CheckBox", "x22 y" y " w460" (TimerOn ? " Checked" : ""), "Afficher le chronomètre après chaque grenade")
     y += 40
@@ -3032,7 +3214,9 @@ ShowSettings() {
     d.Add("Text", "x22 y" ty " w110", "Position Y")
     slTmY := d.Add("Slider", "x140 y" y " w260 Range0-" yr " ToolTip", Max(0, Min(TimerY - vt, yr)))
     txTmY := d.Add("Text", "x406 y" ty " w70", "")
-    y += 40
+    y += 36
+    btnPickT := d.Add("Button", "x140 y" y " w260", "Placer avec la souris")
+    y += 44
     ty := y + 4
     d.Add("Text", "x22 y" ty " w110", "Affichage")
     slTmDur := d.Add("Slider", "x140 y" y " w260 Range2-20 ToolTip", TimerDur)
@@ -3046,32 +3230,85 @@ ShowSettings() {
     y += 50
     d.SetFont("s9 c8A8F96")
     d.Add("Text", "x22 y" y " w460 r9", "Mesure le temps entre le moment où tu lâches la grenade (clic gauche relâché, ou relance avec la touche de sv_rethrow_last_grenade) et son explosion, lue dans console.log. Le menu active tout seul le journal du serveur (log on, mp_logdetail 3).`n`nFonctionne pour la smoke, la flash, la HE, le molotov, l'incendiaire et le leurre. Le résultat reste affiché le nombre de secondes choisi ci-dessus. La police, les couleurs, le liseré, les coins et l'opacité suivent le menu. Si tu tires avec une arme pendant que la grenade vole, le temps affiché peut être faux.")
-    d.SetFont("s10 cDefault")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     y += 170
-    yEnd4 := y
+    yEnd5 := y
+
+    ; ----- Onglet Fenêtres -----
+    tabs.UseTab(6)
+    y := 44
+    ty := y + 4
+    wtSel := (WinThemeSel = "light") ? 2 : (WinThemeSel = "menu") ? 3 : 1
+    d.Add("Text", "x22 y" ty " w110", "Thème")
+    ddWT := d.Add("DropDownList", "x140 y" y " w260 Choose" wtSel, ["Sombre", "Clair", "Comme le menu en jeu"])
+    y += 40
+    ty := y + 4
+    waNames := ["Bleu", "Cyan", "Vert", "Or", "Orange", "Rose", "Violet"]
+    waHex := ["5B9BFF", "4FD8E8", "4FD17A", "E3C48A", "FF9F43", "FF7EB6", "B28DFF"]
+    waSel := 1
+    for i, h in waHex {
+        if (h = WinAccent)
+            waSel := i
+    }
+    d.Add("Text", "x22 y" ty " w110", "Accent")
+    ddWA := d.Add("DropDownList", "x140 y" y " w260 Choose" waSel, waNames)
+    y += 40
+    ty := y + 4
+    wfSel := 1
+    for i, f in fonts {
+        if (i > 1 && f = WinFontName)
+            wfSel := i
+    }
+    d.Add("Text", "x22 y" ty " w110", "Police")
+    ddWF := d.Add("DropDownList", "x140 y" y " w260 Choose" wfSel, fonts)
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Taille du texte")
+    slWS := d.Add("Slider", "x140 y" y " w260 Range90-120 ToolTip", WinScale)
+    txWS := d.Add("Text", "x406 y" ty " w70", WinScale " %")
+    slWS.OnEvent("Change", (*) => txWS.Text := slWS.Value " %")
+    y += 50
+    d.SetFont("s9 c" WinPal()["dim"])
+    d.Add("Text", "x22 y" y " w460 r5", "Ces réglages concernent les fenêtres du menu (réglages, gestion, profils...). Ils s'appliquent à la prochaine ouverture d'une fenêtre, après « Enregistrer ». « Comme le menu en jeu » reprend le fond et le thème de l'overlay. Si les fenêtres sont illisibles, choisis « Clair », ou mets WinTheme=light dans config.ini.")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
+    y += 100
+    yEnd6 := y
+
+    ; ----- Onglet Aide -----
+    tabs.UseTab(7)
+    y := 44
+    btnChkS := d.Add("Button", "x22 y" y " w440", "Vérifier l'installation")
+    y += 44
+    btnDiag := d.Add("Button", "x22 y" y " w440", "Copier le diagnostic (pour demander de l'aide)")
+    y += 44
+    btnClean := d.Add("Button", "x22 y" y " w440", "Nettoyer les captures et temps orphelins")
+    y += 50
+    d.SetFont("s9 c8A8F96")
+    d.Add("Text", "x22 y" y " w440 r6", "Vérifier l'installation : contrôle le dossier cfg, console.log et la connexion directe.`n`nCopier le diagnostic : met dans le presse-papiers un rapport sans données personnelles, à coller quand tu demandes de l'aide.`n`nNettoyer : supprime les captures et temps de vol qui ne correspondent plus à aucun stuff.")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
+    y += 120
+    yEnd7 := y
     tabs.UseTab(0)
-    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4) + 6
+    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4, yEnd5, yEnd6, yEnd7) + 6
     tabs.Move(6, 6, 500, tabH)
     y := tabH + 18
-    d.SetFont("s10 bold")
+    d.SetFont("s" WinSz() " bold")
     ledTx := d.Add("Text", "x14 y" y " w466", "")
-    d.SetFont("s10 norm")
+    d.SetFont("s" WinSz() " norm")
     y += 28
     btnSave := d.Add("Button", "x12 y" y " w150 Default", "Enregistrer")
     btnReset := d.Add("Button", "x+8 yp w150", "Réinitialiser")
     btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
-    btnChkS := d.Add("Button", "x12 y+10 w466", "Vérifier l'installation")
-    btnDiag := d.Add("Button", "x12 y+8 w466", "Copier le diagnostic (pour demander de l'aide)")
 
     LedTick() {
         if !ProcessExist("cs2.exe") {
-            ledTx.SetFont("cC0392B")
+            ledTx.SetFont("c" WinPal()["bad"])
             ledTx.Text := "● CS2 n'est pas lancé"
         } else if NetOpen() {
-            ledTx.SetFont("c1B8E3A")
+            ledTx.SetFont("c" WinPal()["ok"])
             ledTx.Text := "● CS2 connecté (connexion directe active)"
         } else {
-            ledTx.SetFont("cC0392B")
+            ledTx.SetFont("c" WinPal()["bad"])
             ledTx.Text := "● CS2 lancé mais non connecté : relance-le avec le menu"
         }
     }
@@ -3197,46 +3434,84 @@ ShowSettings() {
     }
 
     ResetClick(*) {
-        global ovTheme
-        ovTheme := ""
-        ddTheme.Choose(1)
-        ddFont.Choose(1)
-        slScale.Value := 100
-        slX.Value := Max(0, Min(30 - vl, xr))
-        slY.Value := Max(0, Min(100 - vt, yr))
-        slOp.Value := 225
-        slR.Value := 20
-        slG.Value := 24
-        slB.Value := 29
-        ddPreset.Choose(2)
-        slBw.Value := 2
-        slCr.Value := 14
-        ddBc.Choose(1)
-        edBc.Text := ""
-        ovBorderCol := ""
-        chkHud.Value := 0
-        ddHudPos.Choose(1)
-        slHudX.Value := Max(0, Min(12 - vl, xr))
-        slHudY.Value := Max(0, Min(900 - vt, yr))
-        chkTm.Value := 1
-        ddTmPos.Choose(1)
-        slTmX.Value := Max(0, Min(12 - vl, xr))
-        slTmY.Value := Max(0, Min(820 - vt, yr))
-        slTmDur.Value := 6
-        chkFlAsk.Value := 1
-        chkBeep.Value := 1
-        chkShotOn.Value := 1
-        slShotSz.Value := 100
-        slShotZm.Value := 160
-        slShotCr.Value := 3
-        ddShotPos.Choose(1)
-        slShotX.Value := Max(0, Min(520 - vl, xr))
-        slShotY.Value := Max(0, Min(100 - vt, yr))
+        global ovTheme, ovBorderCol
+        tv := tabs.Value
+        if (tv = 1) {
+            ovTheme := ""
+            ddTheme.Choose(1)
+            ddFont.Choose(1)
+            slScale.Value := 100
+            slX.Value := Max(0, Min(30 - vl, xr))
+            slY.Value := Max(0, Min(100 - vt, yr))
+            slOp.Value := 225
+        } else if (tv = 2) {
+            ovTheme := ""
+            ddTheme.Choose(1)
+            slR.Value := 20
+            slG.Value := 24
+            slB.Value := 29
+            ddPreset.Choose(2)
+            slBw.Value := 2
+            slCr.Value := 14
+            ddBc.Choose(1)
+            edBc.Text := ""
+            ovBorderCol := ""
+        } else if (tv = 3) {
+            chkShotOn.Value := 1
+            slShotSz.Value := 100
+            slShotZm.Value := 160
+            slShotCr.Value := 3
+            ddShotPos.Choose(1)
+            slShotX.Value := Max(0, Min(520 - vl, xr))
+            slShotY.Value := Max(0, Min(100 - vt, yr))
+        } else if (tv = 4) {
+            chkHud.Value := 0
+            ddHudPos.Choose(1)
+            slHudX.Value := Max(0, Min(12 - vl, xr))
+            slHudY.Value := Max(0, Min(900 - vt, yr))
+        } else if (tv = 5) {
+            chkTm.Value := 1
+            ddTmPos.Choose(1)
+            slTmX.Value := Max(0, Min(12 - vl, xr))
+            slTmY.Value := Max(0, Min(820 - vt, yr))
+            slTmDur.Value := 6
+            chkFlAsk.Value := 1
+            chkBeep.Value := 1
+        } else if (tv = 6) {
+            ddWT.Choose(1)
+            ddWA.Choose(1)
+            ddWF.Choose(1)
+            slWS.Value := 100
+            txWS.Text := "100 %"
+            return
+        } else {
+            return
+        }
+        Sync()
+    }
+
+    ; Place un élément à l'endroit où l'on clique à l'écran
+    PickPos(slx, sly, ddPlace := "", *) {
+        CoordMode("Mouse", "Screen")
+        ToolTip("Clique à l'endroit voulu (Échap pour annuler)")
+        while (!GetKeyState("LButton", "P") && !GetKeyState("Escape", "P"))
+            Sleep(20)
+        cancel := GetKeyState("Escape", "P")
+        MouseGetPos(&mx, &my)
+        KeyWait("LButton")
+        KeyWait("Escape")
+        ToolTip()
+        if cancel
+            return
+        slx.Value := Max(0, Min(mx - vl, xr))
+        sly.Value := Max(0, Min(my - vt, yr))
+        if IsObject(ddPlace)
+            ddPlace.Choose(2)
         Sync()
     }
 
     Finish(save, *) {
-        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep
+        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep, WinThemeSel, WinAccent, WinFontName, WinScale
         if save {
             IniWrite(ovTheme, IniFile, "Overlay", "Theme")
             IniWrite(ovFont, IniFile, "Overlay", "Font")
@@ -3266,6 +3541,14 @@ ShowSettings() {
             IniWrite(TimerDur, IniFile, "Settings", "TimerDur")
             IniWrite(FlightAsk ? 1 : 0, IniFile, "Settings", "FlightAsk")
             IniWrite(TimerBeep ? 1 : 0, IniFile, "Settings", "TimerBeep")
+            WinThemeSel := (ddWT.Value = 2) ? "light" : (ddWT.Value = 3) ? "menu" : "dark"
+            WinAccent := waHex[ddWA.Value]
+            WinFontName := (ddWF.Value = 1) ? "Segoe UI" : ddWF.Text
+            WinScale := slWS.Value
+            IniWrite(WinThemeSel, IniFile, "Settings", "WinTheme")
+            IniWrite(WinAccent, IniFile, "Settings", "WinAccent")
+            IniWrite(WinFontName, IniFile, "Settings", "WinFont")
+            IniWrite(WinScale, IniFile, "Settings", "WinScale")
         } else {
             ovFont := old["Font"]
             ovScale := old["Scale"]
@@ -3334,6 +3617,10 @@ ShowSettings() {
     slTmY.OnEvent("Change", Sync)
     slTmDur.OnEvent("Change", Sync)
     btnTmTest.OnEvent("Click", (*) => TmShow("Smoke : 2,9 s"))
+    btnPickM.OnEvent("Click", PickPos.Bind(slX, slY, ""))
+    btnPickS.OnEvent("Click", PickPos.Bind(slShotX, slShotY, ddShotPos))
+    btnPickH.OnEvent("Click", PickPos.Bind(slHudX, slHudY, ddHudPos))
+    btnPickT.OnEvent("Click", PickPos.Bind(slTmX, slTmY, ddTmPos))
     slShotSz.OnEvent("Change", Sync)
     slShotZm.OnEvent("Change", Sync)
     slShotCr.OnEvent("Change", Sync)
@@ -3351,6 +3638,7 @@ ShowSettings() {
     btnCancel.OnEvent("Click", Finish.Bind(false))
     d.OnEvent("Close", Finish.Bind(false))
     d.OnEvent("Escape", Finish.Bind(false))
+    WinStyle(d)
     d.Show("AutoSize x" Max(0, A_ScreenWidth - 520) " y60")
     Sync()
 }
@@ -3635,20 +3923,22 @@ ShowManager() {
     }
     ui := Map("busy", false)
 
-    d := Gui("+AlwaysOnTop", "Gestion des stuffs et des catégories")
-    d.SetFont("s10", "Segoe UI")
+    d := WinNew("Gestion des stuffs et des catégories", "+AlwaysOnTop +Resize +MinSize780x540")
     d.Add("Text", "x12 y16 w50", "Map")
     ddMap := d.Add("DropDownList", "x64 y12 w320 Choose" selMap, labels)
     d.Add("Text", "x12 y54 w260", "Catégories")
-    d.Add("Text", "x290 y54 w300", "Stuffs de la catégorie")
+    d.Add("Text", "x290 y54 w170", "Stuffs de la catégorie")
+    edFind := d.Add("Edit", "x460 y50 w300")
+    SendMessage(0x1501, 1, StrPtr("Rechercher un stuff..."), edFind)   ; texte grisé quand le champ est vide
     lvCat := d.Add("ListView", "x12 y78 w260 r14 -Multi", ["Catégorie", "Stuffs", "Cad."])
-    lvSt := d.Add("ListView", "x290 y78 w470 r14", ["Nom", "Cad.", "Info"])
+    lvSt := d.Add("ListView", "x290 y78 w470 r14", ["Nom", "Cad.", "Vol", "Info"])
     lvCat.ModifyCol(1, 140)
     lvCat.ModifyCol(2, 50)
     lvCat.ModifyCol(3, 45)
     lvSt.ModifyCol(1, 190)
     lvSt.ModifyCol(2, 45)
-    lvSt.ModifyCol(3, 215)
+    lvSt.ModifyCol(3, 55)
+    lvSt.ModifyCol(4, 150)
     lvCat.GetPos(&lx, &ly, &lw, &lh)
     row1 := ly + lh + 8
     row2 := row1 + 34
@@ -3665,14 +3955,14 @@ ShowManager() {
     btnStInfo := d.Add("Button", "x+8 yp w86", "Info chat")
     btnStLock := d.Add("Button", "x+8 yp w86", "Cadenas")
     btnStDel := d.Add("Button", "x+8 yp w86", "Supprimer")
-    d.Add("Text", "x290 y" row2t " w100", "Déplacer vers")
+    txMoveLbl := d.Add("Text", "x290 y" row2t " w100", "Déplacer vers")
     cbDest := d.Add("ComboBox", "x395 y" row2 " w230", [])
     btnMove := d.Add("Button", "x+8 yp-1 w125 Default", "Déplacer")
     d.SetFont("s9 c8A8F96")
-    d.Add("Text", "x12 y" note " w748 r3", "Double-clique sur un stuff (ou « Modifier… ») pour tout changer : type, catégorie, nom, coordonnées, commandes, info. Supprimer une catégorie garde ses stuffs : ils sont déplacés dans « " FALLBACK_CAT " ». Sélectionne plusieurs stuffs avec Ctrl ou Maj. Un élément verrouillé ne peut être ni supprimé, ni renommé, ni déplacé.")
-    d.SetFont("s10 c1B6E1B")
+    txNote := d.Add("Text", "x12 y" note " w748 r3", "Double-clique sur un stuff (ou « Modifier… ») pour tout changer : type, catégorie, nom, coordonnées, commandes, info. Supprimer une catégorie garde ses stuffs : ils sont déplacés dans « " FALLBACK_CAT " ». Sélectionne plusieurs stuffs avec Ctrl ou Maj. Un élément verrouillé ne peut être ni supprimé, ni renommé, ni déplacé.")
+    d.SetFont("s" WinSz() " c" WinPal()["ok"])
     stText := d.Add("Text", "x12 y" status " w748", "")
-    d.SetFont("s10 cDefault")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     btnClose := d.Add("Button", "x12 y" bottom " w120", "Fermer")
     btnUndo := d.Add("Button", "x+8 yp w260", "Annuler la suppression (Ctrl+Z)")
 
@@ -3709,10 +3999,43 @@ ShowManager() {
         cc := SelCat()
         if (cc = "")
             return
+        q := Trim(edFind.Value)
         for ent in ReadEntries(MapPath())[2] {
-            if (ent[1] = cc)
-                lvSt.Add("", ent[2], locks.Has("it|" StuffKey(cc, ent[2])) ? LOCK_ICON : "", InfoDisp(ent[4]))
+            if (ent[1] != cc)
+                continue
+            if (q != "" && !InStr(ent[2], q) && !InStr(InfoDisp(ent[4]), q))
+                continue
+            ft := FlightTime(ent[3])
+            lvSt.Add("", ent[2], locks.Has("it|" StuffKey(cc, ent[2])) ? LOCK_ICON : "", (ft != "") ? FlightText(ft) : "", InfoDisp(ent[4]))
         }
+    }
+
+    ; Clic droit sur un stuff : actions rapides
+    StuffMenu(ctrl, item, isRight, x, y) {
+        if (item = 0)
+            return
+        lvSt.Modify(item, "Select Focus")
+        m := Menu()
+        m.Add("Modifier...", EditStuff)
+        m.Add("Renommer", RenStuff)
+        m.Add("Info chat", InfoStuff)
+        m.Add("Cadenas", LockStuff)
+        m.Add()
+        m.Add("Supprimer", DelStuff)
+        m.Show()
+    }
+
+    ; Fenêtre redimensionnable : les listes grandissent, les boutons suivent
+    ResizeMgr(g, minmax, w, h) {
+        if (minmax = -1 || !ui.Has("h0"))
+            return
+        dh := h - ui["h0"]
+        dw := w - ui["w0"]
+        lvCat.Move(, , , ui["lh0"] + dh)
+        lvSt.Move(, , ui["lw0"] + dw, ui["lh0"] + dh)
+        for c, y0 in ui["ys"]
+            c.Move(, y0 + dh)
+        edFind.Move(, , Max(120, ui["fw0"] + dw))
     }
 
     RefreshCats(keep := "") {
@@ -4040,6 +4363,9 @@ ShowManager() {
     }
 
     ddMap.OnEvent("Change", (*) => RefreshCats(""))
+    edFind.OnEvent("Change", (*) => RefreshStuffs())
+    lvSt.OnEvent("ContextMenu", StuffMenu)
+    d.OnEvent("Size", ResizeMgr)
     lvCat.OnEvent("ItemSelect", CatSelected)
     btnCatNew.OnEvent("Click", NewCat)
     btnCatRen.OnEvent("Click", RenCat)
@@ -4060,7 +4386,22 @@ ShowManager() {
     d.OnEvent("Close", Finish)
     d.OnEvent("Escape", Finish)
     RefreshCats("")
+    WinStyle(d)
     d.Show("AutoSize Center")
+    d.GetClientPos(, , &cw0, &ch0)
+    lvSt.GetPos(, , &lw0, &lh0)
+    edFind.GetPos(, , &fw0)
+    ui["w0"] := cw0
+    ui["h0"] := ch0
+    ui["lw0"] := lw0
+    ui["lh0"] := lh0
+    ui["fw0"] := fw0
+    ys := Map()
+    for c in [btnCatNew, btnCatRen, btnCatDel, btnCatLock, btnStEdit, btnStRen, btnStInfo, btnStLock, btnStDel, cbDest, btnMove, stText, btnClose, btnUndo, txMoveLbl, txNote] {
+        c.GetPos(, &cy)
+        ys[c] := cy
+    }
+    ui["ys"] := ys
 }
 
 ; =====================================================================
@@ -4101,22 +4442,28 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             typeSel := tp0
     }
 
-    d := Gui("+AlwaysOnTop", "Modifier le stuff")
-    d.SetFont("s10", "Segoe UI")
+    d := WinNew("Modifier le stuff", "+AlwaysOnTop")
     d.Add("Text", "xm w110", "Type")
     ddType := d.Add("DropDownList", "x130 yp-3 w380 Choose1", Types)
     d.Add("Text", "xm y+14 w110", "Catégorie")
     cbCat := d.Add("ComboBox", "x130 yp-3 w380", [])
     d.Add("Text", "xm y+14 w110", "Nom")
     edName := d.Add("Edit", "x130 yp-3 w380", oldName)
+    fl := Map("v", "")
+    flOld := FlightTime(cmd)
+    d.Add("Text", "xm y+10 w110", "Temps de vol")
+    txFlight := d.Add("Text", "x130 yp w120", (flOld != "") ? FlightText(flOld) : "non mesuré")
+    btnFlight := d.Add("Button", "x+8 yp-5 w160", "Mesurer...")
+    btnFlightDel := d.Add("Button", "x+8 yp w90", "Supprimer")
+    btnFlightDel.Enabled := (flOld != "")
     d.Add("Text", "xm y+14 w110", "Tags")
-    cbTag := d.Add("ComboBox", "x130 yp-3 w206", [])
-    btnTagAdd := d.Add("Button", "x+6 yp w36", "+")
-    btnTagDel := d.Add("Button", "x+6 yp w36", "-")
+    cbTag := d.Add("ComboBox", "x130 yp-3 w150", [])
+    btnTagAdd := d.Add("Button", "x+6 yp w64", "Ajouter")
+    btnTagDel := d.Add("Button", "x+6 yp w64", "Retirer")
     btnTagInfo := d.Add("Button", "x+6 yp w84", "→ Info")
     d.SetFont("s9 c8A8F96")
     txTags := d.Add("Text", "x130 y+4 w380 r2", "")
-    d.SetFont("s10 cDefault")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     d.Add("Text", "xm y+10 w110", "Info chat")
     edInfo := d.Add("Edit", "x130 yp-3 w380 r3", SplitInfo(ent[4])[1])
     d.Add("Text", "xm y+14 w110", "Position")
@@ -4126,14 +4473,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     edOthers := d.Add("Edit", "x130 yp-3 w380 r2", others)
     d.SetFont("s9 c8A8F96")
     d.Add("Text", "xm y+6 w500", "Exemples : give weapon_smokegrenade ou sv_rethrow_last_grenade. Sépare les commandes par un point-virgule.")
-    d.SetFont("s10 cDefault")
-    fl := Map("v", "")
-    flOld := FlightTime(cmd)
-    d.Add("Text", "xm y+10 w110", "Temps de vol")
-    txFlight := d.Add("Text", "x130 yp w120", (flOld != "") ? FlightText(flOld) : "non mesuré")
-    btnFlight := d.Add("Button", "x+8 yp-5 w160", "Mesurer...")
-    btnFlightDel := d.Add("Button", "x+8 yp w90", "Supprimer")
-    btnFlightDel.Enabled := (flOld != "")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     shotFile := ShotPath(keyMap, cmd)
     curShot := shotFile
     shotRedone := false
@@ -4439,6 +4779,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
     btnCancel.OnEvent("Click", CancelClick)
     d.OnEvent("Close", CancelClick)
     d.OnEvent("Escape", CancelClick)
+    WinStyle(d)
     d.Show("AutoSize Center")
     hwnd := d.Hwnd
     WinWaitClose("ahk_id " hwnd)
@@ -5421,8 +5762,7 @@ ShowImport(txt, ownerHwnd) {
     imgs := pack["imgs"]
     tms := pack["tms"]
     res := Map("done", false)
-    d := Gui("+AlwaysOnTop +OwnDialogs", "Importer des stuffs")
-    d.SetFont("s10", "Segoe UI")
+    d := WinNew("Importer des stuffs", "+AlwaysOnTop +OwnDialogs")
     src := (pack["from"] != "") ? " (profil « " pack["from"] " »)" : ""
     d.Add("Text", "x12 y12 w720", ents.Length " stuff(s) reçu(s)" src ". Coche ceux à importer.")
     d.Add("Text", "x12 y46 w150", "Profil de destination")
@@ -5449,7 +5789,7 @@ ShowImport(txt, ownerHwnd) {
     if (zdelta != 0)
         note .= "`nHauteur : les coordonnées sont ajustées de " zdelta " pour correspondre à ton réglage TpZOffset."
     d.Add("Text", "x12 y+8 w720 r3", note)
-    d.SetFont("s10 cDefault")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     btnOk := d.Add("Button", "x12 y+10 w200 Default", "Importer la sélection")
     btnAll := d.Add("Button", "x+10 yp w140", "Tout cocher")
     btnNone := d.Add("Button", "x+10 yp w140", "Tout décocher")
@@ -5583,6 +5923,7 @@ ShowImport(txt, ownerHwnd) {
     d.OnEvent("Close", Cancel)
     d.OnEvent("Escape", Cancel)
     Refill()
+    WinStyle(d)
     d.Show("AutoSize Center")
     hwnd := d.Hwnd
     WinWaitClose("ahk_id " hwnd)
@@ -5610,45 +5951,63 @@ ShowShare() {
     mgrOpen := true
     rows := []
 
-    d := Gui("+AlwaysOnTop +OwnDialogs", "Profils et partage de stuffs")
-    d.SetFont("s10", "Segoe UI")
+    d := WinNew("Profils et partage de stuffs", "+AlwaysOnTop +OwnDialogs")
     d.Add("Text", "x12 y14 w130", "Profil actif :")
-    d.SetFont("s10 bold")
+    d.SetFont("s" WinSz() " bold")
     d.Add("Text", "x130 y14 w300", curProfile)
-    d.SetFont("s10 norm")
-    d.Add("Text", "x12 y50 w130", "Profils")
-    ddProf := d.Add("DropDownList", "x130 y46 w250", ListProfiles())
+    d.SetFont("s" WinSz() " norm")
+    tabs := WinTabs(d, ["Profils", "Partager des stuffs", "Sauvegardes"], 6, 48, 762)
+
+    ; ----- Onglet Profils -----
+    tabs.UseTab(1)
+    d.Add("Text", "x22 y88 w100", "Profil")
+    ddProf := d.Add("DropDownList", "x130 y84 w250", ListProfiles())
     btnAct := d.Add("Button", "x+8 yp-1 w100", "Activer")
     btnNew := d.Add("Button", "x+8 yp w100", "Nouveau…")
     btnDelP := d.Add("Button", "x+8 yp w100", "Supprimer")
-    d.Add("Text", "x12 y92 w740", "Exporter : coche les stuffs du profil actif à partager (un seul, plusieurs, ou tout).")
-    lvEx := d.Add("ListView", "x12 y118 w740 r12 Checked NoSort", ["Map", "Catégorie", "Nom", "Info"])
+    d.SetFont("s9 c8A8F96")
+    d.Add("Text", "x22 y130 w724 r2", "Un profil est un jeu complet de maps, favoris, cadenas, temps de vol et captures. Le profil Principal est celui de base. « Activer » recharge le menu avec le profil choisi.")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
+    d.Add("Text", "x22 y190 w724", "Changer de PC ou sauvegarder un profil entier :")
+    btnPExp := d.Add("Button", "x22 y216 w240", "Exporter le profil (.zip)…")
+    btnPImp := d.Add("Button", "x+8 yp w240", "Importer un profil (.zip)…")
+    yEnd1 := 280
+
+    ; ----- Onglet Partager -----
+    tabs.UseTab(2)
+    d.Add("Text", "x22 y88 w724", "Exporter : coche les stuffs du profil actif à partager (un seul, plusieurs, ou tout).")
+    lvEx := d.Add("ListView", "x22 y114 w724 r11 Checked NoSort", ["Map", "Catégorie", "Nom", "Info"])
     lvEx.ModifyCol(1, 110)
-    lvEx.ModifyCol(2, 190)
+    lvEx.ModifyCol(2, 180)
     lvEx.ModifyCol(3, 220)
     lvEx.ModifyCol(4, 190)
     lvEx.GetPos(&lx, &ly, &lw, &lh)
     r1 := ly + lh + 8
-    yImg := r1 + 36
-    yImpT := r1 + 78
-    yImpB := r1 + 104
-    yStat := r1 + 148
-    yClose := r1 + 178
-    btnAll := d.Add("Button", "x12 y" r1 " w120", "Tout cocher")
+    btnAll := d.Add("Button", "x22 y" r1 " w120", "Tout cocher")
     btnNone := d.Add("Button", "x+8 yp w120", "Tout décocher")
     btnFile := d.Add("Button", "x+8 yp w200", "Exporter vers un fichier…")
     btnCode := d.Add("Button", "x+8 yp w200", "Copier le code")
-    chkImg := d.Add("CheckBox", "x12 y" yImg " w740 Checked", "Inclure les captures d'écran des stuffs (export vers un fichier uniquement)")
-    d.Add("Text", "x12 y" yImpT " w740", "Importer : reçu d'un ami ?")
-    btnImpF := d.Add("Button", "x12 y" yImpB " w240", "Importer un fichier .stuffpack…")
+    stCount := d.Add("Text", "x22 y" (r1 + 36) " w724", "")
+    chkImg := d.Add("CheckBox", "x22 y" (r1 + 60) " w724 Checked", "Inclure les captures d'écran des stuffs (export vers un fichier uniquement)")
+    d.Add("Text", "x22 y" (r1 + 96) " w724", "Importer : reçu d'un ami ?")
+    btnImpF := d.Add("Button", "x22 y" (r1 + 122) " w240", "Importer un fichier .stuffpack…")
     btnImpC := d.Add("Button", "x+8 yp w300", "Importer depuis le presse-papiers (code)")
-    d.SetFont("s10 c1B6E1B")
-    stT := d.Add("Text", "x12 y" yStat " w740", "")
-    d.SetFont("s10 cDefault")
-    btnClose := d.Add("Button", "x12 y" yClose " w120", "Fermer")
-    btnRest := d.Add("Button", "x+8 yp w200", "Restaurer une sauvegarde…")
-    btnPExp := d.Add("Button", "x+8 yp w170", "Exporter le profil…")
-    btnPImp := d.Add("Button", "x+8 yp w170", "Importer un profil…")
+    yEnd2 := r1 + 166
+
+    ; ----- Onglet Sauvegardes -----
+    tabs.UseTab(3)
+    d.Add("Text", "x22 y88 w724 r3", "Une sauvegarde de tes maps est faite chaque jour, et avant chaque mise à jour. Tu peux revenir à l'une d'elles. Ton état actuel est sauvegardé avant la restauration.")
+    btnRest := d.Add("Button", "x22 y140 w260", "Restaurer une sauvegarde…")
+    yEnd3 := 220
+
+    tabs.UseTab(0)
+    tabH := Max(yEnd1, yEnd2, yEnd3) - 44 + 6
+    tabs.Move(6, 44, 762, tabH)
+    yStat := 44 + tabH + 10
+    d.SetFont("s" WinSz() " c" WinPal()["ok"])
+    stT := d.Add("Text", "x12 y" yStat " w756", "")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
+    btnClose := d.Add("Button", "x12 y" (yStat + 32) " w120", "Fermer")
 
     pick := 1
     for k, pn in ListProfiles() {
@@ -5671,6 +6030,15 @@ ShowShare() {
                 lvEx.Add("", mn, ent[1], ent[2], InfoDisp(ent[4]))
             }
         }
+            UpdCount()
+    }
+
+    UpdCount(*) {
+        n := 0
+        r := 0
+        while (r := lvEx.GetNext(r, "Checked"))
+            n += 1
+        stCount.Text := n " stuff(s) coché(s) sur " lvEx.GetCount()
     }
 
     Picked() {
@@ -5683,7 +6051,7 @@ ShowShare() {
 
     CheckAll(on, *) {
         Loop lvEx.GetCount()
-            lvEx.Modify(A_Index, on ? "Check" : "-Check")
+            lvEx.Modify(A_Index, on ? "Check" : "-Check")        UpdCount()
     }
 
     ExportFile(*) {
@@ -5805,11 +6173,13 @@ ShowShare() {
     btnDelP.OnEvent("Click", DelProf)
     btnClose.OnEvent("Click", Finish)
     btnRest.OnEvent("Click", (*) => ShowRestore(d.Hwnd))
+    lvEx.OnEvent("ItemCheck", (*) => SetTimer(UpdCount, -30))
     btnPExp.OnEvent("Click", (*) => ExportProfile(ddProf.Text, d.Hwnd))
     btnPImp.OnEvent("Click", ImportProfileBtn)
     d.OnEvent("Close", Finish)
     d.OnEvent("Escape", Finish)
     Fill()
+    WinStyle(d)
     d.Show("AutoSize Center")
 }
 
@@ -6164,6 +6534,19 @@ PreUpdateBackup() {
     }
 }
 
+; Nom de dossier de sauvegarde -> [type lisible, date lisible]
+BackupLabel(nm) {
+    if RegExMatch(nm, "^(\d{4})-(\d\d)-(\d\d)$", &m)
+        return ["Automatique (quotidienne)", m[3] "/" m[2] "/" m[1]]
+    if RegExMatch(nm, "^avant-maj-(.+?)_(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\d\d$", &m)
+        return ["Avant la mise à jour " m[1], m[4] "/" m[3] "/" m[2] " à " m[5] " h " m[6]]
+    if RegExMatch(nm, "^avant-restauration-(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\d\d$", &m)
+        return ["Avant une restauration", m[3] "/" m[2] "/" m[1] " à " m[4] " h " m[5]]
+    if RegExMatch(nm, "^avant-import-(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\d\d$", &m)
+        return ["Avant un import de profil", m[3] "/" m[2] "/" m[1] " à " m[4] " h " m[5]]
+    return [nm, ""]
+}
+
 ShowRestore(ownerHwnd) {
     root := DataDir "\backup\auto"
     names := []
@@ -6174,18 +6557,20 @@ ShowRestore(ownerHwnd) {
         return
     }
     SortNames(names, true)
-    d := Gui("+AlwaysOnTop +OwnDialogs", "Restaurer une sauvegarde")
-    d.SetFont("s10", "Segoe UI")
-    d.Add("Text", "x12 y12 w470", "Choisis la sauvegarde à restaurer pour le profil « " curProfile " ».`nTon état actuel est sauvegardé juste avant (dossier avant-restauration).")
-    lv := d.Add("ListView", "x12 y58 w470 r10 NoSort -Multi", ["Sauvegarde", "Maps"])
+    d := WinNew("Restaurer une sauvegarde", "+AlwaysOnTop +OwnDialogs")
+    d.Add("Text", "x12 y12 w470", "Choisis la sauvegarde à restaurer pour le profil « " curProfile " ».`nTon état actuel est sauvegardé juste avant (sauvegarde « Avant une restauration »).")
+    lv := d.Add("ListView", "x12 y58 w470 r10 NoSort -Multi", ["Type", "Date", "Maps", "Dossier"])
     for nm in names {
         cnt := 0
         Loop Files root "\" nm "\*.txt"
             cnt += 1
-        lv.Add("", nm, cnt)
+        fb := BackupLabel(nm)
+        lv.Add("", fb[1], fb[2], cnt, nm)
     }
-    lv.ModifyCol(1, 330)
-    lv.ModifyCol(2, 80)
+    lv.ModifyCol(1, 230)
+    lv.ModifyCol(2, 150)
+    lv.ModifyCol(3, 60)
+    lv.ModifyCol(4, 0)
     btnOk := d.Add("Button", "x12 y+12 w200 Default", "Restaurer")
     btnNo := d.Add("Button", "x+10 yp w120", "Annuler")
 
@@ -6193,7 +6578,7 @@ ShowRestore(ownerHwnd) {
         r := lv.GetNext(0)
         if !r
             return
-        sel := lv.GetText(r, 1)
+        sel := lv.GetText(r, 4)
         ans := MsgBox("Remplacer les maps du profil « " curProfile " » par la sauvegarde « " sel " » ?`nTon état actuel sera sauvegardé avant.", "Restaurer", 0x40024)
         if (ans != "Yes")
             return
@@ -6224,6 +6609,7 @@ ShowRestore(ownerHwnd) {
     btnNo.OnEvent("Click", CancelRestore)
     d.OnEvent("Close", CancelRestore)
     d.OnEvent("Escape", CancelRestore)
+    WinStyle(d)
     d.Show("AutoSize Center")
     hw := d.Hwnd
     WinWaitClose("ahk_id " hw)
@@ -6367,17 +6753,43 @@ StartCheck(*) {
     chkAttempts := 0
     chkTicks := 0
     chkBusy := false
-    chkGui := Gui("+AlwaysOnTop", "Vérification de l'installation")
-    chkGui.SetFont("s10", "Segoe UI")
+    chkGui := WinNew("Vérification de l'installation", "+AlwaysOnTop")
     chkHead := chkGui.Add("Text", "x12 y12 w620 r2", "")
     chkTxt := chkGui.Add("Text", "x12 y+10 w620 r16", "")
     btnRe := chkGui.Add("Button", "x12 y+12 w220", "Relancer la vérification")
     btnX := chkGui.Add("Button", "x+10 yp w120", "Fermer")
+    btnCfgCopy := chkGui.Add("Button", "x12 y+10 w300", "Copier cs2_practice.cfg dans le cfg de CS2")
+    btnCfgOpen := chkGui.Add("Button", "x+10 yp w200", "Ouvrir le dossier cfg")
+    CfgCopy(*) {
+        src := A_ScriptDir "\" PracticeCfg ".cfg"
+        if !FileExist(src)
+            src := A_ScriptDir "\cs2_practice.cfg"
+        if !FileExist(src) {
+            MsgBox("Fichier cs2_practice.cfg introuvable à côté du menu.", "Vérification", 0x40010)
+            return
+        }
+        try {
+            FileCopy(src, cfgDir "\" PracticeCfg ".cfg", 1)
+            MsgBox("cs2_practice.cfg copié dans :`n" cfgDir, "Vérification", 0x40040)
+            SetTimer(StartCheck, -50)
+        } catch as err {
+            MsgBox("Copie impossible : " err.Message, "Vérification", 0x40010)
+        }
+    }
+    CfgOpen(*) {
+        if DirExist(cfgDir)
+            Run('explorer "' cfgDir '"')
+        else
+            MsgBox("Dossier cfg introuvable : " cfgDir "`nCorrige CfgPath dans config.ini.", "Vérification", 0x40030)
+    }
+    btnCfgCopy.OnEvent("Click", CfgCopy)
+    btnCfgOpen.OnEvent("Click", CfgOpen)
     btnRe.OnEvent("Click", (*) => SetTimer(StartCheck, -50))
     btnX.OnEvent("Click", CheckClose)
     chkGui.OnEvent("Close", CheckClose)
     chkGui.OnEvent("Escape", CheckClose)
     CheckRender("Vérification en cours...")
+    WinStyle(chkGui)
     chkGui.Show("AutoSize NoActivate")
     SetTimer(CheckTick, 2000)
     CheckTick()
