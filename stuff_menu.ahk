@@ -2672,7 +2672,6 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
         ShowTags()
     }
 
-
     ; Quand une catégorie existante est choisie, le type suit (ou "(aucun)" s'il n'y en a pas)
     CatSync(*) {
         ccTxt := Trim(cbCat.Text)
