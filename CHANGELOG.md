@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.26.5
+
+- Launcher : bouton « Vérifier les mises à jour » (propose l'installation si une version plus récente existe, sinon confirme que tu es à jour).
+
 ## v2.26.4
 
 - Après un redémarrage du menu (mise à jour, retour à la version précédente, changement de touche), le launcher se rouvre tout seul. Le jeu n'est pas relancé.

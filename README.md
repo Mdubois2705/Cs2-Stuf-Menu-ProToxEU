@@ -85,6 +85,7 @@ Au démarrage, une fenêtre d'accueil propose :
 | Élément | Rôle |
 | --- | --- |
 | Ligne de version | « Menu à jour » ou « Version X disponible » (clic pour installer) |
+| Vérifier les mises à jour | Cherche une nouvelle version et propose de l'installer |
 | Voyant | État de CS2 : non lancé, lancé et connecté, lancé sans connexion directe |
 | **Lancer CS2** | Démarre le jeu avec la connexion directe (ou le relance si besoin) |
 | **Map au lancement** | Map chargée automatiquement après le lancement (voir [map automatique](#map-dentraînement-automatique)) |

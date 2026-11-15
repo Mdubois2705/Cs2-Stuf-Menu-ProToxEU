@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.26.4"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.26.5"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -810,6 +810,7 @@ OpenLauncher() {
     lg.Add("Text", "x24 y+16 w372 r2", "Fermer cette fenêtre laisse le menu actif (icône près de l'horloge). Dans CS2, appuie sur " MenuKey " pour ouvrir le menu.")
     lg.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
     btnQuit := lg.Add("Button", "x24 y+12 w140", "Quitter le menu")
+    btnUpd := lg.Add("Button", "x+12 yp w220", "Vérifier les mises à jour")
     GoClick(*) {
         LaunchFlow()
         if AutoCheck
@@ -894,6 +895,18 @@ OpenLauncher() {
             SetTimer(UpCheck, -100)
         }
     }
+    UpdBtn(*) {
+        upT.SetFont("c" WinPal()["dim"])
+        upT.Text := "Mise à jour : vérification..."
+        UpCheck()
+        if (updRemote = "") {
+            MsgBox("Impossible de joindre GitHub. Vérifie ta connexion Internet puis réessaie.", "Mise à jour du menu", 0x40030)
+        } else if (VerCompare(updRemote, APP_VERSION) > 0) {
+            UpClick()
+        } else {
+            MsgBox("Tu as déjà la dernière version (" APP_VERSION ").", "Mise à jour du menu", 0x40040)
+        }
+    }
     LauncherTick() {
         if !IsObject(lg)
             return
@@ -923,6 +936,7 @@ OpenLauncher() {
     btnRep.OnEvent("Click", RepClick)
     upT.OnEvent("Click", UpClick)
     btnQuit.OnEvent("Click", QuitClick)
+    btnUpd.OnEvent("Click", UpdBtn)
     lg.OnEvent("Close", Hide)
     ico := A_ScriptDir "\menu_stuf.ico"
     if FileExist(ico) {
