@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.25.5"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.26.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -59,6 +59,10 @@ TimerY := ToInt(IniRead(IniFile, "Settings", "TimerY", "820"), 820)
 TimerDur := Max(2, Min(20, ToInt(IniRead(IniFile, "Settings", "TimerDur", "6"), 6)))   ; secondes d'affichage du résultat
 ShowChangelogOn := (IniRead(IniFile, "Settings", "ShowChangelog", "1") = "1")   ; fenêtre « Nouveautés » après chaque mise à jour
 LauncherOn := (IniRead(IniFile, "Settings", "Launcher", "1") = "1")   ; fenêtre d'accueil au démarrage
+AutoMap := Trim(IniRead(IniFile, "Settings", "AutoMap", "last"))   ; map chargée toute seule après le lancement de CS2 : last, none ou un nom de map
+AutoMapDelay := Max(3, Min(60, ToInt(IniRead(IniFile, "Settings", "AutoMapDelay", "8"), 8)))   ; secondes d'attente après la connexion au jeu
+PackAdmin := (IniRead(IniFile, "Settings", "PackAdmin", "0") = "1")   ; réservé à l'auteur : publier des packs dans son dépôt
+PackRepoDir := Trim(IniRead(IniFile, "Settings", "PackRepoDir", ""))
 WinThemeSel := IniRead(IniFile, "Settings", "WinTheme", "dark")   ; dark, light ou menu
 if !RegExMatch(WinThemeSel, "^(dark|light|menu)$")
     WinThemeSel := "dark"
@@ -690,10 +694,14 @@ NetSend(cmd) {
 }
 
 OnExit((*) => NetClose())
+OnError(ScriptError)
 
 ; Lance CS2 par Steam avec les options nécessaires à la connexion directe, sans toucher aux options enregistrées dans Steam.
 ; Méthode fiable : steam.exe -applaunch 730 <options> (le lien steam://rungameid ignore souvent les options).
 launchWatch := 0
+autoMapDone := true   ; false après un lancement de CS2 par le menu : la map automatique reste à charger
+updRemote := ""       ; dernière version trouvée sur GitHub
+updTick := 0
 ; Lance CS2 avec la connexion directe (ou propose de le relancer s'il est déjà ouvert sans elle)
 LaunchFlow() {
     if !ProcessExist("cs2.exe") {
@@ -731,15 +739,18 @@ TraySetup() {
     }
 }
 
-; Fenêtre d'accueil : lancer le jeu, nouveautés, vérification, réglages
+; Fenêtre d'accueil : lancer le jeu, map automatique, mise à jour, sauvegarde, packs, nouveautés, vérification, réglages
 OpenLauncher() {
-    global launcherHwnd
+    global launcherHwnd, updRemote, updTick
     static lg := ""
     static st := ""
+    static upT := ""
     if IsObject(lg) {
         try {
             lg.Show()
             LauncherTick()
+            if (A_TickCount - updTick > 600000)
+                SetTimer(UpCheck, -300)
             return
         }
     }
@@ -752,15 +763,49 @@ OpenLauncher() {
     lg.Add("Text", "x24 y18 w372", "MENU STUF")
     lg.SetFont("s" Max(8, WinSz() - 1) " norm c" p["dim"], WinFontName)
     lg.Add("Text", "x26 y+0 w372", "V." APP_VERSION " ProToxEU - lineups et entraînement CS2")
-    lg.Add("Text", "x24 y+14 w372 h2 Background" p["accent"])
+    upT := lg.Add("Text", "x26 y+2 w372 +0x100", "Mise à jour : vérification...")
+    lg.Add("Text", "x24 y+12 w372 h2 Background" p["accent"])
     lg.SetFont("s" WinSz() " bold c" p["txt"], WinFontName)
     st := lg.Add("Text", "x24 y+14 w372", "")
     lg.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
     btnGo := lg.Add("Button", "x24 y+16 w372 h46 Default", "Lancer CS2")
-    btnNews := lg.Add("Button", "x24 y+12 w180 h36", newsUnseen ? "Nouveautés  ●" : "Nouveautés")
+    lg.SetFont("s" WinSz() " norm c" p["dim"], WinFontName)
+    lg.Add("Text", "x24 y+16 w150", "Map au lancement :")
+    lg.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
+    names := MapChoices()
+    amKey := StrLower(AutoMap)
+    if (amKey != "last" && amKey != "none" && amKey != "") {
+        has := false
+        for x in names {
+            if (x = AutoMap)
+                has := true
+        }
+        if (!has && RegExMatch(AutoMap, "^\w+$"))
+            names.Push(AutoMap)
+    }
+    mapItems := ["Dernière map jouée"]
+    for x in names
+        mapItems.Push(x)
+    mapItems.Push("Aucune (menu principal)")
+    ddMap := lg.Add("DropDownList", "x+6 yp-4 w212", mapItems)
+    sel := 1
+    if (amKey = "none") {
+        sel := mapItems.Length
+    } else if (amKey != "last" && amKey != "") {
+        for k, x in mapItems {
+            if (x = AutoMap)
+                sel := k
+        }
+    }
+    ddMap.Choose(sel)
+    btnNews := lg.Add("Button", "x24 y+16 w180 h36", newsUnseen ? "Nouveautés  ●" : "Nouveautés")
     btnChk := lg.Add("Button", "x+12 yp w180 h36", "Vérification")
     btnSet := lg.Add("Button", "x24 y+10 w180 h36", "Réglages")
     btnDir := lg.Add("Button", "x+12 yp w180 h36", "Ouvrir le dossier")
+    btnSave := lg.Add("Button", "x24 y+10 w180 h36", "Sauvegarder maintenant")
+    btnPack := lg.Add("Button", "x+12 yp w180 h36", "Packs de stuffs")
+    btnGuide := lg.Add("Button", "x24 y+10 w180 h36", "Guide de démarrage")
+    btnRep := lg.Add("Button", "x+12 yp w180 h36", "Signaler un problème")
     lg.SetFont("s" Max(8, WinSz() - 1) " norm c" p["dim"], WinFontName)
     lg.Add("Text", "x24 y+16 w372 r2", "Fermer cette fenêtre laisse le menu actif (icône près de l'horloge). Dans CS2, appuie sur " MenuKey " pour ouvrir le menu.")
     lg.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
@@ -770,6 +815,19 @@ OpenLauncher() {
         if AutoCheck
             SetTimer(StartCheck, -1500)   ; la vérification s'ouvre à côté du launcher
         LauncherTick()
+    }
+    MapChange(*) {
+        global AutoMap
+        i := ddMap.Value
+        if (i = 1) {
+            v := "last"
+        } else if (i = mapItems.Length) {
+            v := "none"
+        } else {
+            v := mapItems[i]
+        }
+        AutoMap := v
+        IniWrite(v, IniFile, "Settings", "AutoMap")
     }
     NewsClick(*) {
         global newsUnseen
@@ -786,6 +844,18 @@ OpenLauncher() {
     DirClick(*) {
         Run('explorer "' A_ScriptDir '"')
     }
+    SaveClick(*) {
+        ManualBackup()
+    }
+    PackClick(*) {
+        ShowPacks(lg.Hwnd)
+    }
+    GuideClick(*) {
+        ShowWelcome()
+    }
+    RepClick(*) {
+        ShowReport()
+    }
     QuitClick(*) {
         ExitApp()
     }
@@ -793,6 +863,36 @@ OpenLauncher() {
         SetTimer(LauncherTick, 0)
         lg.Hide()
         TrayTip("Le menu reste actif. Clique sur l'icône près de l'horloge pour rouvrir le launcher.", "Menu Stuf")
+    }
+    UpCheck() {
+        global updRemote, updTick
+        if !IsObject(lg)
+            return
+        updTick := A_TickCount
+        updRemote := RemoteVersion()
+        UpShow()
+    }
+    UpShow() {
+        pp := WinPal()
+        if (updRemote = "") {
+            upT.SetFont("c" pp["dim"])
+            upT.Text := "Mise à jour : impossible de vérifier (clique pour réessayer)"
+        } else if (VerCompare(updRemote, APP_VERSION) > 0) {
+            upT.SetFont("c" pp["accent"])
+            upT.Text := "● Version " updRemote " disponible - clique ici pour l'installer"
+        } else {
+            upT.SetFont("c" pp["ok"])
+            upT.Text := "● Menu à jour"
+        }
+    }
+    UpClick(*) {
+        if (updRemote != "" && VerCompare(updRemote, APP_VERSION) > 0) {
+            if (MsgBox("Installer la version " updRemote " (tu as la " APP_VERSION ") ?`nTes stuffs, favoris, profils et réglages ne sont pas touchés.", "Mise à jour du menu", 0x40024) = "Yes")
+                InstallUpdate()
+        } else {
+            upT.Text := "Mise à jour : vérification..."
+            SetTimer(UpCheck, -100)
+        }
     }
     LauncherTick() {
         if !IsObject(lg)
@@ -812,10 +912,16 @@ OpenLauncher() {
         }
     }
     btnGo.OnEvent("Click", GoClick)
+    ddMap.OnEvent("Change", MapChange)
     btnNews.OnEvent("Click", NewsClick)
     btnChk.OnEvent("Click", ChkClick)
     btnSet.OnEvent("Click", SetClick)
     btnDir.OnEvent("Click", DirClick)
+    btnSave.OnEvent("Click", SaveClick)
+    btnPack.OnEvent("Click", PackClick)
+    btnGuide.OnEvent("Click", GuideClick)
+    btnRep.OnEvent("Click", RepClick)
+    upT.OnEvent("Click", UpClick)
     btnQuit.OnEvent("Click", QuitClick)
     lg.OnEvent("Close", Hide)
     ico := A_ScriptDir "\menu_stuf.ico"
@@ -831,10 +937,16 @@ OpenLauncher() {
     SetTimer(LauncherTick, 1500)
     WinStyle(lg)
     lg.Show("AutoSize Center")
+    if (updRemote != "" && A_TickCount - updTick < 600000)
+        UpShow()
+    else
+        SetTimer(UpCheck, -600)
+    if (IniRead(IniFile, "State", "WelcomeDone", "0") != "1")
+        SetTimer(ShowWelcome, -900)
 }
 
 LaunchGame() {
-    global launchWatch
+    global launchWatch, autoMapDone
     args := StrReplace(LaunchArgs, "{port}", NetconPort)
     steamExe := ""
     try steamExe := RegRead("HKEY_CURRENT_USER\Software\Valve\Steam", "SteamExe")
@@ -854,6 +966,7 @@ LaunchGame() {
     }
     if ok {
         launchWatch := A_TickCount
+        autoMapDone := false
         SetTimer(LaunchCheck, 3000)
     }
     return ok
@@ -861,7 +974,7 @@ LaunchGame() {
 
 ; Après le lancement : attend que le port s'ouvre ; au bout de 2 minutes, prévient si le jeu n'a pas reçu les options
 LaunchCheck() {
-    global launchWatch, netFailTick
+    global launchWatch, netFailTick, autoMapDone
     if (A_TickCount - launchWatch > 120000) {
         SetTimer(LaunchCheck, 0)
         if ProcessExist("cs2.exe") && !NetOpen()
@@ -875,7 +988,84 @@ LaunchCheck() {
         SetTimer(LaunchCheck, 0)
         ToolTip("Connexion directe à CS2 active")
         SetTimer(() => ToolTip(), -2500)
+        if (!autoMapDone) {
+            autoMapDone := true
+            if (AutoMapName() != "")
+                SetTimer(AutoMapGo.Bind(1), -AutoMapDelay * 1000)
+        }
     }
+}
+
+; Nom de la map à charger après le lancement ("" = aucune)
+AutoMapName() {
+    m := StrLower(AutoMap)
+    if (m = "" || m = "none")
+        return ""
+    if (m = "last") {
+        if (LastMap != "" && RegExMatch(LastMap, "^\w+$"))
+            return LastMap
+        return "de_dust2"
+    }
+    return RegExMatch(AutoMap, "^\w+$") ? AutoMap : ""
+}
+
+; Charge la map d'entraînement une fois le jeu prêt (un seul nouvel essai si le jeu n'était pas encore à l'écran d'accueil)
+AutoMapGo(tryNo := 1, *) {
+    if !ProcessExist("cs2.exe")
+        return
+    nm := AutoMapName()
+    if (nm = "")
+        return
+    if (tryNo > 1 && InStr(RunAndReadLog("status", "main lump"), "main lump"))
+        return
+    if NetSend("map " nm) {
+        ToolTip("Chargement de la map " nm "...")
+        SetTimer(() => ToolTip(), -3500)
+        if AutoExec
+            SetTimer(AutoPracticeWait.Bind(0), -4000)   ; le cfg d'entraînement (bots, argent, etc.) s'exécute dès que la map est chargée
+    }
+    if (tryNo < 2)
+        SetTimer(AutoMapGo.Bind(2), -20000)
+}
+
+; Attend la fin du chargement de la map (jusqu'à 90 s) puis exécute le cfg d'entraînement une fois
+AutoPracticeWait(n := 0, *) {
+    global execMap
+    if !ProcessExist("cs2.exe")
+        return
+    txt := RunAndReadLog("status", "main lump")
+    if RegExMatch(txt, "main lump") {
+        Sleep(2500)   ; laisse les joueurs et les bots apparaître avant l'exec
+        LoadMaps()
+        mp := MapFromStatus(txt)
+        execMap := (mp != "") ? mp : "?"
+        RunPractice()
+        ToolTip(PracticeCfg " exécuté")
+        SetTimer(() => ToolTip(), -2000)
+        return
+    }
+    if (n < 40)
+        SetTimer(AutoPracticeWait.Bind(n + 1), -2000)
+}
+
+; Liste des maps proposées (tes fichiers de map + les maps officielles)
+MapChoices() {
+    LoadMaps()
+    names := []
+    for n in mapNames {
+        if RegExMatch(n, "^\w+$") && SubStr(n, 1, 1) != "_"
+            names.Push(n)
+    }
+    for n in ["de_ancient", "de_anubis", "de_dust2", "de_inferno", "de_mirage", "de_nuke", "de_overpass", "de_train", "de_vertigo"] {
+        has := false
+        for x in names {
+            if (x = n)
+                has := true
+        }
+        if !has
+            names.Push(n)
+    }
+    return names
 }
 
 ; =====================================================================
@@ -6379,14 +6569,17 @@ ShowShare() {
     chkImg := d.Add("CheckBox", "x22 y" (r1 + 60) " w724 Checked", "Inclure les captures d'écran des stuffs (export vers un fichier uniquement)")
     d.Add("Text", "x22 y" (r1 + 96) " w724", "Importer : reçu d'un ami ?")
     btnImpF := d.Add("Button", "x22 y" (r1 + 122) " w240", "Importer un fichier .stuffpack…")
-    btnImpC := d.Add("Button", "x+8 yp w300", "Importer depuis le presse-papiers (code)")
+    btnImpC := d.Add("Button", "x+8 yp w230", "Importer depuis le presse-papiers (code)")
+    btnPkO := d.Add("Button", "x+8 yp w140", "Packs en ligne...")
     yEnd2 := r1 + 166
 
     ; ----- Onglet Sauvegardes -----
     tabs.UseTab(3)
     d.Add("Text", "x22 y88 w724 r3", "Une sauvegarde de tes maps est faite chaque jour, et avant chaque mise à jour. Tu peux revenir à l'une d'elles. Ton état actuel est sauvegardé avant la restauration.")
     btnRest := d.Add("Button", "x22 y140 w260", "Restaurer une sauvegarde…")
-    yEnd3 := 220
+    d.Add("Text", "x22 y190 w724 r2", "Une mise à jour du menu pose problème ? Tu peux revenir à la version précédente du programme (tes stuffs ne sont pas touchés).")
+    btnRoll := d.Add("Button", "x22 y228 w340", "Revenir à la version précédente du menu...")
+    yEnd3 := 280
 
     tabs.UseTab(0)
     tabH := Max(yEnd1, yEnd2, yEnd3) - 44 + 6
@@ -6439,7 +6632,8 @@ ShowShare() {
 
     CheckAll(on, *) {
         Loop lvEx.GetCount()
-            lvEx.Modify(A_Index, on ? "Check" : "-Check")        UpdCount()
+            lvEx.Modify(A_Index, on ? "Check" : "-Check")
+        UpdCount()
     }
 
     ExportFile(*) {
@@ -6561,6 +6755,8 @@ ShowShare() {
     btnDelP.OnEvent("Click", DelProf)
     btnClose.OnEvent("Click", Finish)
     btnRest.OnEvent("Click", (*) => ShowRestore(d.Hwnd))
+    btnRoll.OnEvent("Click", (*) => RollbackUpdate(false))
+    btnPkO.OnEvent("Click", (*) => ShowPacks(d.Hwnd))
     lvEx.OnEvent("ItemCheck", (*) => SetTimer(UpdCount, -30))
     btnPExp.OnEvent("Click", (*) => ExportProfile(ddProf.Text, d.Hwnd))
     btnPImp.OnEvent("Click", ImportProfileBtn)
@@ -6895,31 +7091,7 @@ ImportProfileZip(ownerHwnd) {
 
 ; Avant une mise à jour : copie les maps et les fichiers de data (temps, favoris, cadenas) de chaque profil
 PreUpdateBackup() {
-    stamp := "avant-maj-" APP_VERSION "_" FormatTime(, "yyyy-MM-dd_HHmmss")
-    for pn in ListProfiles() {
-        mdir := ProfMaps(pn)
-        if !DirExist(mdir)
-            continue
-        root := ProfData(pn) "\backup\auto"
-        dest := root "\" stamp
-        try {
-            DirCreate(dest "\data")
-            Loop Files mdir "\*.txt"
-                FileCopy(A_LoopFileFullPath, dest "\" A_LoopFileName, 1)
-            Loop Files ProfData(pn) "\*.txt"
-                FileCopy(A_LoopFileFullPath, dest "\data\" A_LoopFileName, 1)
-        } catch {
-            continue
-        }
-        names := []
-        Loop Files root "\avant-maj-*", "D"
-            names.Push(A_LoopFileName)
-        SortNames(names)
-        while (names.Length > 5) {
-            try DirDelete(root "\" names[1], true)
-            names.RemoveAt(1)
-        }
-    }
+    BackupNow("avant-maj-" APP_VERSION "_" FormatTime(, "yyyy-MM-dd_HHmmss"), "avant-maj-*", 5)
 }
 
 ; Nom de dossier de sauvegarde -> [type lisible, date lisible]
@@ -6928,6 +7100,8 @@ BackupLabel(nm) {
         return ["Automatique (quotidienne)", m[3] "/" m[2] "/" m[1]]
     if RegExMatch(nm, "^avant-maj-(.+?)_(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\d\d$", &m)
         return ["Avant la mise à jour " m[1], m[4] "/" m[3] "/" m[2] " à " m[5] " h " m[6]]
+    if RegExMatch(nm, "^manuelle-(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\d\d$", &m)
+        return ["Sauvegarde manuelle", m[3] "/" m[2] "/" m[1] " à " m[4] " h " m[5]]
     if RegExMatch(nm, "^avant-restauration-(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\d\d$", &m)
         return ["Avant une restauration", m[3] "/" m[2] "/" m[1] " à " m[4] " h " m[5]]
     if RegExMatch(nm, "^avant-import-(\d{4})-(\d\d)-(\d\d)_(\d\d)(\d\d)\d\d$", &m)
@@ -7049,6 +7223,13 @@ Check1() {
     else
         out.Push(["fail", "Impossible d'écrire dans le dossier data", "Déplace le menu dans un dossier où tu peux écrire (Bureau, Documents)"])
 
+    steam := ""
+    try steam := StrReplace(RegRead("HKEY_CURRENT_USER\Software\Valve\Steam", "SteamExe"), "/", "\")
+    if (steam != "" && FileExist(steam))
+        out.Push(["ok", "Steam trouvé : le menu peut lancer CS2 avec les bonnes options", ""])
+    else
+        out.Push(["warn", "Steam introuvable sur ce PC", "Lance CS2 toi-même avec les options " StrReplace(LaunchArgs, "{port}", NetconPort) " dans les options de lancement de Steam"])
+
     if FileExist(ConsoleLog)
         out.Push(["ok", "console.log trouvé", ""])
     else
@@ -7146,6 +7327,8 @@ StartCheck(*) {
     chkTxt := chkGui.Add("Text", "x12 y+10 w620 r16", "")
     btnRe := chkGui.Add("Button", "x12 y+12 w220", "Relancer la vérification")
     btnX := chkGui.Add("Button", "x+10 yp w120", "Fermer")
+    btnRep := chkGui.Add("Button", "x+10 yp w200", "Créer un rapport...")
+    btnRep.OnEvent("Click", (*) => ShowReport())
     btnCfgCopy := chkGui.Add("Button", "x12 y+10 w300", "Copier cs2_practice.cfg dans le cfg de CS2")
     btnCfgOpen := chkGui.Add("Button", "x+10 yp w200", "Ouvrir le dossier cfg")
     CfgCopy(*) {
@@ -7231,8 +7414,12 @@ CheckTick() {
                 bad += (r[1] != "ok") ? 1 : 0
             if (bad = 0) {
                 CheckClose()
+                if (IniRead(IniFile, "State", "InstallOk", "0") != "1") {
+                    IniWrite("1", IniFile, "State", "InstallOk")
+                    TrayTip("Installation validée : tout est prêt pour t'entraîner.", "Menu Stuf")
+                }
             } else {
-                CheckRender("Certains points demandent ton attention (voir ci-dessous).")
+                CheckRender("Il y a " bad " point(s) à corriger (voir ci-dessous). Le bouton « Créer un rapport » prépare un message à m'envoyer.")
             }
         } else {
             CheckRender("Attente de la partie... (essai " chkAttempts "/30)")
@@ -7243,24 +7430,499 @@ CheckTick() {
 }
 
 ; =====================================================================
+;  Sauvegarde manuelle, mise à jour : outils communs
+; =====================================================================
+; Copie les maps et les données (temps, favoris, cadenas) de chaque profil dans backup\auto\<stamp>. Renvoie le nombre de profils sauvegardés.
+BackupNow(stamp, pattern, keep) {
+    saved := 0
+    for pn in ListProfiles() {
+        mdir := ProfMaps(pn)
+        if !DirExist(mdir)
+            continue
+        root := ProfData(pn) "\backup\auto"
+        dest := root "\" stamp
+        try {
+            DirCreate(dest "\data")
+            Loop Files mdir "\*.txt"
+                FileCopy(A_LoopFileFullPath, dest "\" A_LoopFileName, 1)
+            Loop Files ProfData(pn) "\*.txt"
+                FileCopy(A_LoopFileFullPath, dest "\data\" A_LoopFileName, 1)
+        } catch {
+            continue
+        }
+        saved += 1
+        names := []
+        Loop Files root "\" pattern, "D"
+            names.Push(A_LoopFileName)
+        SortNames(names)
+        while (names.Length > keep) {
+            try DirDelete(root "\" names[1], true)
+            names.RemoveAt(1)
+        }
+    }
+    return saved
+}
+
+ManualBackup() {
+    n := BackupNow("manuelle-" FormatTime(, "yyyy-MM-dd_HHmmss"), "manuelle-*", 10)
+    if (n > 0)
+        MsgBox("Sauvegarde créée (" n " profil(s)) : maps, favoris, cadenas et temps de vol.`n`nPour revenir en arrière : « Profils et partage de stuffs » > Sauvegardes > Restaurer. Les 10 dernières sauvegardes manuelles sont gardées.", "Sauvegarde", 0x40040)
+    else
+        MsgBox("Rien à sauvegarder : aucun fichier de map trouvé.", "Sauvegarde", 0x40030)
+}
+
+; Dernière version publiée sur GitHub ("" si injoignable)
+RemoteVersion() {
+    tmp := A_Temp "\cs2stuff_version.txt"
+    try FileDelete(tmp)
+    remote := ""
+    try {
+        Download("https://raw.githubusercontent.com/" UPDATE_REPO "/main/VERSION", tmp)
+        remote := Trim(FileRead(tmp), " `t`r`n")
+    } catch {
+        return ""
+    }
+    return RegExMatch(remote, "^\d+(\.\d+)*$") ? remote : ""
+}
+
+; =====================================================================
+;  Retour à la version précédente du menu
+; =====================================================================
+RollbackFile() {
+    for dir in [A_ScriptDir "\data\backup", DataDir "\backup"] {
+        if FileExist(dir "\stuff_menu.ahk.bak")
+            return dir "\stuff_menu.ahk.bak"
+    }
+    return ""
+}
+
+; Appelée à chaque erreur non gérée : journal + compteur pendant la période d'essai qui suit une mise à jour
+ScriptError(exc, mode) {
+    try {
+        DirCreate(A_ScriptDir "\data")
+        lf := A_ScriptDir "\data\menu_errors.log"
+        if (FileExist(lf) && FileGetSize(lf) > 200000)
+            FileDelete(lf)
+        ln := ""
+        try ln := exc.Line
+        FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " v" APP_VERSION " : " exc.Message " (ligne " ln ")`n", lf, "UTF-8")
+        if (IniRead(IniFile, "State", "UpdateTrial", "0") = "1") {
+            n := ToInt(IniRead(IniFile, "State", "TrialErrors", "0"), 0) + 1
+            IniWrite(n, IniFile, "State", "TrialErrors")
+            if (n >= 2)
+                SetTimer(() => RollbackUpdate(true), -1500)
+        }
+    }
+    return 0
+}
+
+EndTrial() {
+    IniWrite(0, IniFile, "State", "UpdateTrial")
+    IniWrite(0, IniFile, "State", "TrialErrors")
+}
+
+RollbackUpdate(auto := false) {
+    static busy := false
+    if busy
+        return
+    bak := RollbackFile()
+    if (bak = "") {
+        if !auto
+            MsgBox("Aucune ancienne version enregistrée.`nElle est créée automatiquement à chaque mise à jour du menu.", "Version précédente", 0x40030)
+        return
+    }
+    prev := IniRead(IniFile, "State", "PrevVersion", "")
+    prevTxt := RegExMatch(prev, "^\d+(\.\d+)*$") ? "la version " prev : "la version précédente"
+    if auto
+        msg := "Le menu a rencontré plusieurs erreurs depuis la mise à jour vers la " APP_VERSION ".`n`nRevenir à " prevTxt " ?`nTes stuffs, favoris et profils ne sont pas touchés."
+    else
+        msg := "Revenir à " prevTxt " du menu ?`nTes stuffs, favoris et profils ne sont pas touchés. Le menu redémarre."
+    busy := true
+    if (MsgBox(msg, "Menu Stuf - version précédente", 0x40024) != "Yes") {
+        busy := false
+        if auto
+            EndTrial()
+        return
+    }
+    try FileCopy(A_ScriptFullPath, bak ".nouvelle", 1)
+    try {
+        FileCopy(bak, A_ScriptFullPath, 1)
+    } catch as err {
+        MsgBox("Impossible de restaurer : " err.Message, "Version précédente", 0x40010)
+        busy := false
+        return
+    }
+    IniWrite(APP_VERSION, IniFile, "State", "SkipUpdate")   ; ne pas reproposer cette version automatiquement
+    if RegExMatch(prev, "^\d+(\.\d+)*$")
+        IniWrite(prev, IniFile, "State", "LastSeenVersion")
+    EndTrial()
+    IniWrite(1, IniFile, "State", "SkipCheck")
+    MsgBox("Ancienne version restaurée. Le menu redémarre.", "Version précédente", 0x40040)
+    Reload()
+}
+
+; =====================================================================
+;  Guide de démarrage (première utilisation, puis bouton du launcher)
+; =====================================================================
+ShowWelcome(*) {
+    static open := ""
+    if IsObject(open) {
+        try {
+            open.Show()
+            return
+        }
+    }
+    p := WinPal()
+    d := WinNew("Guide de démarrage", "")
+    open := d
+    d.MarginX := 20
+    d.MarginY := 16
+    d.SetFont("s" Round(WinSz() * 1.6) " bold c" p["accent"], WinFontName)
+    d.Add("Text", "x20 y16 w440", "Bienvenue !")
+    d.SetFont("s" WinSz() " norm c" p["dim"], WinFontName)
+    d.Add("Text", "x20 y+2 w440", "Trois étapes pour t'entraîner en moins d'une minute.")
+    d.SetFont("s" WinSz() " bold c" p["txt"], WinFontName)
+    d.Add("Text", "x20 y+18 w440", "1. Lance CS2 depuis le launcher")
+    d.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
+    d.Add("Text", "x20 y+4 w440 r3", "Clique sur « Lancer CS2 ». Le menu démarre le jeu avec les bonnes options et charge une map d'entraînement : tu n'as rien à régler dans Steam.")
+    btnTest := d.Add("Button", "x20 y+8 w220", "Tester l'installation")
+    d.SetFont("s" WinSz() " bold c" p["txt"], WinFontName)
+    d.Add("Text", "x20 y+18 w440", "2. Ouvre le menu dans le jeu")
+    d.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
+    d.Add("Text", "x20 y+4 w440 r2", "Une fois dans la map, appuie sur " MenuKey ". Les flèches naviguent, Entrée lance un stuff, " AddKey " en crée un.")
+    btnKey := d.Add("Button", "x20 y+8 w220", "Changer la touche du menu")
+    d.SetFont("s" WinSz() " bold c" p["txt"], WinFontName)
+    d.Add("Text", "x20 y+18 w440", "3. Récupère des stuffs")
+    d.SetFont("s" WinSz() " norm c" p["txt"], WinFontName)
+    d.Add("Text", "x20 y+4 w440 r2", "Importe les packs de stuffs publiés par ProToxEU, ou crée les tiens directement depuis le jeu.")
+    btnPk := d.Add("Button", "x20 y+8 w220", "Voir les packs de stuffs")
+    btnDone := d.Add("Button", "x20 y+24 w440 h36 Default", "C'est compris")
+    TestClick(*) {
+        SetTimer(StartCheck, -50)
+    }
+    KeyClick(*) {
+        k := Trim(AskText("Touche du menu", "Nom de la touche (ex. F1, Insert, XButton1) :", MenuKey, "ahk_id " d.Hwnd))
+        if (k = "")
+            return
+        if (!GetKeyVK(k) && !GetKeySC(k)) {
+            MsgBox("Touche inconnue : " k "`nExemples : F1, F5, Insert, Home, XButton1.", "Touche du menu", 0x40030)
+            return
+        }
+        IniWrite(k, IniFile, "Settings", "MenuKey")
+        MsgBox("Touche enregistrée : " k ".`nLe menu redémarre pour l'appliquer.", "Touche du menu", 0x40040)
+        IniWrite("1", IniFile, "State", "WelcomeDone")
+        IniWrite(1, IniFile, "State", "SkipCheck")
+        Reload()
+    }
+    PkClick(*) {
+        ShowPacks(d.Hwnd)
+    }
+    Done(*) {
+        IniWrite("1", IniFile, "State", "WelcomeDone")
+        open := ""
+        try d.Destroy()
+    }
+    btnTest.OnEvent("Click", TestClick)
+    btnKey.OnEvent("Click", KeyClick)
+    btnPk.OnEvent("Click", PkClick)
+    btnDone.OnEvent("Click", Done)
+    d.OnEvent("Close", Done)
+    d.OnEvent("Escape", Done)
+    WinStyle(d)
+    if (launcherHwnd && WinExist("ahk_id " launcherHwnd)) {
+        WinGetPos(&lx, &ly, &lw, &lh, "ahk_id " launcherHwnd)
+        d.Show("AutoSize x" (lx + lw + 12) " y" ly)
+        d.GetPos(&cx, &cy, &cw, &ch)
+        MonitorGetWorkArea(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+        if (cx + cw > mr)
+            d.Move(Max(ml, lx - 12 - cw), ly)
+    } else {
+        d.Show("AutoSize Center")
+    }
+}
+
+; =====================================================================
+;  Packs de stuffs publiés dans le dépôt GitHub (dossier packs\, lecture seule pour les joueurs)
+; =====================================================================
+PackUrl(file) {
+    return "https://raw.githubusercontent.com/" UPDATE_REPO "/main/packs/" file
+}
+
+; Liste [fichier, titre, description] depuis packs\index.txt ; false si injoignable
+FetchPackIndex() {
+    tmp := A_Temp "\cs2stuff_packs.txt"
+    try FileDelete(tmp)
+    try {
+        Download(PackUrl("index.txt"), tmp)
+        txt := FileRead(tmp, "UTF-8")
+    } catch {
+        return false
+    }
+    rows := []
+    for ln in StrSplit(txt, "`n", "`r") {
+        ln := Trim(ln)
+        if (ln = "" || SubStr(ln, 1, 1) = "#")
+            continue
+        parts := StrSplit(ln, "|", " `t")
+        if (parts.Length >= 2 && RegExMatch(parts[1], "i)^[\w\-\.]+\.stuffpack$"))
+            rows.Push([parts[1], parts[2], (parts.Length >= 3) ? parts[3] : ""])
+    }
+    return rows
+}
+
+ShowPacks(ownerHwnd := 0) {
+    static open := ""
+    if IsObject(open) {
+        try {
+            open.Show()
+            return
+        }
+    }
+    d := WinNew("Packs de stuffs", "+OwnDialogs")
+    open := d
+    d.Add("Text", "x12 y12 w560", "Packs de stuffs prêts à l'emploi, publiés par ProToxEU. Choisis-en un pour l'importer (tu décides quoi garder et où le ranger).")
+    lv := d.Add("ListView", "x12 y+10 w560 r9 NoSort -Multi", ["Pack", "Description", "Fichier"])
+    lv.ModifyCol(1, 190)
+    lv.ModifyCol(2, 360)
+    lv.ModifyCol(3, 0)
+    stT := d.Add("Text", "x12 y+8 w560", "Chargement de la liste...")
+    btnImp := d.Add("Button", "x12 y+10 w200 Default", "Importer ce pack")
+    btnRef := d.Add("Button", "x+8 yp w120", "Actualiser")
+    btnX := d.Add("Button", "x+8 yp w100", "Fermer")
+    btnAdm := ""
+    if PackAdmin
+        btnAdm := d.Add("Button", "x12 y+10 w300", "Publier un pack (administrateur)...")
+    Refresh(*) {
+        lv.Delete()
+        rows := FetchPackIndex()
+        if !IsObject(rows) {
+            stT.Text := "Impossible de joindre GitHub. Vérifie ta connexion puis clique sur Actualiser."
+            return
+        }
+        for r in rows
+            lv.Add("", r[2], r[3], r[1])
+        stT.Text := (rows.Length = 0) ? "Aucun pack publié pour le moment." : rows.Length " pack(s) disponible(s)."
+    }
+    ImportSel(*) {
+        r := lv.GetNext(0)
+        if !r {
+            stT.Text := "Choisis d'abord un pack dans la liste."
+            return
+        }
+        f := lv.GetText(r, 3)
+        tmp := A_Temp "\cs2stuff_pack.stuffpack"
+        txt := ""
+        try {
+            try FileDelete(tmp)
+            Download(PackUrl(f), tmp)
+            txt := FileRead(tmp, "UTF-8")
+        } catch {
+            stT.Text := "Téléchargement impossible. Réessaie plus tard."
+            return
+        }
+        if ShowImport(txt, d.Hwnd)
+            LoadMaps()
+    }
+    AdminAdd(*) {
+        global PackRepoDir
+        if (PackRepoDir = "" || !DirExist(PackRepoDir)) {
+            pk := DirSelect("*" A_Desktop, 0, "Choisis ton dossier Git du menu (celui qui contient stuff_menu.ahk)")
+            pk := RTrim(pk, "\")
+            if (pk = "")
+                return
+            PackRepoDir := pk
+            IniWrite(pk, IniFile, "Settings", "PackRepoDir")
+        }
+        f := FileSelect(3, A_Desktop, "Choisis le pack à publier (.stuffpack)", "Pack de stuffs (*.stuffpack)")
+        if (f = "")
+            return
+        SplitPath(f, &fn, , , &base)
+        safe := RegExReplace(fn, "[^\w\-\.]", "_")
+        if !RegExMatch(safe, "i)\.stuffpack$")
+            safe .= ".stuffpack"
+        title := Trim(AskText("Titre du pack", "Titre affiché aux joueurs :", base, "ahk_id " d.Hwnd))
+        if (title = "")
+            return
+        desc := Trim(AskText("Description", "Description courte (map, contenu...) :", "", "ahk_id " d.Hwnd))
+        title := RegExReplace(title, "[|`r`n]", " ")
+        desc := RegExReplace(desc, "[|`r`n]", " ")
+        pdir := PackRepoDir "\packs"
+        idx := pdir "\index.txt"
+        try {
+            DirCreate(pdir)
+            FileCopy(f, pdir "\" safe, 1)
+            old := FileExist(idx) ? FileRead(idx, "UTF-8") : "# Un pack par ligne : fichier.stuffpack | Titre | Description`n"
+            out := ""
+            for ln in StrSplit(old, "`n", "`r") {
+                if (ln = "")
+                    continue
+                if (StrLower(StrSplit(ln, "|", " `t")[1]) = StrLower(safe))
+                    continue
+                out .= ln "`n"
+            }
+            out .= safe " | " title " | " desc "`n"
+            try FileDelete(idx)
+            FileAppend(out, idx, "UTF-8-RAW")
+        } catch as err {
+            MsgBox("Publication impossible : " err.Message, "Packs", 0x40010)
+            return
+        }
+        MsgBox("Pack ajouté dans " pdir ".`n`nPour le publier, dans ce dossier :`ngit add .`ngit commit -m `"Pack " title "`"`ngit push", "Packs", 0x40040)
+        Refresh()
+    }
+    Shut(*) {
+        open := ""
+        try d.Destroy()
+    }
+    btnImp.OnEvent("Click", ImportSel)
+    lv.OnEvent("DoubleClick", ImportSel)
+    btnRef.OnEvent("Click", Refresh)
+    btnX.OnEvent("Click", Shut)
+    if IsObject(btnAdm)
+        btnAdm.OnEvent("Click", AdminAdd)
+    d.OnEvent("Close", Shut)
+    d.OnEvent("Escape", Shut)
+    WinStyle(d)
+    d.Show("AutoSize Center")
+    Refresh()
+}
+
+; =====================================================================
+;  Rapport de problème (aucune donnée personnelle : chemins et noms nettoyés)
+; =====================================================================
+ScrubPath(t) {
+    return StrReplace(t, A_UserName, "UTILISATEUR")
+}
+
+BuildReport() {
+    nl := "`r`n"
+    r := "RAPPORT MENU STUF" nl
+    r .= "Date : " FormatTime(, "yyyy-MM-dd HH:mm:ss") nl
+    r .= "Version du menu : " APP_VERSION nl
+    r .= "AutoHotkey : " A_AhkVersion "   Windows : " A_OSVersion (A_Is64bitOS ? " (64 bits)" : "") nl
+    r .= "Profil actif : " curProfile nl
+    r .= "Dossier du menu : " ScrubPath(A_ScriptDir) nl
+    r .= "CS2 lancé : " (ProcessExist("cs2.exe") ? "oui" : "non") "   Connexion directe (port " NetconPort ") : " (NetOpen() ? "oui" : "non") nl
+    r .= "Map automatique : " AutoMap nl
+    r .= nl "--- Vérification de l'installation ---" nl
+    try {
+        for x in Check1()
+            r .= "[" x[1] "] " ScrubPath(x[2]) nl
+    }
+    r .= nl "--- Réglages (sans chemins) ---" nl
+    try {
+        for ln in StrSplit(IniRead(IniFile, "Settings"), "`n", "`r") {
+            if (ln = "" || RegExMatch(ln, "i)^(CfgPath|ConsoleLog|PackRepoDir)="))
+                continue
+            r .= ScrubPath(ln) nl
+        }
+    }
+    r .= nl "--- Données ---" nl
+    for pn in ListProfiles() {
+        n := 0
+        mdir := ProfMaps(pn)
+        Loop Files mdir "\de_*.txt"
+            n += 1
+        r .= "Profil " pn " : " n " fichier(s) de map" nl
+    }
+    r .= "Ancienne version disponible : " (RollbackFile() != "" ? "oui" : "non") nl
+    lf := A_ScriptDir "\data\menu_errors.log"
+    r .= nl "--- Dernières erreurs du menu ---" nl
+    try {
+        if FileExist(lf) {
+            lines := StrSplit(FileRead(lf, "UTF-8"), "`n", "`r")
+            i0 := Max(1, lines.Length - 12)
+            Loop lines.Length - i0 + 1 {
+                if (lines[i0 + A_Index - 1] != "")
+                    r .= ScrubPath(lines[i0 + A_Index - 1]) nl
+            }
+        } else {
+            r .= "(aucune)" nl
+        }
+    }
+    r .= nl "--- Extraits de console.log (erreurs et commandes du menu) ---" nl
+    try {
+        if FileExist(ConsoleLog) {
+            fo := FileOpen(ConsoleLog, "r", "UTF-8")
+            fo.Seek(Max(0, fo.Length - 80000))
+            tail := fo.Read()
+            fo.Close()
+            got := []
+            for ln in StrSplit(tail, "`n", "`r") {
+                if RegExMatch(ln, "i)unknown command|error|failed|netcon|sv_throw|threw|sv_rethrow")
+                    got.Push(ScrubPath(SubStr(ln, 1, 200)))
+            }
+            j0 := Max(1, got.Length - 15)
+            if (got.Length = 0)
+                r .= "(rien à signaler)" nl
+            Loop got.Length - j0 + 1 {
+                if (got.Length > 0)
+                    r .= got[j0 + A_Index - 1] nl
+            }
+        } else {
+            r .= "(console.log absent)" nl
+        }
+    }
+    return r
+}
+
+ShowReport() {
+    static open := ""
+    if IsObject(open) {
+        try {
+            open.Show()
+            return
+        }
+    }
+    txt := BuildReport()
+    d := WinNew("Signaler un problème", "+OwnDialogs")
+    open := d
+    d.Add("Text", "x12 y12 w640", "Voici ce qui sera envoyé : version, état de l'installation, réglages et dernières erreurs. Aucun chemin personnel, aucun nom de joueur.")
+    ed := d.Add("Edit", "x12 y+8 w640 r18 ReadOnly +VScroll", txt)
+    stT := d.Add("Text", "x12 y+8 w640", "")
+    btnCp := d.Add("Button", "x12 y+8 w200 Default", "Copier le rapport")
+    btnSv := d.Add("Button", "x+8 yp w230", "Enregistrer et ouvrir le dossier")
+    btnX := d.Add("Button", "x+8 yp w100", "Fermer")
+    CopyRep(*) {
+        A_Clipboard := txt
+        stT.Text := "Rapport copié : colle-le dans ton message à ProToxEU."
+    }
+    SaveRep(*) {
+        DirCreate(A_ScriptDir "\data")
+        f := A_ScriptDir "\data\rapport_" FormatTime(, "yyyy-MM-dd_HHmmss") ".txt"
+        try {
+            FileAppend(txt, f, "UTF-8")
+            Run('explorer /select,"' f '"')
+            stT.Text := "Rapport enregistré : envoie ce fichier à ProToxEU."
+        } catch as err {
+            stT.Text := "Enregistrement impossible : " err.Message
+        }
+    }
+    Shut(*) {
+        open := ""
+        try d.Destroy()
+    }
+    btnCp.OnEvent("Click", CopyRep)
+    btnSv.OnEvent("Click", SaveRep)
+    btnX.OnEvent("Click", Shut)
+    d.OnEvent("Close", Shut)
+    d.OnEvent("Escape", Shut)
+    WinStyle(d)
+    d.Show("AutoSize Center")
+}
+
+; =====================================================================
 ;  Mise à jour automatique (depuis GitHub)
 ; =====================================================================
 ; Compare le fichier VERSION du dépôt avec APP_VERSION. Si une version plus récente existe et que
 ; tu acceptes, télécharge l'archive et remplace seulement les fichiers du programme.
 ; maps\, data\, profiles\ et config.ini ne sont jamais touchés.
 CheckUpdate() {
-    tmp := A_Temp "\cs2stuff_version.txt"
-    try FileDelete(tmp)
-    try {
-        Download("https://raw.githubusercontent.com/" UPDATE_REPO "/main/VERSION", tmp)
-        remote := Trim(FileRead(tmp), " `t`r`n")
-    } catch {
+    remote := RemoteVersion()
+    if (remote = "" || VerCompare(remote, APP_VERSION) <= 0)
         return
-    }
-    if !RegExMatch(remote, "^\d+(\.\d+)*$")
-        return
-    if (VerCompare(remote, APP_VERSION) <= 0)
-        return
+    if (remote = IniRead(IniFile, "State", "SkipUpdate", ""))
+        return   ; version abandonnée après un retour à la précédente : proposée seulement depuis le launcher
     msg := "Une nouvelle version est disponible : " remote " (tu as la " APP_VERSION ").`n`n"
     msg .= "Mettre à jour maintenant ?`nTes stuffs, favoris, profils et réglages ne sont pas touchés."
     ans := MsgBox(msg, "Mise à jour du menu", 0x40024)
@@ -7292,11 +7954,11 @@ InstallUpdate() {
         MsgBox("L'archive téléchargée est invalide.`n`nRien n'a été modifié.", "Mise à jour du menu", 0x40010)
         return
     }
-    DirCreate(DataDir "\backup")
-    try FileCopy(A_ScriptFullPath, DataDir "\backup\stuff_menu.ahk.bak", 1)
+    DirCreate(A_ScriptDir "\data\backup")
+    try FileCopy(A_ScriptFullPath, A_ScriptDir "\data\backup\stuff_menu.ahk.bak", 1)
     PreUpdateBackup()
     try {
-        for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1", "menu_stuf.ico", "install.bat", "install.ps1", "uninstall.bat", "uninstall.ps1"] {
+        for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1", "menu_stuf.ico", "install.bat", "install.ps1", "uninstall.bat", "uninstall.ps1", "rollback.bat"] {
             if FileExist(src "\" fn)
                 FileCopy(src "\" fn, A_ScriptDir "\" fn, 1)
         }
@@ -7306,11 +7968,12 @@ InstallUpdate() {
                 FileCopy(A_LoopFileFullPath, A_ScriptDir "\maps_default\" A_LoopFileName, 1)
         }
     } catch as err {
-        try FileCopy(DataDir "\backup\stuff_menu.ahk.bak", A_ScriptDir "\stuff_menu.ahk", 1)
+        try FileCopy(A_ScriptDir "\data\backup\stuff_menu.ahk.bak", A_ScriptDir "\stuff_menu.ahk", 1)
         MsgBox("La mise à jour a échoué : " err.Message "`n`nL'ancien script a été restauré.", "Mise à jour du menu", 0x40010)
         return
     }
     MsgBox("Mise à jour terminée. Le menu va redémarrer.", "Mise à jour du menu", 0x40040)
+    try IniDelete(IniFile, "State", "SkipUpdate")
     IniWrite(1, IniFile, "State", "SkipCheck")
     Reload()
 }
@@ -7377,8 +8040,19 @@ TmApply()
 lastSeen := IniRead(IniFile, "State", "LastSeenVersion", "")
 if (lastSeen != APP_VERSION) {
     IniWrite(APP_VERSION, IniFile, "State", "LastSeenVersion")
+    if (lastSeen != "" && VerCompare(APP_VERSION, lastSeen) > 0 && RollbackFile() != "") {
+        ; période d'essai après une mise à jour : deux erreurs et le menu propose de revenir à la version précédente
+        IniWrite(lastSeen, IniFile, "State", "PrevVersion")
+        IniWrite(1, IniFile, "State", "UpdateTrial")
+        IniWrite(0, IniFile, "State", "TrialErrors")
+    }
     if (ShowChangelogOn && !LauncherOn)
         ShowNews(lastSeen, (lastSeen = "") ? 1 : 8)
+}
+if (IniRead(IniFile, "State", "UpdateTrial", "0") = "1") {
+    SetTimer(EndTrial, -600000)
+    if (ToInt(IniRead(IniFile, "State", "TrialErrors", "0"), 0) >= 2)
+        SetTimer(() => RollbackUpdate(true), -4000)
 }
 if AutoBackupOn
     SetTimer(AutoBackup, -2500)

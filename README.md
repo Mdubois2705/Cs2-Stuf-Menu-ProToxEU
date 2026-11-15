@@ -60,7 +60,7 @@ Le menu est vide au départ : sauvegarde tes stuffs avec « Sauvegarder la posit
 
 ## Launcher
 
-Au démarrage du menu, une fenêtre d'accueil propose : **Lancer CS2**, **Nouveautés**, **Vérification** (de l'installation), **Réglages**, **Ouvrir le dossier** et **Quitter le menu**. Après « Lancer CS2 », la vérification de l'installation s'ouvre toute seule à côté du launcher (`AutoCheck=0` pour la désactiver) ; les nouveautés ne s'ouvrent pas toutes seules. Un voyant indique l'état de CS2 (non lancé, lancé et connecté, lancé sans connexion directe). Fermer la fenêtre laisse le menu actif : l'icône près de l'horloge la rouvre (clic). `Launcher=0` dans `config.ini` supprime la fenêtre et rétablit l'ancien comportement : le menu lance CS2 tout seul au démarrage.
+Au démarrage du menu, une fenêtre d'accueil propose : **Lancer CS2**, **Map au lancement**, **Nouveautés**, **Vérification** (de l'installation), **Réglages**, **Ouvrir le dossier**, **Sauvegarder maintenant**, **Packs de stuffs**, **Guide de démarrage**, **Signaler un problème** et **Quitter le menu**. Sous le titre, une ligne indique si le menu est à jour (clic pour installer une nouvelle version). Après « Lancer CS2 », la vérification de l'installation s'ouvre toute seule à côté du launcher (`AutoCheck=0` pour la désactiver) ; les nouveautés ne s'ouvrent pas toutes seules. Un voyant indique l'état de CS2 (non lancé, lancé et connecté, lancé sans connexion directe). Fermer la fenêtre laisse le menu actif : l'icône près de l'horloge la rouvre (clic). `Launcher=0` dans `config.ini` supprime la fenêtre et rétablit l'ancien comportement : le menu lance CS2 tout seul au démarrage.
 
 ## Raccourcis
 
@@ -296,8 +296,31 @@ Le menu a des coins arrondis et un fin liseré dont la couleur suit le thème. D
 
 Si tu modifies ensuite le fond (préréglage ou curseurs), le menu repasse en « Personnalisé » avec des couleurs de texte automatiques. La liste **Police** ne propose que les polices installées sur ton PC (Segoe UI, Bahnschrift, Cascadia, Consolas, Calibri, Georgia…). Le thème est enregistré dans `config.ini` (`Theme=`).
 
+## Map d'entraînement automatique
+
+Après « Lancer CS2 », le menu charge tout seul une map d'entraînement une fois le jeu prêt (`AutoMapDelay`, 8 s par défaut). Le choix se fait dans le launcher, « Map au lancement » : *Dernière map jouée* (de_dust2 la première fois), une map précise, ou *Aucune*. Dans `config.ini` : `AutoMap=last`, `none` ou un nom de map (ex. `de_mirage`). Cela ne concerne que le jeu lancé par le menu.
+
+## Guide de démarrage
+
+À la première utilisation, une fenêtre explique les 3 étapes (lancer CS2, ouvrir le menu avec la touche, récupérer des stuffs) et permet de changer la touche du menu. Le bouton « Guide de démarrage » du launcher la rouvre.
+
+## Packs de stuffs
+
+Le bouton « Packs de stuffs » (launcher, ou « Profils et partage > Partager des stuffs ») liste les packs publiés dans le dossier `packs\` du dépôt GitHub. Un clic télécharge le pack et ouvre la fenêtre d'import habituelle (tu choisis quoi garder et où le ranger). Les joueurs ne peuvent que les importer.
+
+Pour publier un pack (propriétaire du dépôt) : mets `PackAdmin=1` dans ton `config.ini`, exporte tes stuffs en `.stuffpack`, puis dans la fenêtre des packs clique sur « Publier un pack (administrateur)... » : le fichier est copié dans `packs\` de ton dossier Git et `packs\index.txt` est mis à jour (`PackRepoDir` = ton dossier Git, demandé la première fois). Termine avec `git add .`, `git commit`, `git push`. Format de `index.txt` : une ligne par pack, `fichier.stuffpack | Titre | Description`.
+
+## Signaler un problème
+
+Le bouton « Signaler un problème » du launcher (ou « Créer un rapport » dans la vérification) affiche un rapport : version, Windows, état de l'installation, réglages, dernières erreurs du menu et extraits utiles de `console.log`. Les chemins et le nom d'utilisateur Windows sont masqués. Tu peux le copier ou l'enregistrer dans `data\rapport_...txt`.
+
+## Retour à la version précédente
+
+Chaque mise à jour garde l'ancien script dans `data\backup\stuff_menu.ahk.bak`. Si le menu rencontre deux erreurs dans les minutes qui suivent une mise à jour, il propose de revenir à la version précédente (tes stuffs ne sont pas touchés, la version abandonnée n'est plus proposée automatiquement). Le même retour est dans « Profils et partage > Sauvegardes ». Si le menu ne démarre plus du tout, double-clique sur `rollback.bat`. Les erreurs sont notées dans `data\menu_errors.log`.
+
 ## Sauvegardes et annulation
 
+- **Sauvegarde manuelle** : bouton « Sauvegarder maintenant » du launcher (les 10 dernières sont gardées, listées dans « Restaurer une sauvegarde »).
 - **Sauvegarde automatique** : une fois par jour, au lancement du script, tes maps (de chaque profil) sont copiées dans `data\backup\auto\AAAA-MM-JJ\`. Les 14 dernières sont conservées (`BackupKeep` dans `config.ini`, `AutoBackup=0` pour désactiver). Pour restaurer : entrée « Profils et partage de stuffs » du menu, puis bouton « Restaurer une sauvegarde… ». Ton état actuel est sauvegardé juste avant dans un dossier `avant-restauration-...`.
 - **Annuler une suppression** : `Ctrl+Z` dans le menu, ou le bouton « Annuler la suppression » (et `Ctrl+Z`) dans la fenêtre de gestion. Le dernier stuff supprimé est remis dans sa catégorie ; les 50 derniers sont mémorisés dans `data\deleted.txt`. Le favori et le cadenas du stuff ne sont pas restaurés. La suppression d'une catégorie ne détruit pas ses stuffs (ils vont dans « Non classés »), donc elle n'a pas besoin d'être annulée.
 

@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 $repo = 'Mdubois2705/Cs2-Stuf-Menu-ProToxEU'
 $name = 'Menu Stuf'
-$files = 'stuff_menu.ahk','README.md','CHANGELOG.md','LICENSE','config.example.ini','cs2_practice.cfg','VERSION','menu_stuf.ico','install.bat','install.ps1','uninstall.bat','uninstall.ps1','update.bat','update.ps1'
+$files = 'stuff_menu.ahk','README.md','CHANGELOG.md','LICENSE','config.example.ini','cs2_practice.cfg','VERSION','menu_stuf.ico','install.bat','install.ps1','uninstall.bat','uninstall.ps1','rollback.bat','update.bat','update.ps1'
 
 function Find-Ahk {
     $c = @(

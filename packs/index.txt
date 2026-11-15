@@ -1,0 +1,4 @@
+# Packs de stuffs proposes dans le menu (bouton "Packs de stuffs").
+# Un pack par ligne : fichier.stuffpack | Titre | Description
+# Seul le proprietaire du depot peut en ajouter (git push).
+mes-stuffs.stuffpack | mes-stuffs | 

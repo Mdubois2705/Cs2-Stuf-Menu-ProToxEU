@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.26.1
+
+- Correction : avec la map automatique, le cfg d'entraînement (bots, argent, cheats...) n'était pas exécuté tant que tu n'ouvrais pas le menu. Il s'exécute maintenant tout seul dès que la map est chargée (`AutoExec=0` pour l'éviter).
+
+## v2.26.0
+
+- **Map d'entraînement automatique** : après « Lancer CS2 », le menu charge tout seul une map (la dernière jouée, ou de_dust2 la première fois). Le choix se fait dans le launcher (« Map au lancement » : dernière map, une map précise ou aucune). `AutoMap` et `AutoMapDelay` dans `config.ini`.
+- **Launcher** : indique si le menu est à jour (clic pour installer une nouvelle version), bouton « Sauvegarder maintenant » (copie manuelle de tes stuffs, favoris et temps de vol), « Packs de stuffs », « Guide de démarrage » et « Signaler un problème ».
+- **Guide de démarrage** : s'affiche à la première utilisation (3 étapes : lancer CS2, ouvrir le menu, récupérer des stuffs). Le bouton du launcher le rouvre.
+- **Packs de stuffs** : packs publiés par ProToxEU sur GitHub, importables en un clic (tu choisis quoi garder). Seul le propriétaire du dépôt peut en publier.
+- **Signaler un problème** : crée un rapport (version, état de l'installation, réglages, dernières erreurs) sans chemin ni nom personnel, à copier ou enregistrer.
+- **Vérification** : contrôle aussi la présence de Steam, affiche le nombre de points à corriger et confirme « Installation validée » la première fois.
+- **Retour à la version précédente** : si le menu rencontre deux erreurs après une mise à jour, il propose de revenir à la version d'avant. Aussi disponible dans « Profils et partage > Sauvegardes ». `rollback.bat` fait la même chose si le menu ne démarre plus.
+- Sauvegardes manuelles listées dans « Restaurer une sauvegarde ».
+
 ## v2.25.5
 
 - La vérification de l'installation s'ouvre de nouveau toute seule, 1,5 s après « Lancer CS2 » (comme avant), mais à côté du launcher et non plus par-dessus. La fenêtre Nouveautés ne s'ouvre pas toute seule (point ● sur le bouton du launcher).
