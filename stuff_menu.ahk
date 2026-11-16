@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.32.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -86,6 +86,9 @@ KeysAuto := (IniRead(IniFile, "Settings", "KeysAuto", "1") = "1")   ; 1 = à dro
 KeysX := ToInt(IniRead(IniFile, "Settings", "KeysX", "1500"), 1500)
 KeysY := ToInt(IniRead(IniFile, "Settings", "KeysY", "900"), 900)
 RethrowKey := Trim(IniRead(IniFile, "Settings", "RethrowKey", "k"))   ; touche liée à sv_rethrow_last_grenade (chrono : départ de la relance)
+MenuSound := (IniRead(IniFile, "Settings", "MenuSound", "1") = "1")   ; petits sons quand on défile, avance ou recule dans le menu
+MenuSoundVol := Max(10, Min(100, ToInt(IniRead(IniFile, "Settings", "MenuSoundVol", "25"), 25)))
+snd := Map()   ; sons du menu en mémoire (WAV)
 KeysHideOut := (IniRead(IniFile, "Settings", "KeysHideOut", "0") = "1")   ; 1 = touches masquées quand CS2 n'est pas au premier plan
 TimerHideOut := (IniRead(IniFile, "Settings", "TimerHideOut", "0") = "1")   ; 1 = chrono masqué quand CS2 n'est pas au premier plan
 FlightAsk := (IniRead(IniFile, "Settings", "FlightAsk", "1") = "1")   ; proposer de mesurer le temps de vol après la création d'un stuff
@@ -2734,11 +2737,58 @@ CloseMenu() {
     HideShot()
 }
 
+; =====================================================================
+;  Petits sons du menu (très doux, générés en mémoire : aucun fichier)
+; =====================================================================
+; Fichier WAV mono 16 bits : une note sinusoïdale qui s'allume et s'éteint doucement
+MakeWav(freq, dur, amp, decay) {
+    n := Round(44100 * dur)
+    buf := Buffer(44 + 2 * n, 0)
+    NumPut("UInt", 0x46464952, buf, 0)    ; "RIFF"
+    NumPut("UInt", 36 + 2 * n, buf, 4)
+    NumPut("UInt", 0x45564157, buf, 8)    ; "WAVE"
+    NumPut("UInt", 0x20746D66, buf, 12)   ; "fmt "
+    NumPut("UInt", 16, buf, 16)
+    NumPut("UShort", 1, buf, 20)
+    NumPut("UShort", 1, buf, 22)
+    NumPut("UInt", 44100, buf, 24)
+    NumPut("UInt", 88200, buf, 28)
+    NumPut("UShort", 2, buf, 32)
+    NumPut("UShort", 16, buf, 34)
+    NumPut("UInt", 0x61746164, buf, 36)   ; "data"
+    NumPut("UInt", 2 * n, buf, 40)
+    atk := Round(44100 * 0.006)
+    Loop n {
+        i := A_Index - 1
+        t := i / 44100
+        e := Exp(-t * decay) * ((i < atk) ? Sin(1.5707963 * i / atk) : 1)
+        NumPut("Short", Round(Sin(6.2831853 * freq * t) * e * amp * 32767), buf, 44 + 2 * i)
+    }
+    return buf
+}
+
+; (Re)construit les trois sons : défilement, avancer, reculer (volume réglable)
+BuildMenuSounds() {
+    k := MenuSoundVol / 100
+    snd["scroll"] := MakeWav(300, 0.05, 0.18 * k, 60)
+    snd["fwd"] := MakeWav(262, 0.12, 0.22 * k, 24)
+    snd["back"] := MakeWav(196, 0.12, 0.22 * k, 24)
+}
+
+MenuSnd(kind) {
+    if !MenuSound
+        return
+    if (snd.Count = 0)
+        BuildMenuSounds()
+    try DllCall("winmm\PlaySoundW", "Ptr", snd[kind], "Ptr", 0, "UInt", 0x7)   ; en mémoire, sans attendre
+}
+
 Move(d) {
     global mapIdx, catIdx, itemIdx, resIdx, mainIdx
     n := Count()
     if (n = 0)
         return
+    MenuSnd("scroll")
     if (level = 4) {
         items4 := MainItems()
         Loop n {
@@ -2761,11 +2811,13 @@ Move(d) {
 Select() {
     global level, catIdx, itemIdx, LastMap
     if (level = 4) {
+        MenuSnd("fwd")
         MainSelect()
         return
     }
     if (Count() = 0)
         return
+    MenuSnd("fwd")
     if (level = 0) {
         LoadMapStuff(mapIdx)
         LastMap := mapNames[mapIdx]
@@ -2788,6 +2840,7 @@ Select() {
 
 Back() {
     global level, utilMode
+    MenuSnd("back")
     if (level = 3) {
         ExitSearch()
         return
@@ -2812,6 +2865,7 @@ Back() {
 }
 
 EscKey() {
+    MenuSnd("back")
     if (level = 3) {
         ExitSearch()
         return
@@ -4065,8 +4119,23 @@ ShowSettings() {
     d.Add("Text", "x22 y" ty " w110", "Opacité")
     slOp := d.Add("Slider", "x140 y" y " w260 Range80-255 ToolTip", ovOpacity)
     txOp := d.Add("Text", "x406 y" ty " w70", "")
+    y += 44
+    chkSnd := d.Add("CheckBox", "x22 y" y " w460" (MenuSound ? " Checked" : ""), "Petits sons dans le menu (défilement, avancer, reculer)")
+    y += 34
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w110", "Volume des sons")
+    slSnd := d.Add("Slider", "x140 y" y " w260 Range10-100 ToolTip", MenuSoundVol)
     y += 46
     yEnd1 := y
+    SndSync(*) {
+        global MenuSound, MenuSoundVol
+        MenuSound := chkSnd.Value ? true : false
+        MenuSoundVol := slSnd.Value
+        IniWrite(MenuSound ? 1 : 0, IniFile, "Settings", "MenuSound")
+        IniWrite(MenuSoundVol, IniFile, "Settings", "MenuSoundVol")
+        BuildMenuSounds()
+        MenuSnd("fwd")   ; aperçu
+    }
 
     ; ----- Onglet Couleurs -----
     tabs.UseTab(2)
@@ -4836,6 +4905,8 @@ ShowSettings() {
     chkKH.OnEvent("Click", KSync)
     chkQN.OnEvent("Click", QSync)
     chkQH.OnEvent("Click", QSync)
+    chkSnd.OnEvent("Click", SndSync)
+    slSnd.OnEvent("Change", SndSync)
     chkQZ.OnEvent("Click", QSync)
     chkQS.OnEvent("Click", QSync)
     slQZ.OnEvent("Change", QSync)
@@ -8429,7 +8500,7 @@ AutoBackup() {
 ProfSettingKeys() {
     return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
         , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
-        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizZoneOn", "QuizZoneSize", "QuizFovPct", "QuizScoreOn", "QuizTol", "QuizKeyZone", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
+        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "MenuSound", "MenuSoundVol", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizZoneOn", "QuizZoneSize", "QuizFovPct", "QuizScoreOn", "QuizTol", "QuizKeyZone", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
 }
 
 ExportProfile(prof, ownerHwnd) {

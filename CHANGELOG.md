@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.33.1
+
+- Sons du menu : activés par défaut, volume à 25 %. Si tu avais déjà réglé les sons dans les réglages, ton choix est conservé.
+
+## v2.33.0
+
+- Petits sons très doux dans le menu en jeu : un pour défiler, un pour avancer / valider, un pour reculer. Générés par le menu (aucun fichier), désactivés par défaut. Case « Petits sons dans le menu » et volume dans Réglages > Menu.
+
 ## v2.32.1
 
 - Score du quiz : 100 % jusqu'à 0,3° d'écart, puis dégressif jusqu'à 0 % à l'écart réglé.

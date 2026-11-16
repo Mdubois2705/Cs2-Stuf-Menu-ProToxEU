@@ -324,6 +324,10 @@ Le menu demande `getpos` au jeu par la connexion directe et lit la réponse dans
 
 Onglet **Fenêtres** : thème sombre (par défaut), clair ou « comme le menu en jeu », couleur d'accent, police et taille du texte (90 à 120 %). Chaque changement ouvre une fenêtre d'aperçu et s'applique à la prochaine ouverture d'une fenêtre. Équivalents dans `config.ini` : `WinTheme` (`dark`, `light`, `menu`), `WinAccent`, `WinFont`, `WinScale`. Les boîtes de message de Windows gardent le style de Windows. Si les fenêtres sont illisibles chez toi, mets `WinTheme=light`.
 
+### Sons du menu
+
+Réglages > onglet **Menu** : « Petits sons dans le menu » joue une note très douce quand tu défiles, quand tu avances ou valides, et quand tu recules. Les sons sont générés par le menu (aucun fichier), activés par défaut à 25 % de volume. Équivalents dans `config.ini` : `MenuSound`, `MenuSoundVol` (10 à 100).
+
 ### Thèmes et police
 
 La liste **Thème** (onglet Menu) applique en un clic une palette complète (fond, titre, nom de map, textes) :
