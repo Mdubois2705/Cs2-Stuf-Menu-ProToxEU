@@ -259,7 +259,7 @@ Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu 
 - **Chrono en direct** : le compteur tourne à l'écran dès le lâcher (type connu par la ligne `sv_throw_...`), puis s'arrête sur le temps final. Avec la touche de relance, il démarre avec le type de la dernière grenade vue.
 - **Précision** : environ un dixième de seconde (lecture du fichier toutes les 50 ms).
 - **Limite** : le menu ne sait pas quelle arme tu tiens ; un tir pendant que la grenade vole peut fausser le temps.
-- **Réglages** (onglet Chrono) : activer (le panneau reste alors affiché en permanence), placement (par défaut au-dessus des coordonnées, ou libre), durée d'affichage du résultat, « Tester l'affichage ». L'apparence suit celle du menu. Équivalents : `TimerOn`, `TimerHideOut` (1 = masquer hors de CS2), `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
+- **Réglages** (onglet Chrono) : activer (le panneau reste alors affiché en permanence), placement (par défaut à droite des coordonnées, ou libre), durée d'affichage du résultat, « Tester l'affichage ». L'apparence suit celle du menu. Équivalents : `TimerOn`, `TimerHideOut` (1 = masquer hors de CS2), `TimerAuto`, `TimerX`, `TimerY`, `TimerDur`.
 - **Tester la mesure** : pendant 60 s, chaque grenade lancée est mesurée et le résultat s'affiche dans les réglages avec l'origine du départ, même si le chronomètre est désactivé.
 - **Temps incorrect ?** Mets `TimerDebug=1` : les événements sont notés dans `data\timer_debug.txt`.
 

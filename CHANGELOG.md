@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.31.3
+
+- Chrono : la position par défaut est maintenant à droite des coordonnées (avant : au-dessus), centrée sur leur hauteur.
+
 ## v2.31.2
 
 - Quiz : la liste des stuffs était illisible (grisée sur fond blanc) en mode « Aléatoire ». Elle reste lisible en permanence ; cocher un stuff ou un bouton de sélection passe tout seul en mode « Choisir les stuffs ».

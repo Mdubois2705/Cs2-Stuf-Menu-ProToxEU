@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.31.2"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.31.3"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -53,7 +53,7 @@ HudX := ToInt(IniRead(IniFile, "Settings", "HudX", "12"), 12)
 HudY := ToInt(IniRead(IniFile, "Settings", "HudY", "900"), 900)
 ; Chronomètre de grenade (temps entre le lâcher et l'explosion)
 TimerOn := (IniRead(IniFile, "Settings", "TimerOn", "1") = "1")
-TimerAuto := (IniRead(IniFile, "Settings", "TimerAuto", "1") = "1")   ; 1 = au-dessus des coordonnées, 0 = position libre
+TimerAuto := (IniRead(IniFile, "Settings", "TimerAuto", "1") = "1")   ; 1 = à droite des coordonnées, 0 = position libre
 TimerX := ToInt(IniRead(IniFile, "Settings", "TimerX", "12"), 12)
 TimerY := ToInt(IniRead(IniFile, "Settings", "TimerY", "820"), 820)
 TimerDur := Max(2, Min(20, ToInt(IniRead(IniFile, "Settings", "TimerDur", "6"), 6)))   ; secondes d'affichage du résultat
@@ -3899,7 +3899,7 @@ ShowSettings() {
     y += 40
     ty := y + 4
     d.Add("Text", "x22 y" ty " w110", "Placement")
-    ddTmPos := d.Add("DropDownList", "x140 y" y " w260 Choose" (TimerAuto ? 1 : 2), ["Au-dessus des coordonnées (par défaut)", "Libre (où je veux sur l'écran)"])
+    ddTmPos := d.Add("DropDownList", "x140 y" y " w260 Choose" (TimerAuto ? 1 : 2), ["À droite des coordonnées (par défaut)", "Libre (où je veux sur l'écran)"])
     y += 40
     ty := y + 4
     d.Add("Text", "x22 y" ty " w110", "Position X")
@@ -6295,6 +6295,26 @@ HudPaint() {
     PanelEnd(hudGui, bg, W, H, hudSt["X"], hudSt["Y"])
 }
 
+; Taille et position [largeur, hauteur, x, y] du panneau des coordonnées (même s'il n'est pas affiché)
+HudGeom() {
+    k := DpiK()
+    sc := ovScale / 100
+    px := PxOf(FS(11))
+    pad := Max(6, Round(8 * sc * k))
+    rowH := Round(px * 1.75)
+    gap := Max(2, Round(px * 0.18))
+    W := Round(330 * sc * k) + 2 * pad
+    H := 2 * pad + 3 * rowH + 2 * gap
+    MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
+    if HudAuto
+        return [W, H, ml + 12 + ovBorder, mb - H - 12 - ovBorder]
+    vl := SysGet(76)
+    vt := SysGet(77)
+    vw := SysGet(78)
+    vh := SysGet(79)
+    return [W, H, Max(vl, Min(HudX, vl + vw - W)), Max(vt, Min(HudY, vt + vh - H))]
+}
+
 ; ---------- Chronomètre de grenade ----------
 TmShow(txt, hold := false) {
     global tmGui, tmB, tmText, tmVisible, tmCtl, tmSt
@@ -6314,20 +6334,10 @@ TmShow(txt, hold := false) {
     vw := SysGet(78)
     vh := SysGet(79)
     if TimerAuto {
-        ; juste au-dessus des coordonnées
-        MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
-        if (hudOn && IsObject(hudGui)) {
-            hudGui.GetPos(&cx, &cy)
-        } else if HudAuto {
-            estH := Round(5.9 * PxOf(FS(11))) + 2 * Max(6, Round(8 * ovScale / 100 * DpiK()))
-            cx := ml + 12 + ovBorder
-            cy := mb - estH - 12 - ovBorder
-        } else {
-            cx := HudX
-            cy := HudY
-        }
-        x := cx
-        y := cy - 2 * ovBorder - 8 - h
+        ; juste à droite des coordonnées, centré sur leur hauteur
+        hg := HudGeom()
+        x := hg[3] + hg[1] + 8 + 2 * ovBorder
+        y := hg[4] + (hg[2] - h) // 2
     } else {
         x := TimerX
         y := TimerY
