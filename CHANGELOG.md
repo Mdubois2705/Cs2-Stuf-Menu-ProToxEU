@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.32.0
+
+- **Zone d'aide du quiz** : une touche (Insert par défaut) affiche un cercle à l'écran qui contient le repère sans le centrer dessus. Le menu lit ton pitch et ton yaw en continu ; le cercle suit ta souris. Trois niveaux (de plus en plus petit), puis la zone disparaît. Hors écran, un trait indique la direction.
+- **Pourcentage de réussite** : au lancer (clic gauche relâché), ta visée est comparée à celle du stuff. Le bandeau affiche le pourcentage, l'écart en degrés et ta moyenne sur la partie.
+- Onglet Quiz : zone d'aide (activer, taille, ajustement du champ), score (activer, écart pour 0 %) et la nouvelle touche Zone.
+
 ## v2.31.5
 
 - Les fenêtres du menu (réglages, quiz, gestion, packs, partage...) se rouvrent à l'endroit où tu les as laissées. La position est mémorisée par fenêtre dans `config.ini` (section `WinPos`) ; elle est recadrée si l'écran a changé.

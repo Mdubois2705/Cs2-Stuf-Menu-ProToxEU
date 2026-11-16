@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.31.5"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.32.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -276,9 +276,26 @@ quizPool := []      ; stuffs du quiz
 quizOrder := []     ; ordre restant du tour (sans répétition)
 quizHist := []      ; stuffs déjà vus (pour « précédent »)
 quizHistPos := 0
+quizAng := ""       ; visée actuelle [pitch, yaw, instant de lecture]
+quizTarget := ""    ; visée du stuff du quiz [pitch, yaw]
+quizZoneLv := 0     ; niveau de la zone d'aide (0 = masquée, 1 à 3)
+quizZoneOff := [0, 0]
+quizZoneGui := ""
+quizInfoLine := ""
+quizScoreLine := ""
+quizScoreSum := 0
+quizScoreN := 0
+quizNoScore := false
+quizLaunchTick := 0
+qaPos := 0
+QuizZoneOn := (IniRead(IniFile, "Settings", "QuizZoneOn", "1") = "1")   ; zone d'aide disponible
+QuizZoneSize := Max(60, Min(300, ToInt(IniRead(IniFile, "Settings", "QuizZoneSize", "140"), 140)))   ; rayon du cercle (niveau 1)
+QuizScoreOn := (IniRead(IniFile, "Settings", "QuizScoreOn", "1") = "1")   ; pourcentage de réussite au lancer
+QuizTol := Max(1, Min(15, ToInt(IniRead(IniFile, "Settings", "QuizTol", "5"), 5)))   ; écart (en degrés) qui donne 0 %
+QuizFovPct := Max(70, Min(130, ToInt(IniRead(IniFile, "Settings", "QuizFovPct", "100"), 100)))   ; réglage fin de la zone
 quizMap := ""
 quizBound := Map()  ; touches actuellement branchées
-quizKeys := Map("next", "PgDn", "prev", "PgUp", "hint", "Home", "ans", "End")
+quizKeys := Map("next", "PgDn", "prev", "PgUp", "hint", "Home", "ans", "End", "zone", "Insert")
 QuizNoRepeat := (IniRead(IniFile, "Settings", "QuizNoRepeat", "1") = "1")   ; chaque stuff une fois avant de recommencer
 QuizHintShot := (IniRead(IniFile, "Settings", "QuizHintShot", "1") = "1")   ; l'aide montre aussi la capture
 QuizMode := IniRead(IniFile, "Settings", "QuizMode", "all")   ; all = tous les stuffs, pick = stuffs choisis
@@ -1894,17 +1911,17 @@ ShowNews(sinceVer := "", maxN := 5) {
 ; Page de départ : stuffs choisis ou aléatoire sur toute la map. Ensuite des touches (réglables) passent au stuff
 ; suivant, reviennent au précédent, donnent l'aide (info du chat + capture) ou la réponse (relance complète).
 QuizKeyDefault(a) {
-    static d := Map("next", "PgDn", "prev", "PgUp", "hint", "Home", "ans", "End")
+    static d := Map("next", "PgDn", "prev", "PgUp", "hint", "Home", "ans", "End", "zone", "Insert")
     return d[a]
 }
 
 QuizKeysLoad() {
-    for a, nm in Map("next", "QuizKeyNext", "prev", "QuizKeyPrev", "hint", "QuizKeyHint", "ans", "QuizKeyAns")
+    for a, nm in Map("next", "QuizKeyNext", "prev", "QuizKeyPrev", "hint", "QuizKeyHint", "ans", "QuizKeyAns", "zone", "QuizKeyZone")
         quizKeys[a] := IniRead(IniFile, "Settings", nm, QuizKeyDefault(a))
 }
 
 QuizKeyIni(a) {
-    return Map("next", "QuizKeyNext", "prev", "QuizKeyPrev", "hint", "QuizKeyHint", "ans", "QuizKeyAns")[a]
+    return Map("next", "QuizKeyNext", "prev", "QuizKeyPrev", "hint", "QuizKeyHint", "ans", "QuizKeyAns", "zone", "QuizKeyZone")[a]
 }
 
 ; Nom lisible d'une touche
@@ -1916,7 +1933,7 @@ QuizKeyShow(k) {
 }
 
 QuizKeysSummary() {
-    return "Touches : suivant " QuizKeyShow(quizKeys["next"]) "   précédent " QuizKeyShow(quizKeys["prev"]) "   aide " QuizKeyShow(quizKeys["hint"]) "   réponse " QuizKeyShow(quizKeys["ans"])
+    return "Touches : suivant " QuizKeyShow(quizKeys["next"]) "   précédent " QuizKeyShow(quizKeys["prev"]) "   aide " QuizKeyShow(quizKeys["hint"]) "   zone " QuizKeyShow(quizKeys["zone"]) "   réponse " QuizKeyShow(quizKeys["ans"])
 }
 
 QuizActive(*) => (quizOn && WinActive("ahk_exe cs2.exe"))
@@ -1928,6 +1945,8 @@ QuizKeyAct(a, *) {
         QuizPrev()
     else if (a = "hint")
         QuizHint()
+    else if (a = "zone")
+        QuizZoneKey()
     else
         QuizReveal()
 }
@@ -1936,7 +1955,7 @@ QuizKeyAct(a, *) {
 ; Le « ~ » laisse la touche aussi au jeu.
 QuizBind() {
     HotIf(QuizActive)
-    for a in ["next", "prev", "hint", "ans"] {
+    for a in ["next", "prev", "hint", "ans", "zone"] {
         old := quizBound.Has(a) ? quizBound[a] : ""
         if (old != "")
             try Hotkey("~" old, "Off")
@@ -1993,7 +2012,7 @@ CaptureKey() {
 
 ; Lignes des touches du quiz (page de configuration et onglet des réglages) ; renvoie le y suivant
 QuizKeysUI(d, y, onChange := "") {
-    rows := [["next", "Suivant (autre stuff)"], ["prev", "Précédent (stuff d'avant)"], ["hint", "Aide (info du chat + repère)"], ["ans", "Réponse (relance le stuff)"]]
+    rows := [["next", "Suivant (autre stuff)"], ["prev", "Précédent (stuff d'avant)"], ["hint", "Aide (info du chat + repère)"], ["zone", "Zone d'aide (cercle à l'écran)"], ["ans", "Réponse (relance le stuff)"]]
     btns := Map()
     for r in rows {
         a := r[1]
@@ -2010,7 +2029,7 @@ QuizKeysUI(d, y, onChange := "") {
         k := CaptureKey()
         if (k = "")
             return
-        for o in ["next", "prev", "hint", "ans"] {
+        for o in ["next", "prev", "hint", "ans", "zone"] {
             if (o != a && quizKeys[o] = k) {
                 ToolTip("Cette touche est déjà utilisée par une autre action du quiz")
                 SetTimer(() => ToolTip(), -2200)
@@ -2211,7 +2230,11 @@ QuizBegin(pool, mapName) {
     quizHistPos := 0
     quizMap := mapName
     quizCur := ""
+    quizScoreSum := 0
+    quizScoreN := 0
+    qaPos := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : 0
     QuizBind()
+    SetTimer(QuizAimTick, 90)
     QuizNext()
 }
 
@@ -2278,31 +2301,71 @@ QuizPrev(*) {
 
 ; Téléporte au départ du stuff (sans la visée) et affiche le bandeau
 QuizLaunch(e) {
-    global quizCur
+    global quizCur, quizTarget, quizZoneLv, quizInfoLine, quizScoreLine, quizNoScore, quizLaunchTick
     quizCur := e
+    quizTarget := QuizTargetOf(e)
+    quizZoneLv := 0
+    quizInfoLine := ""
+    quizScoreLine := ""
+    quizNoScore := false
+    quizLaunchTick := A_TickCount
+    QuizZoneHide()
     qcmd := RegExReplace(e[3], "i)\s*;?\s*setang\s+" NUM "\s+" NUM "(?:\s+" NUM ")?", "")
     qcmd := Trim(RegExReplace(qcmd, "\s*;(\s*;)+", ";"), " `t;")
     HideShot()
     RunCmd(qcmd)
-    QzShow("QUIZ " quizHistPos " : " e[2], "(" e[1] ")")
+    QuizBanner()
+}
+
+; Bandeau : numéro, nom, catégorie, puis l'info (aide) et le score du dernier lancer
+QuizBanner() {
+    if !IsObject(quizCur)
+        return
+    lines := ["QUIZ " quizHistPos " : " quizCur[2], "(" quizCur[1] ")"]
+    if (quizInfoLine != "")
+        lines.Push(quizInfoLine)
+    if (quizScoreLine != "")
+        lines.Push(quizScoreLine)
+    QzShow(lines*)
+}
+
+; Angles [pitch, yaw] visés par le stuff ("" si le stuff n'a pas de visée)
+QuizTargetOf(e) {
+    if RegExMatch(e[3], "i)setang\s+(" NUM ")\s+(" NUM ")", &m)
+        return [Number(m[1]), Number(m[2])]
+    return ""
+}
+
+Wrap180(a) {
+    while (a > 180)
+        a -= 360
+    while (a <= -180)
+        a += 360
+    return a
 }
 
 ; Aide : info du chat et repère (capture du stuff)
 QuizHint(*) {
+    global quizInfoLine
     if (!quizOn || !IsObject(quizCur))
         return
     info := SplitInfo(quizCur[4])[1]
-    QzShow("QUIZ " quizHistPos " : " quizCur[2], "(" quizCur[1] ")", (info != "") ? "Info : " info : "Pas d'info pour ce stuff")
+    quizInfoLine := (info != "") ? "Info : " info : "Pas d'info pour ce stuff"
+    QuizBanner()
     if QuizHintShot
         UpdateShot(true, ShotPath(quizMap, quizCur[3]))
 }
 
 QuizReveal(*) {
+    global quizNoScore, quizZoneLv
     if (!quizOn || !IsObject(quizCur)) {
         ToolTip("Aucun quiz en cours")
         SetTimer(() => ToolTip(), -1800)
         return
     }
+    quizNoScore := true   ; la réponse règle la visée : pas de score pour ce lancer
+    quizZoneLv := 0
+    QuizZoneHide()
     QzHide()
     HideShot()
     RunCmd(quizCur[3], SplitInfo(quizCur[4])[1])
@@ -2310,10 +2373,132 @@ QuizReveal(*) {
     SetTimer(() => ToolTip(), -2500)
 }
 
+; Zone d'aide : un cercle qui contient le repère sans le centrer dessus. Chaque appui la rétrécit, le 4e la retire.
+QuizZoneKey(*) {
+    global quizZoneLv, quizZoneOff
+    if (!quizOn || !IsObject(quizCur) || !QuizZoneOn)
+        return
+    if !IsObject(quizTarget) {
+        ToolTip("Ce stuff n'a pas de visée enregistrée : pas de zone d'aide")
+        SetTimer(() => ToolTip(), -2000)
+        return
+    }
+    quizZoneLv := Mod(quizZoneLv + 1, 4)
+    if (quizZoneLv = 0) {
+        QuizZoneHide()
+        return
+    }
+    ang := Random(0, 359) * 0.0174533
+    quizZoneOff := [Cos(ang) * Random(25, 55) / 100, Sin(ang) * Random(25, 55) / 100]   ; décalage (en rayons) : le repère n'est jamais au centre
+    ToolTip("Zone d'aide : niveau " quizZoneLv " / 3")
+    SetTimer(() => ToolTip(), -1200)
+}
+
+QuizZoneHide() {
+    if IsObject(quizZoneGui)
+        try quizZoneGui.Hide()
+}
+
+; Lecture régulière de la visée (pitch, yaw) et mise à jour de la zone
+QuizAimTick() {
+    global qaPos, quizAng
+    if !quizOn {
+        SetTimer(QuizAimTick, 0)
+        return
+    }
+    if (!WinActive("ahk_exe cs2.exe") || !FileExist(ConsoleLog) || cmdBusy > 0) {
+        QuizZoneHide()
+        return
+    }
+    sz := FileGetSize(ConsoleLog)
+    if (sz < qaPos)
+        qaPos := 0
+    if (sz > qaPos) {
+        txt := ReadFrom(ConsoleLog, qaPos)
+        qaPos := sz
+        lp := LastPos(txt)
+        if IsObject(lp)
+            quizAng := [Number(lp[4]), Number(lp[5]), A_TickCount]
+    }
+    if (A_TickCount - lastCmdTick > 500)
+        NetSend("sv_cheats 1; getpos")
+    QuizZoneDraw()
+}
+
+QuizZoneDraw() {
+    global quizZoneGui
+    if (quizZoneLv = 0 || !IsObject(quizTarget) || !IsObject(quizAng) || A_TickCount - quizAng[3] > 2000) {
+        QuizZoneHide()
+        return
+    }
+    try WinGetClientPos(&x0, &y0, &cw, &ch, "ahk_exe cs2.exe")
+    catch
+        return
+    f := (ch / 1.5) / (QuizFovPct / 100)   ; distance « virtuelle » de l'écran (FOV vertical 73,7° comme CS2)
+    dyaw := Wrap180(quizTarget[2] - quizAng[2])
+    dpit := quizTarget[1] - quizAng[1]
+    far := (Abs(dyaw) > 80 || Abs(dpit) > 80)
+    dyaw := Max(-80, Min(80, dyaw))
+    dpit := Max(-80, Min(80, dpit))
+    tx := x0 + cw / 2 - f * Tan(dyaw * 0.0174533)   ; yaw positif = la cible est à gauche
+    ty := y0 + ch / 2 + f * Tan(dpit * 0.0174533)   ; pitch positif = la cible est plus bas
+    R := Round(QuizZoneSize * DpiK() * [1, 0.6, 0.35][quizZoneLv])
+    px := tx + quizZoneOff[1] * R
+    py := ty + quizZoneOff[2] * R
+    clamped := false
+    nx := Max(x0 + R, Min(x0 + cw - R, px))
+    ny := Max(y0 + R, Min(y0 + ch - R, py))
+    if (nx != px || ny != py || far)
+        clamped := true
+    S := 2 * R + 8
+    if !IsObject(quizZoneGui)
+        quizZoneGui := NewLayered()
+    quizZoneGui.Show("NA x" Round(nx - S / 2) " y" Round(ny - S / 2) " w" S " h" S)
+    bg := PanelBegin(S, S)
+    gg := bg[2]
+    acc := Integer("0x" WinAccent)
+    br := 0
+    pen := 0
+    DllCall("gdiplus\GdipCreateSolidFill", "UInt", ((clamped ? 40 : 55) << 24) | acc, "Ptr*", &br)
+    DllCall("gdiplus\GdipFillEllipse", "Ptr", gg, "Ptr", br, "Float", 4, "Float", 4, "Float", 2 * R, "Float", 2 * R)
+    DllCall("gdiplus\GdipDeleteBrush", "Ptr", br)
+    DllCall("gdiplus\GdipCreatePen1", "UInt", (210 << 24) | acc, "Float", 3, "Int", 2, "Ptr*", &pen)
+    DllCall("gdiplus\GdipDrawEllipse", "Ptr", gg, "Ptr", pen, "Float", 4, "Float", 4, "Float", 2 * R, "Float", 2 * R)
+    if clamped {
+        ; le repère est hors de l'écran : un trait indique la direction
+        vx := tx - nx
+        vy := ty - ny
+        ln := Sqrt(vx * vx + vy * vy)
+        if (ln > 1)
+            DllCall("gdiplus\GdipDrawLine", "Ptr", gg, "Ptr", pen, "Float", R + 4, "Float", R + 4, "Float", R + 4 + vx / ln * R * 0.8, "Float", R + 4 + vy / ln * R * 0.8)
+    }
+    DllCall("gdiplus\GdipDeletePen", "Ptr", pen)
+    PanelEnd(quizZoneGui, bg, S, S, Round(nx - S / 2), Round(ny - S / 2))
+}
+
+; Moment où la grenade part (clic gauche relâché) : compare ta visée à celle du stuff
+QuizThrow() {
+    global quizScoreSum, quizScoreN, quizScoreLine
+    if (!quizOn || !QuizScoreOn || quizNoScore || !IsObject(quizCur) || !IsObject(quizTarget) || !IsObject(quizAng))
+        return
+    if (!WinActive("ahk_exe cs2.exe") || A_TickCount - quizLaunchTick < 800 || A_TickCount - quizAng[3] > 700)
+        return
+    dp := quizAng[1] - quizTarget[1]
+    dy := Wrap180(quizAng[2] - quizTarget[2]) * Cos(quizTarget[1] * 0.0174533)
+    err := Sqrt(dp * dp + dy * dy)
+    pct := Round(Max(0, 100 * (1 - err / QuizTol)))
+    quizScoreSum += pct
+    quizScoreN += 1
+    quizScoreLine := "Visée : " pct " %  (écart " StrReplace(Format("{:.1f}", err), ".", ",") "°)   moyenne " Round(quizScoreSum / quizScoreN) " % sur " quizScoreN
+    QuizBanner()
+}
+
 QuizStop() {
     global quizOn, quizCur
     quizOn := false
     quizCur := ""
+    SetTimer(QuizAimTick, 0)
+    QuizZoneHide()
     QzHide()
     HideShot()
 }
@@ -4108,15 +4293,47 @@ ShowSettings() {
     y += 34
     chkQH := d.Add("CheckBox", "x22 y" y " w540" (QuizHintShot ? " Checked" : ""), "L'aide affiche aussi la capture du stuff (le repère)")
     y += 34
+    chkQZ := d.Add("CheckBox", "x22 y" y " w540" (QuizZoneOn ? " Checked" : ""), "Zone d'aide : un cercle à l'écran qui contient le repère (touche Zone)")
+    y += 34
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w150", "Taille de la zone")
+    slQZ := d.Add("Slider", "x176 y" y " w260 Range60-300 ToolTip", QuizZoneSize)
+    txQZ := d.Add("Text", "x442 y" ty " w90", QuizZoneSize " px")
+    y += 40
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w150", "Ajustement du champ")
+    slQF := d.Add("Slider", "x176 y" y " w260 Range70-130 ToolTip", QuizFovPct)
+    txQF := d.Add("Text", "x442 y" ty " w90", QuizFovPct " %")
+    y += 40
+    chkQS := d.Add("CheckBox", "x22 y" y " w540" (QuizScoreOn ? " Checked" : ""), "Pourcentage de réussite quand tu lances la grenade")
+    y += 34
+    ty := y + 4
+    d.Add("Text", "x22 y" ty " w150", "Écart pour 0 %")
+    slQT := d.Add("Slider", "x176 y" y " w260 Range1-15 ToolTip", QuizTol)
+    txQT := d.Add("Text", "x442 y" ty " w90", QuizTol " °")
+    y += 40
     btnQRe := d.Add("Button", "x22 y" y " w300", "Revoir la page de choix des touches")
     y += 46
     yEnd8 := y
     QSync(*) {
-        global QuizNoRepeat, QuizHintShot
+        global QuizNoRepeat, QuizHintShot, QuizZoneOn, QuizZoneSize, QuizFovPct, QuizScoreOn, QuizTol
         QuizNoRepeat := chkQN.Value ? true : false
         QuizHintShot := chkQH.Value ? true : false
+        QuizZoneOn := chkQZ.Value ? true : false
+        QuizZoneSize := slQZ.Value
+        QuizFovPct := slQF.Value
+        QuizScoreOn := chkQS.Value ? true : false
+        QuizTol := slQT.Value
+        txQZ.Text := QuizZoneSize " px"
+        txQF.Text := QuizFovPct " %"
+        txQT.Text := QuizTol " °"
         IniWrite(QuizNoRepeat ? 1 : 0, IniFile, "Settings", "QuizNoRepeat")
         IniWrite(QuizHintShot ? 1 : 0, IniFile, "Settings", "QuizHintShot")
+        IniWrite(QuizZoneOn ? 1 : 0, IniFile, "Settings", "QuizZoneOn")
+        IniWrite(QuizZoneSize, IniFile, "Settings", "QuizZoneSize")
+        IniWrite(QuizFovPct, IniFile, "Settings", "QuizFovPct")
+        IniWrite(QuizScoreOn ? 1 : 0, IniFile, "Settings", "QuizScoreOn")
+        IniWrite(QuizTol, IniFile, "Settings", "QuizTol")
     }
 
     ; ----- Onglet Aide -----
@@ -4555,6 +4772,11 @@ ShowSettings() {
     chkKH.OnEvent("Click", KSync)
     chkQN.OnEvent("Click", QSync)
     chkQH.OnEvent("Click", QSync)
+    chkQZ.OnEvent("Click", QSync)
+    chkQS.OnEvent("Click", QSync)
+    slQZ.OnEvent("Change", QSync)
+    slQF.OnEvent("Change", QSync)
+    slQT.OnEvent("Change", QSync)
     btnQRe.OnEvent("Click", (*) => ShowQuizKeys())
     slKS.OnEvent("Change", KSync)
     slKO.OnEvent("Change", KSync)
@@ -8143,7 +8365,7 @@ AutoBackup() {
 ProfSettingKeys() {
     return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
         , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
-        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
+        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizZoneOn", "QuizZoneSize", "QuizFovPct", "QuizScoreOn", "QuizTol", "QuizKeyZone", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
 }
 
 ExportProfile(prof, ownerHwnd) {
@@ -9310,7 +9532,7 @@ SafeHotkey(key, fn) {
 
 HotIf(InGame)
 SafeHotkey(MenuKey, (*) => Toggle())
-Hotkey("~LButton Up", (*) => TmClick())   ; chronomètre : moment où la grenade est lâchée
+Hotkey("~LButton Up", (*) => (TmClick(), QuizThrow()))   ; chronomètre : moment où la grenade est lâchée
 if (RethrowKey != "")
     SafeHotkey("~" RethrowKey, (*) => TmRethrow())   ; chronomètre : relance avec la touche de sv_rethrow_last_grenade
 
