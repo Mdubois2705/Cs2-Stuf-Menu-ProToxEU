@@ -28,7 +28,7 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 - **Ajout / suppression** de stuffs et de catégories depuis le menu
 - Utilitaires : bots (placer, accroupi, immobile…), God mode, noclip, kit d'armes
 - **Chronomètre de grenade** : temps entre le lâcher et l'explosion, en direct pour les relances, et **temps de vol mémorisé par stuff**
-- **Quiz** : un stuff au hasard, sans la visée ni les infos du chat
+- **Quiz** : entraîne-toi à retrouver les lineups, avec les stuffs de ton choix ou au hasard sans répétition
 - **Captures d'écran** des stuffs, **coordonnées en temps réel**
 - **Profils**, **partage** (fichier ou code) et **packs de stuffs** publiés sur GitHub
 - **Apparence réglable** (menu en jeu et fenêtres) : thèmes, police, taille, couleurs
@@ -108,19 +108,19 @@ Une seule touche en jeu : **`F1`** ouvre le **menu principal**. Tout le reste s'
 | Stuffs | Menu des stuffs : Map > Catégorie > Stuff, ouvert sur la map détectée |
 | Utilitaires | Bots, God mode, noclip, kit d'armes, kill smokes… (catégorie `Utilitaires` de `maps\_commun.txt`) |
 | Relancer le dernier stuff | Relance le dernier stuff utilisé |
-| Quiz : stuff au hasard | Te téléporte au départ d'un stuff au hasard, **sans la visée ni le message du chat** (voir [Quiz](#quiz)) |
-| Quiz : voir la réponse | Relance le stuff du quiz en entier |
+| Quiz : choisir les stuffs et lancer | Ouvre la page de départ du quiz (voir [Quiz](#quiz)) |
+| Quiz : suivant, d'avant, aide, réponse, arrêter | Disponibles pendant un quiz, aussi avec les touches du quiz |
 | Sauvegarder la position actuelle | Enregistre ta position comme nouveau stuff |
 | Enregistrer le dernier lancer comme stuff | Voir [Dernier lancer](#dernier-lancer-en-stuff) |
 | Changer de map | Liste de maps (voir [changer de map](#changer-de-map)) |
 | Gérer les stuffs et les catégories | Fenêtre de gestion |
 | Profils et partage de stuffs | Profils, export, import, sauvegardes |
 | Nouveautés | Historique des dernières versions |
-| Réglages du menu | Huit onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Aide |
+| Réglages du menu | Neuf onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Quiz, Aide |
 | Relancer l'exec de cs2_practice | Relance le cfg d'entraînement |
 | Vérifier l'installation | Contrôle de l'installation |
 
-Le menu principal a trois blocs séparés par des tirets ; « Quiz : voir la réponse » n'apparaît que pendant un quiz.
+Le menu principal a trois blocs séparés par des tirets ; les entrées « Quiz : suivant… arrêter » n'apparaissent que pendant un quiz.
 
 Dans le menu des stuffs :
 
@@ -234,7 +234,21 @@ Le bouton **Nettoyer les captures et temps orphelins** (onglet Captures des rég
 
 ### Quiz
 
-« Quiz : stuff au hasard » choisit un stuff au hasard parmi ceux de la map détectée (hors Utilitaires) et te téléporte au départ avec la grenade, **sans la visée ni le message du chat**. Un bandeau en haut de l'écran affiche le nom et la catégorie du stuff ; à toi de retrouver le lineup. « Quiz : voir la réponse » relance le stuff en entier et retire le bandeau.
+« Quiz : choisir les stuffs et lancer » ouvre la page de départ du quiz pour la map détectée (hors Utilitaires) :
+
+- **Aléatoire parmi tous les stuffs** de la map, ou **choix des stuffs à travailler** (cases à cocher, par catégorie ou tout d'un coup). Ta sélection est mémorisée par map.
+- **Pas de répétition** (activé par défaut) : chaque stuff passe une seule fois avant de recommencer, et le premier d'un nouveau tour n'est jamais celui que tu viens de voir.
+
+Tu es téléporté au départ du stuff avec la grenade, **sans la visée ni le message du chat**. Un bandeau en haut de l'écran donne le numéro, le nom et la catégorie. Pendant le quiz, quatre touches (actives seulement dans CS2) :
+
+| Action | Effet |
+|---|---|
+| Suivant | stuff suivant (si tu es revenu en arrière, il rejoue d'abord les stuffs déjà vus) |
+| Précédent | retour au stuff d'avant |
+| Aide | affiche l'info du chat et le repère (la capture du stuff) |
+| Réponse | relance le stuff en entier, avec la visée et le message du chat |
+
+Au **premier quiz**, une page te laisse choisir ces touches (clavier ou boutons de souris ; défauts : Page suivante, Page précédente, Début, Fin). Tu les changes ensuite dans « Réglages du menu » > onglet **Quiz**, avec « Pas de répétition » et l'affichage de la capture dans l'aide. Les touches du quiz laissent aussi leur effet au jeu : choisis-en que tu n'utilises pas en jeu. « Quiz : arrêter » (menu principal) termine le quiz. Équivalents dans `config.ini` : `QuizKeyNext`, `QuizKeyPrev`, `QuizKeyHint`, `QuizKeyAns`, `QuizNoRepeat`, `QuizHintShot`, `QuizMode`.
 
 ## Chronomètre de grenade
 
@@ -285,7 +299,7 @@ Format de `packs\index.txt` : une ligne par pack, `fichier.stuffpack | Titre | D
 
 ## Réglages
 
-« Réglages du menu » (huit onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Aide) :
+« Réglages du menu » (neuf onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Quiz, Aide) :
 
 - Un voyant indique en direct si CS2 est connecté au menu (vert) ou non (rouge).
 - Chaque position (menu, capture, coordonnées, chrono) a un bouton **Placer avec la souris** : tu cliques à l'endroit voulu à l'écran.

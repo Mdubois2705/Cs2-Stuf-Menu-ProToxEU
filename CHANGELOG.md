@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.31.0
+
+- **Quiz refait** : « Quiz : choisir les stuffs et lancer » ouvre une page de départ. Tu choisis soit tous les stuffs de la map au hasard, soit les stuffs à travailler (cases à cocher, par catégorie). La sélection est mémorisée par map.
+- Option « Pas de répétition » (par défaut) : chaque stuff une seule fois avant de recommencer, sans retomber sur le même deux fois de suite.
+- Quatre touches pendant le quiz, actives dans CS2 : **suivant**, **précédent** (retour au stuff d'avant), **aide** (info du chat + capture du stuff comme repère) et **réponse**. Le menu principal propose aussi ces actions et « Quiz : arrêter ».
+- Au premier quiz, une page te laisse choisir tes touches (clavier ou boutons de souris).
+- Nouvel onglet **Quiz** dans « Réglages du menu » : touches, pas de répétition, capture dans l'aide.
+- Le bandeau du quiz affiche le numéro du stuff, et l'info du chat quand tu demandes l'aide.
+
 ## v2.30.0
 
 - Touches à l'écran et chrono : nouvelle case « Masquer quand CS2 n'est pas au premier plan (alt-tab) » (onglets Touches et Chrono). Par défaut, ils restent affichés en permanence.

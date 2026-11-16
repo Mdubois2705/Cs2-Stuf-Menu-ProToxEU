@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.30.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.31.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -265,6 +265,17 @@ hudSt := Map()
 tmSt := ""
 times := Map()      ; temps de vol : clé de position -> secondes
 quizCur := ""       ; stuff du quiz en cours
+quizOn := false     ; un quiz est en cours
+quizPool := []      ; stuffs du quiz
+quizOrder := []     ; ordre restant du tour (sans répétition)
+quizHist := []      ; stuffs déjà vus (pour « précédent »)
+quizHistPos := 0
+quizMap := ""
+quizBound := Map()  ; touches actuellement branchées
+quizKeys := Map("next", "PgDn", "prev", "PgUp", "hint", "Home", "ans", "End")
+QuizNoRepeat := (IniRead(IniFile, "Settings", "QuizNoRepeat", "1") = "1")   ; chaque stuff une fois avant de recommencer
+QuizHintShot := (IniRead(IniFile, "Settings", "QuizHintShot", "1") = "1")   ; l'aide montre aussi la capture
+QuizMode := IniRead(IniFile, "Settings", "QuizMode", "all")   ; all = tous les stuffs, pick = stuffs choisis
 qzGui := ""         ; bandeau du quiz
 clGui := ""         ; fenêtre des nouveautés
 qzB := ""
@@ -1402,9 +1413,9 @@ MainItems() {
         , ["util", "Utilitaires (bots, god mode, noclip...)"]
         , ["last", "Relancer le dernier stuff"]
         , ["changemap", "Changer de map"]
-        , ["quiz", "Quiz : stuff au hasard (sans les infos)"]]
-    if IsObject(quizCur)
-        out.Push(["quizans", "Quiz : voir la réponse"])
+        , ["quiz", quizOn ? "Quiz : nouvelle partie (choisir les stuffs)" : "Quiz : choisir les stuffs et lancer"]]
+    if quizOn
+        out.Push(["quiznext", "Quiz : stuff suivant"], ["quizprev", "Quiz : stuff d'avant"], ["quizhint", "Quiz : aide (info et repère)"], ["quizans", "Quiz : voir la réponse"], ["quizstop", "Quiz : arrêter"])
     out.Push(["sep", "- - - - - - - - - - - -"]
         , ["savelast", "Enregistrer le dernier lancer comme stuff"]
         , ["save", "Sauvegarder la position actuelle"]
@@ -1449,9 +1460,17 @@ MainSelect() {
     else if (id = "savelast")
         SaveLastThrow()
     else if (id = "quiz")
-        QuizStart()
+        ShowQuizStart()
+    else if (id = "quiznext")
+        QuizNext()
+    else if (id = "quizprev")
+        QuizPrev()
+    else if (id = "quizhint")
+        QuizHint()
     else if (id = "quizans")
         QuizReveal()
+    else if (id = "quizstop")
+        QuizStop()
     else if (id = "save")
         ShowSaveDialog()
     else if (id = "manage")
@@ -1828,12 +1847,198 @@ ShowNews(sinceVer := "", maxN := 5) {
 }
 
 ; =====================================================================
-;  Quiz : un stuff au hasard de la map, sans l'angle ni les infos du chat
+;  Quiz : se téléporte au départ d'un stuff, sans l'angle ni les infos du chat
 ; =====================================================================
-; Tu es téléporté au point de départ (avec la grenade) mais la visée n'est pas réglée et le message
-; du chat n'est pas envoyé : à toi de retrouver le lineup. « Quiz : voir la réponse » relance le stuff complet.
-QuizStart() {
-    global quizCur, LastMap
+; Page de départ : stuffs choisis ou aléatoire sur toute la map. Ensuite des touches (réglables) passent au stuff
+; suivant, reviennent au précédent, donnent l'aide (info du chat + capture) ou la réponse (relance complète).
+QuizKeyDefault(a) {
+    static d := Map("next", "PgDn", "prev", "PgUp", "hint", "Home", "ans", "End")
+    return d[a]
+}
+
+QuizKeysLoad() {
+    for a, nm in Map("next", "QuizKeyNext", "prev", "QuizKeyPrev", "hint", "QuizKeyHint", "ans", "QuizKeyAns")
+        quizKeys[a] := IniRead(IniFile, "Settings", nm, QuizKeyDefault(a))
+}
+
+QuizKeyIni(a) {
+    return Map("next", "QuizKeyNext", "prev", "QuizKeyPrev", "hint", "QuizKeyHint", "ans", "QuizKeyAns")[a]
+}
+
+; Nom lisible d'une touche
+QuizKeyShow(k) {
+    if (k = "")
+        return "(aucune)"
+    names := Map("XButton1", "Souris 4", "XButton2", "Souris 5", "MButton", "Molette (clic)", "PgDn", "Page suivante", "PgUp", "Page précédente")
+    return names.Has(k) ? names[k] : StrUpper(k)
+}
+
+QuizKeysSummary() {
+    return "Touches : suivant " QuizKeyShow(quizKeys["next"]) "   précédent " QuizKeyShow(quizKeys["prev"]) "   aide " QuizKeyShow(quizKeys["hint"]) "   réponse " QuizKeyShow(quizKeys["ans"])
+}
+
+QuizActive(*) => (quizOn && WinActive("ahk_exe cs2.exe"))
+
+QuizKeyAct(a, *) {
+    if (a = "next")
+        QuizNext()
+    else if (a = "prev")
+        QuizPrev()
+    else if (a = "hint")
+        QuizHint()
+    else
+        QuizReveal()
+}
+
+; (Re)branche les touches du quiz : actives seulement pendant un quiz et quand CS2 est au premier plan.
+; Le « ~ » laisse la touche aussi au jeu.
+QuizBind() {
+    HotIf(QuizActive)
+    for a in ["next", "prev", "hint", "ans"] {
+        old := quizBound.Has(a) ? quizBound[a] : ""
+        if (old != "")
+            try Hotkey("~" old, "Off")
+        quizBound[a] := ""
+        k := quizKeys[a]
+        if (k = "")
+            continue
+        try {
+            Hotkey("~" k, QuizKeyAct.Bind(a), "On")
+            quizBound[a] := k
+        }
+    }
+    HotIf()
+}
+
+; Attend l'appui sur une touche (Échap : annule) et renvoie son nom
+CaptureKey() {
+    static names := ""
+    if (names = "") {
+        names := ["XButton1", "XButton2", "MButton", "Tab", "CapsLock", "Space", "Enter", "Backspace", "Insert", "Delete", "Home", "End", "PgUp", "PgDn", "Up", "Down", "Left", "Right", "ScrollLock", "Pause"
+            , "NumpadDot", "NumpadAdd", "NumpadSub", "NumpadMult", "NumpadDiv", "NumpadEnter"]
+        Loop 26
+            names.Push(Chr(96 + A_Index))
+        Loop 10
+            names.Push(String(A_Index - 1), "Numpad" (A_Index - 1))
+        Loop 24
+            names.Push("F" A_Index)
+    }
+    ToolTip("Appuie sur la touche voulue... (Échap pour annuler)")
+    KeyWait("LButton")
+    t0 := A_TickCount
+    res := ""
+    while (A_TickCount - t0 < 15000) {
+        if GetKeyState("Escape", "P")
+            break
+        for nm in names {
+            if GetKeyState(nm, "P") {
+                res := nm
+                break
+            }
+        }
+        if (res != "")
+            break
+        Sleep(15)
+    }
+    ToolTip()
+    Loop 60 {
+        if !(GetKeyState("Escape", "P") || (res != "" && GetKeyState(res, "P")))
+            break
+        Sleep(15)
+    }
+    return res
+}
+
+; Lignes des touches du quiz (page de configuration et onglet des réglages) ; renvoie le y suivant
+QuizKeysUI(d, y, onChange := "") {
+    rows := [["next", "Suivant (autre stuff)"], ["prev", "Précédent (stuff d'avant)"], ["hint", "Aide (info du chat + repère)"], ["ans", "Réponse (relance le stuff)"]]
+    btns := Map()
+    for r in rows {
+        a := r[1]
+        d.Add("Text", "x22 y" (y + 5) " w190", r[2])
+        b := d.Add("Button", "x216 y" y " w230", QuizKeyShow(quizKeys[a]))
+        btns[a] := b
+        b.OnEvent("Click", Pick.Bind(a, b))
+        y += 38
+    }
+    bDef := d.Add("Button", "x216 y" y " w230", "Touches par défaut")
+    bDef.OnEvent("Click", Defaults)
+    y += 40
+    Pick(a, b, *) {
+        k := CaptureKey()
+        if (k = "")
+            return
+        for o in ["next", "prev", "hint", "ans"] {
+            if (o != a && quizKeys[o] = k) {
+                ToolTip("Cette touche est déjà utilisée par une autre action du quiz")
+                SetTimer(() => ToolTip(), -2200)
+                return
+            }
+        }
+        quizKeys[a] := k
+        IniWrite(k, IniFile, "Settings", QuizKeyIni(a))
+        b.Text := QuizKeyShow(k)
+        QuizBind()
+        if IsObject(onChange)
+            onChange()
+    }
+    Defaults(*) {
+        for a, b in btns {
+            quizKeys[a] := QuizKeyDefault(a)
+            IniWrite(quizKeys[a], IniFile, "Settings", QuizKeyIni(a))
+            b.Text := QuizKeyShow(quizKeys[a])
+        }
+        QuizBind()
+        if IsObject(onChange)
+            onChange()
+    }
+    return y
+}
+
+; Page de choix des touches (affichée au premier quiz, et depuis les réglages)
+ShowQuizKeys(onDone := "") {
+    static open := ""
+    if IsObject(open) {
+        try {
+            open.Show()
+            return
+        }
+    }
+    d := WinNew("Quiz : touches")
+    open := d
+    d.Add("Text", "x22 y14 w440 r3", "Choisis les touches du quiz : clique sur une touche, puis appuie sur celle que tu veux (clavier ou boutons de souris). Elles ne marchent que dans CS2, pendant un quiz.")
+    y := QuizKeysUI(d, 74)
+    btnOk := d.Add("Button", "x216 y" (y + 4) " w230 Default", "Valider")
+    Shut(*) {
+        open := ""
+        try d.Destroy()
+    }
+    Ok(*) {
+        IniWrite("1", IniFile, "State", "QuizKeysDone")
+        Shut()
+        if IsObject(onDone)
+            onDone()
+    }
+    btnOk.OnEvent("Click", Ok)
+    d.OnEvent("Close", Shut)
+    d.OnEvent("Escape", Shut)
+    WinStyle(d)
+    d.Show("AutoSize Center")
+}
+
+; Page de départ du quiz
+ShowQuizStart() {
+    static open := ""
+    if (IniRead(IniFile, "State", "QuizKeysDone", "") != "1") {
+        ShowQuizKeys(ShowQuizStart)   ; premier quiz : d'abord le choix des touches
+        return
+    }
+    if IsObject(open) {
+        try {
+            open.Show()
+            return
+        }
+    }
     LoadMaps()
     target := LastMap
     if (AutoDetect && FileExist(ConsoleLog) && NetOpen()) {
@@ -1852,28 +2057,225 @@ QuizStart() {
         return
     }
     pool := []
+    cats := []
+    seenC := Map()
     for e in ReadEntries(path)[2] {
-        if (e[1] != UTIL_CAT && RegExMatch(e[3], "i)setpos"))
+        if (e[1] != UTIL_CAT && RegExMatch(e[3], "i)setpos")) {
             pool.Push(e)
+            if !seenC.Has(e[1]) {
+                seenC[e[1]] := 1
+                cats.Push(e[1])
+            }
+        }
     }
     if (pool.Length = 0) {
         ToolTip("Quiz : aucun stuff avec position dans " target)
         SetTimer(() => ToolTip(), -2500)
         return
     }
-    pick := pool[Random(1, pool.Length)]
-    tries := 0
-    while (pool.Length > 1 && IsObject(quizCur) && quizCur[1] = pick[1] && quizCur[2] = pick[2] && tries < 8) {
-        pick := pool[Random(1, pool.Length)]
-        tries += 1
+    d := WinNew("Quiz : " target)
+    open := d
+    d.Add("Text", "x12 y12 w580", "Map : " target "   (" pool.Length " stuffs avec une position)")
+    rAll := d.Add("Radio", "x12 y+10 w580" ((QuizMode = "pick") ? "" : " Checked"), "Aléatoire parmi tous les stuffs de la map")
+    rPick := d.Add("Radio", "x12 y+6 w580" ((QuizMode = "pick") ? " Checked" : ""), "Choisir les stuffs à travailler :")
+    lv := d.Add("ListView", "x12 y+8 w580 r13 Checked -Multi", ["Catégorie", "Stuff"])
+    saved := IniRead(IniFile, "QuizSel", target, "")
+    sset := Map()
+    for k in StrSplit(saved, "¦") {
+        if (k != "")
+            sset[k] := 1
     }
-    quizCur := pick
-    qcmd := RegExReplace(pick[3], "i)\s*;?\s*setang\s+" NUM "\s+" NUM "(?:\s+" NUM ")?", "")
-    qcmd := Trim(RegExReplace(qcmd, "\s*;(\s*;)+", ";"), " `t;")
-    RunCmd(qcmd)
-    QzShow("QUIZ : " pick[2], "(" pick[1] ")")
+    for e in pool
+        lv.Add((saved = "" || sset.Has(e[1] "|" e[2])) ? "Check" : "", e[1], e[2])
+    lv.ModifyCol(1, 170)
+    lv.ModifyCol(2, 390)
+    ddC := d.Add("DropDownList", "x12 y+8 w200 Choose1", cats)
+    bCatOn := d.Add("Button", "x+8 yp w120", "Cocher")
+    bCatOff := d.Add("Button", "x+8 yp w120", "Décocher")
+    bAllOn := d.Add("Button", "x+8 yp w110", "Tout cocher")
+    bAllOff := d.Add("Button", "x12 y+8 w120", "Tout décocher")
+    chkNR := d.Add("CheckBox", "x12 y+14 w580" (QuizNoRepeat ? " Checked" : ""), "Pas de répétition : chaque stuff une seule fois avant de recommencer")
+    stK := d.Add("Text", "x12 y+8 w580 r2", QuizKeysSummary())
+    bKeys := d.Add("Button", "x12 y+8 w160", "Touches du quiz...")
+    bGo := d.Add("Button", "x+240 yp w100 Default", "Démarrer")
+    bNo := d.Add("Button", "x+8 yp w100", "Annuler")
+    Enable(*) {
+        lv.Enabled := rPick.Value ? true : false
+        for c in [ddC, bCatOn, bCatOff, bAllOn, bAllOff]
+            c.Enabled := rPick.Value ? true : false
+    }
+    SetCat(on, *) {
+        cn := ddC.Text
+        Loop lv.GetCount() {
+            if (lv.GetText(A_Index, 1) = cn)
+                lv.Modify(A_Index, on ? "Check" : "-Check")
+        }
+    }
+    SetAll(on, *) {
+        Loop lv.GetCount()
+            lv.Modify(A_Index, on ? "Check" : "-Check")
+    }
+    Shut(*) {
+        open := ""
+        try d.Destroy()
+        try WinActivate("ahk_exe cs2.exe")
+    }
+    Go(*) {
+        global QuizMode, QuizNoRepeat
+        sel := []
+        keep := []
+        r := 0
+        while (r := lv.GetNext(r, "C")) {
+            sel.Push(pool[r])
+            keep.Push(pool[r][1] "|" pool[r][2])
+        }
+        if (rPick.Value && sel.Length = 0) {
+            MsgBox("Coche au moins un stuff, ou choisis « Aléatoire parmi tous les stuffs ».", "Quiz", 0x40030)
+            return
+        }
+        QuizMode := rPick.Value ? "pick" : "all"
+        QuizNoRepeat := chkNR.Value ? true : false
+        IniWrite(QuizMode, IniFile, "Settings", "QuizMode")
+        IniWrite(QuizNoRepeat ? 1 : 0, IniFile, "Settings", "QuizNoRepeat")
+        txt := ""
+        for k in keep
+            txt .= (txt = "" ? "" : "¦") k
+        IniWrite(txt, IniFile, "QuizSel", target)
+        run := rPick.Value ? sel : pool
+        Shut()
+        QuizBegin(run, target)
+    }
+    rAll.OnEvent("Click", Enable)
+    rPick.OnEvent("Click", Enable)
+    bCatOn.OnEvent("Click", SetCat.Bind(true))
+    bCatOff.OnEvent("Click", SetCat.Bind(false))
+    bAllOn.OnEvent("Click", SetAll.Bind(true))
+    bAllOff.OnEvent("Click", SetAll.Bind(false))
+    bKeys.OnEvent("Click", (*) => ShowQuizKeys(() => stK.Text := QuizKeysSummary()))
+    bGo.OnEvent("Click", Go)
+    bNo.OnEvent("Click", Shut)
+    d.OnEvent("Close", Shut)
+    d.OnEvent("Escape", Shut)
+    WinStyle(d)
+    Enable()
+    d.Show("AutoSize Center")
 }
 
+QuizBegin(pool, mapName) {
+    global quizOn, quizPool, quizOrder, quizHist, quizHistPos, quizMap, quizCur
+    quizOn := true
+    quizPool := pool
+    quizOrder := []
+    quizHist := []
+    quizHistPos := 0
+    quizMap := mapName
+    quizCur := ""
+    QuizBind()
+    QuizNext()
+}
+
+; Prochain stuff : sans répétition (chaque stuff une fois avant de recommencer), ou au hasard sauf le stuff en cours
+QuizDraw() {
+    global quizOrder
+    n := quizPool.Length
+    if (n = 1)
+        return quizPool[1]
+    last := IsObject(quizCur) ? quizCur : ""
+    if QuizNoRepeat {
+        if (quizOrder.Length = 0) {
+            idx := []
+            Loop n
+                idx.Push(A_Index)
+            Loop n - 1 {
+                i := n - A_Index + 1
+                j := Random(1, i)
+                tmp := idx[i]
+                idx[i] := idx[j]
+                idx[j] := tmp
+            }
+            ; au redémarrage d'un tour, le premier ne doit pas être celui qu'on vient de voir
+            if (IsObject(last) && quizPool[idx[1]][1] = last[1] && quizPool[idx[1]][2] = last[2]) {
+                tmp := idx[1]
+                idx[1] := idx[n]
+                idx[n] := tmp
+            }
+            quizOrder := idx
+        }
+        return quizPool[quizOrder.RemoveAt(1)]
+    }
+    pick := quizPool[Random(1, n)]
+    while (IsObject(last) && pick[1] = last[1] && pick[2] = last[2])
+        pick := quizPool[Random(1, n)]
+    return pick
+}
+
+QuizNext(*) {
+    global quizHistPos
+    if !quizOn
+        return
+    if (quizHistPos < quizHist.Length) {
+        quizHistPos += 1   ; on était revenu en arrière : on rejoue d'abord les stuffs déjà vus
+    } else {
+        quizHist.Push(QuizDraw())
+        quizHistPos := quizHist.Length
+    }
+    QuizLaunch(quizHist[quizHistPos])
+}
+
+QuizPrev(*) {
+    global quizHistPos
+    if !quizOn
+        return
+    if (quizHistPos <= 1) {
+        ToolTip("C'est le premier stuff du quiz")
+        SetTimer(() => ToolTip(), -1500)
+        return
+    }
+    quizHistPos -= 1
+    QuizLaunch(quizHist[quizHistPos])
+}
+
+; Téléporte au départ du stuff (sans la visée) et affiche le bandeau
+QuizLaunch(e) {
+    global quizCur
+    quizCur := e
+    qcmd := RegExReplace(e[3], "i)\s*;?\s*setang\s+" NUM "\s+" NUM "(?:\s+" NUM ")?", "")
+    qcmd := Trim(RegExReplace(qcmd, "\s*;(\s*;)+", ";"), " `t;")
+    HideShot()
+    RunCmd(qcmd)
+    QzShow("QUIZ " quizHistPos " : " e[2], "(" e[1] ")")
+}
+
+; Aide : info du chat et repère (capture du stuff)
+QuizHint(*) {
+    if (!quizOn || !IsObject(quizCur))
+        return
+    info := SplitInfo(quizCur[4])[1]
+    QzShow("QUIZ " quizHistPos " : " quizCur[2], "(" quizCur[1] ")", (info != "") ? "Info : " info : "Pas d'info pour ce stuff")
+    if QuizHintShot
+        UpdateShot(true, ShotPath(quizMap, quizCur[3]))
+}
+
+QuizReveal(*) {
+    if (!quizOn || !IsObject(quizCur)) {
+        ToolTip("Aucun quiz en cours")
+        SetTimer(() => ToolTip(), -1800)
+        return
+    }
+    QzHide()
+    HideShot()
+    RunCmd(quizCur[3], SplitInfo(quizCur[4])[1])
+    ToolTip("Réponse : " quizCur[2])
+    SetTimer(() => ToolTip(), -2500)
+}
+
+QuizStop() {
+    global quizOn, quizCur
+    quizOn := false
+    quizCur := ""
+    QzHide()
+    HideShot()
+}
 
 QzHide() {
     global qzGui, qzB
@@ -1883,18 +2285,6 @@ QzHide() {
         try qzB.Destroy()
     qzGui := ""
     qzB := ""
-}
-
-QuizReveal() {
-    if !IsObject(quizCur) {
-        ToolTip("Aucun quiz en cours")
-        SetTimer(() => ToolTip(), -1800)
-        return
-    }
-    QzHide()
-    RunCmd(quizCur[3], SplitInfo(quizCur[4])[1])
-    ToolTip("Réponse : " quizCur[2])
-    SetTimer(() => ToolTip(), -2500)
 }
 
 Render() {
@@ -3353,7 +3743,7 @@ ShowSettings() {
 
     d := WinNew("Réglages du menu", "+AlwaysOnTop")
     pv := Map("g", "")
-    tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Touches", "Aide"], 6, 8, 560)
+    tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Touches", "Quiz", "Aide"], 6, 8, 620)
     tabs.UseTab(1)
     y := 44
     ty := y + 4
@@ -3667,8 +4057,29 @@ ShowSettings() {
         d.Show()
     }
 
-    ; ----- Onglet Aide -----
+    ; ----- Onglet Quiz -----
     tabs.UseTab(8)
+    y := 44
+    d.Add("Text", "x22 y" y " w540 r2", "Touches du quiz (actives dans CS2, pendant un quiz) et réglages. Les changements de cet onglet s'appliquent tout de suite. Le choix des stuffs se fait dans le menu : « Quiz : choisir les stuffs et lancer ».")
+    y += 52
+    y := QuizKeysUI(d, y)
+    chkQN := d.Add("CheckBox", "x22 y" y " w540" (QuizNoRepeat ? " Checked" : ""), "Pas de répétition : chaque stuff une seule fois avant de recommencer")
+    y += 34
+    chkQH := d.Add("CheckBox", "x22 y" y " w540" (QuizHintShot ? " Checked" : ""), "L'aide affiche aussi la capture du stuff (le repère)")
+    y += 34
+    btnQRe := d.Add("Button", "x22 y" y " w300", "Revoir la page de choix des touches")
+    y += 46
+    yEnd8 := y
+    QSync(*) {
+        global QuizNoRepeat, QuizHintShot
+        QuizNoRepeat := chkQN.Value ? true : false
+        QuizHintShot := chkQH.Value ? true : false
+        IniWrite(QuizNoRepeat ? 1 : 0, IniFile, "Settings", "QuizNoRepeat")
+        IniWrite(QuizHintShot ? 1 : 0, IniFile, "Settings", "QuizHintShot")
+    }
+
+    ; ----- Onglet Aide -----
+    tabs.UseTab(9)
     y := 44
     btnChkS := d.Add("Button", "x22 y" y " w440", "Vérifier l'installation")
     y += 44
@@ -3680,18 +4091,18 @@ ShowSettings() {
     d.Add("Text", "x22 y" y " w440 r6", "Vérifier l'installation : contrôle le dossier cfg, console.log et la connexion directe.`n`nCopier le diagnostic : met dans le presse-papiers un rapport sans données personnelles, à coller quand tu demandes de l'aide.`n`nNettoyer : supprime les captures et temps de vol qui ne correspondent plus à aucun stuff.")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
     y += 120
-    yEnd8 := y
+    yEnd9 := y
     tabs.UseTab(0)
-    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4, yEnd5, yEnd6, yEnd7, yEnd8) + 6
-    tabs.Move(6, 6, 500, tabH)
+    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4, yEnd5, yEnd6, yEnd7, yEnd8, yEnd9) + 6
+    tabs.Move(6, 6, 620, tabH)
     y := tabH + 18
     d.SetFont("s" WinSz() " bold")
-    ledTx := d.Add("Text", "x14 y" y " w466", "")
+    ledTx := d.Add("Text", "x14 y" y " w560", "")
     d.SetFont("s" WinSz() " norm")
     y += 28
     btnReset := d.Add("Button", "x12 y" y " w150", "Réinitialiser")
     btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
-    btnSave := d.Add("Button", "x416 yp w150 Default", "Enregistrer")
+    btnSave := d.Add("Button", "x476 yp w150 Default", "Enregistrer")
 
     LedTick() {
         if !ProcessExist("cs2.exe") {
@@ -4101,6 +4512,9 @@ ShowSettings() {
     chkK.OnEvent("Click", KSync)
     chkKG.OnEvent("Click", KSync)
     chkKH.OnEvent("Click", KSync)
+    chkQN.OnEvent("Click", QSync)
+    chkQH.OnEvent("Click", QSync)
+    btnQRe.OnEvent("Click", (*) => ShowQuizKeys())
     slKS.OnEvent("Change", KSync)
     slKO.OnEvent("Change", KSync)
     ddKP.OnEvent("Change", KSync)
@@ -5948,19 +6362,20 @@ TmPaint() {
 }
 
 ; ---------- Bandeau du quiz (haut de l'écran) ----------
-QzShow(l1, l2) {
+QzShow(lines*) {
     global qzGui, qzB
     QzHide()
     qzB := ""
     px := PxOf(FS(15))
     fnt := (ovFont = "") ? "Consolas" : ovFont
-    m1 := GdipMeasure(l1, fnt, px, true)
-    m2 := GdipMeasure(l2, fnt, px, true)
     padX := Max(14, Round(px * 1.1))
     padY := Max(8, Round(px * 0.6))
     lh := Round(px * 1.5)
-    W := Max(m1[1], m2[1]) + 2 * padX
-    H := 2 * lh + 2 * padY
+    mw := 0
+    for l in lines
+        mw := Max(mw, GdipMeasure(l, fnt, px, true)[1])
+    W := mw + 2 * padX
+    H := lines.Length * lh + 2 * padY
     MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
     X := ml + (mr - ml - W) // 2
     Y := mt + 12 + ovBorder
@@ -5970,21 +6385,27 @@ QzShow(l1, l2) {
     gg := bg[2]
     PanelBack(gg, W, H)
     col := 0xFF000000 | Integer("0x" OvTextColor())
-    GdipText(gg, col, l1, fnt, px, 1, 0, padY, W, lh, 1, 1, false)
-    GdipText(gg, col, l2, fnt, px, 1, 0, padY + lh, W, lh, 1, 1, false)
+    for i, l in lines
+        GdipText(gg, col, l, fnt, px, 1, 0, padY + (i - 1) * lh, W, lh, 1, 1, false)
     PanelEnd(qzGui, bg, W, H, X, Y)
 }
 
 ; ---------- Capture du stuff sélectionné ----------
 ; Affiche (ou cache) la capture du stuff sélectionné. preview = true : aperçu depuis les réglages
-UpdateShot(preview := false) {
+UpdateShot(preview := false, forcePath := "") {
     global gs
-    if (!ShotOn || (!menuOpen && !preview)) {
+    if (forcePath = "" && (!ShotOn || (!menuOpen && !preview))) {
         HideShot()
         return
     }
     path := ""
-    if preview {
+    if (forcePath != "") {
+        path := forcePath   ; capture demandée par le quiz (aide)
+        if !ShotValid(path) {
+            HideShot()
+            return
+        }
+    } else if preview {
         Loop Files, ShotDir() "\*.bmp" {
             if (SubStr(A_LoopFileName, 1, 1) != "_") {
                 path := A_LoopFileFullPath
@@ -6000,7 +6421,7 @@ UpdateShot(preview := false) {
             return
         }
     }
-    if (preview && path != "" && !ShotValid(path))
+    if (preview && forcePath = "" && path != "" && !ShotValid(path))
         path := ""
     tw := Round(ShotZoom * DpiK())
     vl := SysGet(76)
@@ -7671,7 +8092,7 @@ AutoBackup() {
 ProfSettingKeys() {
     return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
         , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
-        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
+        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
 }
 
 ExportProfile(prof, ownerHwnd) {
@@ -8883,6 +9304,8 @@ if HudAtStart
     HudToggle()
 TmApply()
 KeysApply()
+QuizKeysLoad()
+QuizBind()
 SetTimer(TmOutTick, 300)
 ; Après une mise à jour : fenêtre des nouveautés (première installation : la dernière version seulement)
 FixGodMode()
