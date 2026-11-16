@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.31.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.31.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -5758,8 +5758,8 @@ HudTick() {
         if IsObject(lp)
             HudSetText(lp)
     }
-    ; 2) demander la position suivante (pas pendant un menu ou une fenêtre)
-    if (menuOpen || dlgOpen || mgrOpen || setOpen)
+    ; 2) demander la position suivante (continue quand le menu en jeu est ouvert, pause pour les fenêtres)
+    if (dlgOpen || mgrOpen || setOpen)
         return
     ; pause de 2 s après chaque commande du menu (stuff, utilitaire...) pour ne jamais la gêner
     if (A_TickCount - lastCmdTick < 2000)

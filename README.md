@@ -309,7 +309,7 @@ Format de `packs\index.txt` : une ligne par pack, `fichier.stuffpack | Titre | D
 
 Activées dans l'onglet **Coords** (pas de raccourci clavier) ; l'affichage reste actif à chaque lancement jusqu'à ce que tu le désactives. Par défaut dans le **coin inférieur gauche**, ou à la position X / Y de ton choix. Il affiche la map, ta position (X, Y, Z) et ton angle (pitch, yaw), mis à jour plusieurs fois par seconde, avec l'apparence du menu.
 
-Le menu demande `getpos` au jeu par la connexion directe et lit la réponse dans `console.log` ; il ne lit pas la mémoire du jeu. La fréquence se règle avec `HudInterval` (300 ms par défaut). L'affichage se met en pause quand le menu ou une fenêtre est ouverte, ou quand CS2 n'est pas la fenêtre active.
+Le menu demande `getpos` au jeu par la connexion directe et lit la réponse dans `console.log` ; il ne lit pas la mémoire du jeu. La fréquence se règle avec `HudInterval` (300 ms par défaut). L'affichage reste actualisé quand le menu en jeu est ouvert ; il se met en pause quand une fenêtre (réglages, gestion...) est ouverte, ou quand CS2 n'est pas la fenêtre active.
 
 ### Touches à l'écran
 

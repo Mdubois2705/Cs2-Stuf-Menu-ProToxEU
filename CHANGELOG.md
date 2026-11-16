@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.31.1
+
+- Coordonnées : elles continuent de se mettre à jour quand le menu en jeu (F1) est ouvert.
+
 ## v2.31.0
 
 - **Quiz refait** : « Quiz : choisir les stuffs et lancer » ouvre une page de départ. Tu choisis soit tous les stuffs de la map au hasard, soit les stuffs à travailler (cases à cocher, par catégorie). La sélection est mémorisée par map.
