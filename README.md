@@ -309,6 +309,7 @@ Format de `packs\index.txt` : une ligne par pack, `fichier.stuffpack | Titre | D
 - Un voyant indique en direct si CS2 est connecté au menu (vert) ou non (rouge).
 - Chaque position (menu, capture, coordonnées, chrono) a un bouton **Placer avec la souris** : tu cliques à l'endroit voulu à l'écran.
 - « Réinitialiser » ne remet à zéro que l'onglet affiché.
+- Les fenêtres du menu (réglages, quiz, gestion, packs, partage...) se rouvrent là où tu les as laissées ; la position est mémorisée dans `config.ini`, section `[WinPos]` (supprime la ligne d'une fenêtre pour la recentrer).
 
 ### Coordonnées en temps réel
 

@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -77,7 +77,6 @@ if !RegExMatch(WinAccent, "^[0-9A-F]{6}$")
     WinAccent := "5B9BFF"
 WinFontName := IniRead(IniFile, "Settings", "WinFont", "Segoe UI")
 WinScale := Max(90, Min(120, ToInt(IniRead(IniFile, "Settings", "WinScale", "100"), 100)))
-TimerBeep := (IniRead(IniFile, "Settings", "TimerBeep", "1") = "1")   ; ancien réglage de bip (inutilisé : le menu ne produit plus aucun son)
 KeysFromGame := (IniRead(IniFile, "Settings", "KeysFromGame", "1") = "1")   ; lire les touches de CS2 (marche, accroupi, saut, déplacement)
 KeysOn := (IniRead(IniFile, "Settings", "KeysOn", "0") = "1")   ; touches à l'écran (Maj, Ctrl, Espace, ZQSD, souris)
 KeysSize := Max(60, Min(200, ToInt(IniRead(IniFile, "Settings", "KeysSize", "100"), 100)))
@@ -238,10 +237,7 @@ chkAttempts := 0
 chkTicks := 0
 chkBusy := false
 g := ""
-gb := ""            ; fenêtre derrière le menu qui forme le liseré coloré
-hudB := ""          ; liseré des coordonnées
 tmGui := ""         ; fenêtre du chronomètre de grenade
-tmB := ""           ; liseré du chronomètre
 tmText := ""        ; dernier texte affiché
 tmVisible := false
 tmRunning := false  ; lecture de console.log active
@@ -257,7 +253,6 @@ tmLineWasK := false
 tmTesting := false  ; test de la mesure (réglages)
 tmTestCb := ""
 tmExpect := ""      ; temps de vol attendu (stuff lancé par le menu)
-tmBeeped := false
 tmLastLabel := ""   ; type de la dernière grenade vue (pour le chrono en direct des relances)
 TimerDebug := (IniRead(IniFile, "Settings", "TimerDebug", "0") = "1")
 TmDbgFile := DataDir "\timer_debug.txt"
@@ -309,16 +304,10 @@ QuizHintShot := (IniRead(IniFile, "Settings", "QuizHintShot", "1") = "1")   ; l'
 QuizMode := IniRead(IniFile, "Settings", "QuizMode", "all")   ; all = tous les stuffs, pick = stuffs choisis
 qzGui := ""         ; bandeau du quiz
 clGui := ""         ; fenêtre des nouveautés
-qzB := ""
 shotOk := Map()     ; captures vérifiées lisibles
 gs := ""            ; fenêtre qui affiche la capture du stuff sélectionné
-gsPic := ""
-gsTxt := ""
 titleCtl := ""
-listRows := []     ; 13 lignes du menu (texte normal)
-listRowsS := []    ; 13 lignes du menu (ligne sélectionnée, fond mis en valeur)
 infoCtl := ""
-hintCtl := ""
 statusCtl := ""
 favs := Map()
 locks := Map()      ; verrous : "cat|Nom" ou "it|clé du stuff"
@@ -2571,13 +2560,10 @@ QuizStop() {
 }
 
 QzHide() {
-    global qzGui, qzB
+    global qzGui
     if IsObject(qzGui)
         try qzGui.Destroy()
-    if IsObject(qzB)
-        try qzB.Destroy()
     qzGui := ""
-    qzB := ""
 }
 
 Render() {
@@ -2637,21 +2623,8 @@ Render() {
             infoTxt .= ((infoTxt != "") ? "`n" : "") "Temps de vol : " FlightText(ft)
     }
     infoCtl.Text := infoTxt
-    hintCtl.Text := HintText() "`nCtrl+Z : annuler la dernière suppression de stuff"
     ShowOverlay()
     UpdateShot()
-}
-
-HintText() {
-    if (level = 4)
-        return "Haut/Bas : naviguer   Entrée : choisir   Échap : fermer"
-    if (level = 0)
-        return "Droite/Entrée : choisir la map"
-    if (level = 1)
-        return "Droite : ouvrir la catégorie   Tab : recherche   " LockKey " : cadenas   " AddKey " : nouveau stuff"
-    if (level = 2)
-        return "Entrée : lancer le stuff   Tab : recherche   " FavKey " : favori   " LockKey " : cadenas   " AddKey " : nouveau stuff"
-    return "Tape pour filtrer   Entrée : lancer   Échap : retour`n" FavKey " : favori   " LockKey " : cadenas   " AddKey " : nouveau stuff"
 }
 
 SetStatus(msg) {
@@ -2732,8 +2705,6 @@ CloseMenu() {
     if ih.InProgress
         ih.Stop()
     g.Hide()
-    if IsObject(gb)
-        gb.Hide()
     HideShot()
 }
 
@@ -4009,7 +3980,6 @@ ShowPreview() {
     SetList(["> Exemple de stuff", "   Autre stuff", "   * Stuff favori", "   Smoke - Site A"], 1)
     infoCtl.Text := "Info : message affiché dans le chat"
     statusCtl.Text := ""
-    hintCtl.Text := "Droite/Entrée : valider   Gauche : retour"
     ShowOverlay()
     UpdateShot(true)
 }
@@ -4033,7 +4003,7 @@ ShowSettings() {
     if setOpen
         return
     setOpen := true
-    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY, "Tm", TimerOn, "TmAuto", TimerAuto, "TmX", TimerX, "TmY", TimerY, "TmDur", TimerDur, "FlAsk", FlightAsk, "TmHide", TimerHideOut, "TmBeep", TimerBeep)
+    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY, "Tm", TimerOn, "TmAuto", TimerAuto, "TmX", TimerX, "TmY", TimerY, "TmDur", TimerDur, "FlAsk", FlightAsk, "TmHide", TimerHideOut)
     vl := SysGet(76)
     vt := SysGet(77)
     vw := SysGet(78)
@@ -4282,8 +4252,6 @@ ShowSettings() {
     y += 30
     chkTmH := d.Add("CheckBox", "x22 y" y " w460" (TimerHideOut ? " Checked" : ""), "Masquer le chrono quand CS2 n'est pas au premier plan (alt-tab)")
     y += 36
-    chkBeep := d.Add("CheckBox", "x-3000 y" y " w460 Hidden" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
-    ; la case du bip est repoussée hors de la fenêtre : le menu ne produit plus aucun son
     btnTmTest := d.Add("Button", "x22 y" y " w220", "Tester l'affichage")
     btnTmMeasure := d.Add("Button", "x250 y" y " w220", "Tester la mesure")
     y += 44
@@ -4511,7 +4479,7 @@ ShowSettings() {
     SetTimer(LedTick, 2000)
 
     Sync(*) {
-        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep, TimerHideOut
+        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerHideOut
         ovFont := (ddFont.Value = 1) ? "" : ddFont.Text
         ovScale := slScale.Value
         ovX := vl + slX.Value
@@ -4555,7 +4523,6 @@ ShowSettings() {
         TimerDur := slTmDur.Value
         FlightAsk := chkFlAsk.Value
         TimerHideOut := chkTmH.Value ? true : false
-        TimerBeep := chkBeep.Value
         txTmX.Text := TimerX
         txTmY.Text := TimerY
         txTmDur.Text := TimerDur " s"
@@ -4673,7 +4640,6 @@ ShowSettings() {
             slTmDur.Value := 6
             chkFlAsk.Value := 1
             chkTmH.Value := 0
-            chkBeep.Value := 1
         } else if (tv = 6) {
             ddWT.Choose(1)
             ddWA.Choose(1)
@@ -4773,7 +4739,7 @@ ShowSettings() {
     }
 
     Finish(save, *) {
-        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerHideOut, TimerBeep, WinThemeSel, WinAccent, WinFontName, WinScale
+        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerHideOut, WinThemeSel, WinAccent, WinFontName, WinScale
         if save {
             IniWrite(ovTheme, IniFile, "Overlay", "Theme")
             IniWrite(ovFont, IniFile, "Overlay", "Font")
@@ -4803,7 +4769,6 @@ ShowSettings() {
             IniWrite(TimerDur, IniFile, "Settings", "TimerDur")
             IniWrite(FlightAsk ? 1 : 0, IniFile, "Settings", "FlightAsk")
             IniWrite(TimerHideOut ? 1 : 0, IniFile, "Settings", "TimerHideOut")
-            IniWrite(TimerBeep ? 1 : 0, IniFile, "Settings", "TimerBeep")
             WinThemeSel := (ddWT.Value = 2) ? "light" : (ddWT.Value = 3) ? "menu" : "dark"
             WinAccent := waHex[ddWA.Value]
             WinFontName := (ddWF.Value = 1) ? "Segoe UI" : ddWF.Text
@@ -4840,7 +4805,6 @@ ShowSettings() {
             TimerDur := old["TmDur"]
             FlightAsk := old["FlAsk"]
             TimerHideOut := old["TmHide"]
-            TimerBeep := old["TmBeep"]
             TmApply()
             HudSet(old["Hud"])
             if hudOn {
@@ -4878,7 +4842,6 @@ ShowSettings() {
     chkTm.OnEvent("Click", Sync)
     chkFlAsk.OnEvent("Click", Sync)
     chkTmH.OnEvent("Click", Sync)
-    chkBeep.OnEvent("Click", Sync)
     ddTmPos.OnEvent("Change", Sync)
     slTmX.OnEvent("Change", Sync)
     slTmY.OnEvent("Change", Sync)
@@ -6190,8 +6153,6 @@ HudToggle() {
     } else {
         SetTimer(HudTick, 0)
         hudGui.Hide()
-        if IsObject(hudB)
-            hudB.Hide()
     }
 }
 
@@ -6510,13 +6471,9 @@ OvCell() {
 
 ; ---------- Menu en jeu ----------
 BuildOverlay() {
-    global g, gb, gs, titleCtl, infoCtl, hintCtl, statusCtl, ovBg, ovCol, ovSt
+    global g, gs, titleCtl, infoCtl, statusCtl, ovBg, ovCol, ovSt
     if IsObject(g)
         g.Destroy()
-    if IsObject(gb) {
-        gb.Destroy()
-        gb := ""
-    }
     if IsObject(gs) {
         gs.Destroy()
         gs := ""
@@ -6526,22 +6483,20 @@ BuildOverlay() {
         ovBg := th[3]
     dark := (Lum(ovBg) < 140)
     c := Map("title", dark ? "FFB000" : "8A4B00", "list", dark ? "FFFFFF" : "111111", "info", dark ? "FFD27A" : "6B4A00"
-        , "status", dark ? "7CFC00" : "1B6E1B", "hint", dark ? "FFFFFF" : "000000", "foot", dark ? "B4BAC2" : "444444", "brand", dark ? "7AD7FF" : "005A8C")
+        , "status", dark ? "7CFC00" : "1B6E1B", "foot", dark ? "B4BAC2" : "444444", "brand", dark ? "7AD7FF" : "005A8C")
     if IsObject(th) {
         c["brand"] := th[5]
         c["title"] := th[6]
         c["list"] := th[4]
         c["info"] := th[6]
         c["status"] := th[5]
-        c["hint"] := th[4]
         c["foot"] := th[7]
     }
     ovCol := c
-    ovSt := Map("title", "", "info", "", "hint", "", "status", "", "rows", [], "sel", 0
+    ovSt := Map("title", "", "info", "", "status", "", "rows", [], "sel", 0
         , "foot", "Haut/Bas : naviguer   Droite/Entrée : valider   Gauche : retour   Échap : fermer`n" MenuKey " : ouvrir / fermer le menu`n" FavKey " : favori`n" LockKey " : cadenas`n" AddKey " : nouveau stuff (menu des stuffs)`nCtrl+Z : annuler la dernière suppression de stuff")
     titleCtl := OvTextObj("title")
     infoCtl := OvTextObj("info")
-    hintCtl := OvTextObj("hint")
     statusCtl := OvTextObj("status")
     g := NewLayered()
 }
@@ -6628,10 +6583,9 @@ ShowOverlay() {
 
 ; ---------- Coordonnées en temps réel ----------
 BuildHud() {
-    global hudGui, hudTxt, hudB, hudSt
+    global hudGui, hudTxt, hudSt
     if IsObject(hudGui)
         hudGui.Destroy()
-    hudB := ""
     hudSt := Map("txt", hudLast, "W", 0, "H", 0, "X", 0, "Y", 0)
     hudGui := NewLayered()
     hudTxt := HudTxtObj()
@@ -6716,11 +6670,10 @@ HudGeom() {
 
 ; ---------- Chronomètre de grenade ----------
 TmShow(txt, hold := false) {
-    global tmGui, tmB, tmText, tmVisible, tmCtl, tmSt
+    global tmGui, tmText, tmVisible, tmCtl, tmSt
     tmText := txt
     if IsObject(tmGui)
         try tmGui.Destroy()
-    tmB := ""
     px := PxOf(FS(16))
     fnt := (ovFont = "") ? "Consolas" : ovFont
     sm := GdipMeasure("Incendiaire : 99,9 s", fnt, px, true)   ; largeur fixe pour tous les textes
@@ -6771,9 +6724,8 @@ TmPaint() {
 
 ; ---------- Bandeau du quiz (haut de l'écran) ----------
 QzShow(lines*) {
-    global qzGui, qzB
+    global qzGui
     QzHide()
-    qzB := ""
     px := PxOf(FS(15))
     fnt := (ovFont = "") ? "Consolas" : ovFont
     padX := Max(14, Round(px * 1.1))
@@ -6884,13 +6836,6 @@ KeysGdiStart() {
     tok := 0
     DllCall("gdiplus\GdiplusStartup", "Ptr*", &tok, "Ptr", si, "Ptr", 0)
     keysTok := tok
-}
-
-KeysGdiStop() {
-    global keysTok
-    if keysTok
-        DllCall("gdiplus\GdiplusShutdown", "Ptr", keysTok)
-    keysTok := 0
 }
 
 ; Rectangle à coins arrondis rempli (couleur ARGB)
@@ -7221,7 +7166,7 @@ TmThrowLine(now) {
 }
 
 TmFinish(kind, now) {
-    global tmStarts, tmLive, tmMeasured, tmLastLabel, tmBeeped
+    global tmStarts, tmLive, tmMeasured, tmLastLabel
     ; on oublie les grenades trop anciennes (jamais explosées ou jamais vues)
     while (tmStarts.Length >= 1 && now - tmStarts[1][1] > 9000)
         tmStarts.RemoveAt(1)
@@ -7312,12 +7257,11 @@ TmRethrow() {
 
 ; Chrono en direct : démarre à la relance d'une grenade (type connu) et s'arrête à l'explosion
 TmLiveStart(label, now) {
-    global tmLive, tmLiveLabel, tmLiveT0, tmExpect, tmBeeped, tmLastLabel
+    global tmLive, tmLiveLabel, tmLiveT0, tmExpect, tmLastLabel
     tmLive := true
     tmLiveLabel := label
     tmLastLabel := label
     tmLiveT0 := now
-    tmBeeped := false
     tmExpect := ""
     if (recents.Length > 0) {
         ft := FlightTime(recents[1][2])
@@ -7329,7 +7273,7 @@ TmLiveStart(label, now) {
 }
 
 TmLiveTick() {
-    global tmLive, tmBeeped
+    global tmLive
     if !tmLive {
         SetTimer(TmLiveTick, 0)
         return
@@ -7366,7 +7310,6 @@ TmHide(force := false) {
     }
     tmVisible := false
     try tmGui.Hide()
-    try tmB.Hide()
 }
 
 
@@ -8500,7 +8443,7 @@ AutoBackup() {
 ProfSettingKeys() {
     return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
         , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
-        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "MenuSound", "MenuSoundVol", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizZoneOn", "QuizZoneSize", "QuizFovPct", "QuizScoreOn", "QuizTol", "QuizKeyZone", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
+        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "FlightAsk", "TimerHideOut", "KeysHideOut", "MenuSound", "MenuSoundVol", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizZoneOn", "QuizZoneSize", "QuizFovPct", "QuizScoreOn", "QuizTol", "QuizKeyZone", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
 }
 
 ExportProfile(prof, ownerHwnd) {

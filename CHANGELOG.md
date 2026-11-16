@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.33.2
+
+- Nettoyage du code : suppression de variables et fonctions devenues inutiles (anciens contrôles du menu, liserés et textes remplacés par le dessin lissé, réglage et variable de bip du chrono, aide texte du bas du menu, arrêt de GDI+). Aucun changement de comportement.
+- `config.example.ini` : retrait de `TimerBeep`. README : mention de la mémorisation des positions de fenêtres.
+
 ## v2.33.1
 
 - Sons du menu : activés par défaut, volume à 25 %. Si tu avais déjà réglé les sons dans les réglages, ton choix est conservé.
