@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.32.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.32.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -277,6 +277,11 @@ quizOrder := []     ; ordre restant du tour (sans répétition)
 quizHist := []      ; stuffs déjà vus (pour « précédent »)
 quizHistPos := 0
 quizAng := ""       ; visée actuelle [pitch, yaw, instant de lecture]
+quizAngPrev := ""   ; lecture précédente (pour estimer le mouvement)
+quizZoneSig := ""
+quizZoneShown := false
+quizSx := 0
+quizSy := 0
 quizTarget := ""    ; visée du stuff du quiz [pitch, yaw]
 quizZoneLv := 0     ; niveau de la zone d'aide (0 = masquée, 1 à 3)
 quizZoneOff := [0, 0]
@@ -2234,7 +2239,8 @@ QuizBegin(pool, mapName) {
     quizScoreN := 0
     qaPos := FileExist(ConsoleLog) ? FileGetSize(ConsoleLog) : 0
     QuizBind()
-    SetTimer(QuizAimTick, 90)
+    SetTimer(QuizAimTick, 40)
+    SetTimer(QuizZoneDraw, 15)
     QuizNext()
 }
 
@@ -2352,8 +2358,25 @@ QuizHint(*) {
     info := SplitInfo(quizCur[4])[1]
     quizInfoLine := (info != "") ? "Info : " info : "Pas d'info pour ce stuff"
     QuizBanner()
-    if QuizHintShot
-        UpdateShot(true, ShotPath(quizMap, quizCur[3]))
+    if QuizHintShot {
+        sp := ShotPath(quizMap, quizCur[3])
+        if !FileExist(sp) {
+            ; capture enregistrée sous un autre nom de map : on cherche par position
+            ck := ShotCoordKey(quizCur[3])
+            if (ck != "") {
+                Loop Files, ShotDir() "\*_" ck ".bmp" {
+                    sp := A_LoopFileFullPath
+                    break
+                }
+            }
+        }
+        if ShotValid(sp) {
+            UpdateShot(true, sp)
+        } else {
+            quizInfoLine .= "   (pas de capture pour ce stuff)"
+            QuizBanner()
+        }
+    }
 }
 
 QuizReveal(*) {
@@ -2395,21 +2418,23 @@ QuizZoneKey(*) {
 }
 
 QuizZoneHide() {
+    global quizZoneShown, quizZoneSig
+    quizZoneShown := false
+    quizZoneSig := ""
     if IsObject(quizZoneGui)
         try quizZoneGui.Hide()
 }
 
-; Lecture régulière de la visée (pitch, yaw) et mise à jour de la zone
+; Lecture régulière de la visée (pitch, yaw) : ~25 fois par seconde
 QuizAimTick() {
-    global qaPos, quizAng
+    global qaPos, quizAng, quizAngPrev
     if !quizOn {
         SetTimer(QuizAimTick, 0)
+        SetTimer(QuizZoneDraw, 0)
         return
     }
-    if (!WinActive("ahk_exe cs2.exe") || !FileExist(ConsoleLog) || cmdBusy > 0) {
-        QuizZoneHide()
+    if (!WinActive("ahk_exe cs2.exe") || !FileExist(ConsoleLog) || cmdBusy > 0)
         return
-    }
     sz := FileGetSize(ConsoleLog)
     if (sz < qaPos)
         qaPos := 0
@@ -2417,26 +2442,39 @@ QuizAimTick() {
         txt := ReadFrom(ConsoleLog, qaPos)
         qaPos := sz
         lp := LastPos(txt)
-        if IsObject(lp)
+        if IsObject(lp) {
+            quizAngPrev := quizAng
             quizAng := [Number(lp[4]), Number(lp[5]), A_TickCount]
+        }
     }
     if (A_TickCount - lastCmdTick > 500)
         NetSend("sv_cheats 1; getpos")
-    QuizZoneDraw()
 }
 
+; Dessin de la zone (~60 fois par seconde) : la visée est extrapolée entre deux lectures et le cercle est déplacé
+; sans être redessiné (seul son déplacement change). Il n'est redessiné que si sa taille ou son état change.
 QuizZoneDraw() {
-    global quizZoneGui
-    if (quizZoneLv = 0 || !IsObject(quizTarget) || !IsObject(quizAng) || A_TickCount - quizAng[3] > 2000) {
+    global quizZoneGui, quizZoneSig, quizZoneShown, quizSx, quizSy
+    if (!quizOn || quizZoneLv = 0 || !IsObject(quizTarget) || !IsObject(quizAng) || A_TickCount - quizAng[3] > 2000 || !WinActive("ahk_exe cs2.exe")) {
         QuizZoneHide()
         return
     }
     try WinGetClientPos(&x0, &y0, &cw, &ch, "ahk_exe cs2.exe")
     catch
         return
+    cp := quizAng[1]
+    cy := quizAng[2]
+    if IsObject(quizAngPrev) {
+        dt := quizAng[3] - quizAngPrev[3]
+        if (dt >= 15 && dt <= 250) {
+            k := Min(A_TickCount - quizAng[3], 120) / dt
+            cp += (quizAng[1] - quizAngPrev[1]) * k
+            cy += Wrap180(quizAng[2] - quizAngPrev[2]) * k
+        }
+    }
     f := (ch / 1.5) / (QuizFovPct / 100)   ; distance « virtuelle » de l'écran (FOV vertical 73,7° comme CS2)
-    dyaw := Wrap180(quizTarget[2] - quizAng[2])
-    dpit := quizTarget[1] - quizAng[1]
+    dyaw := Wrap180(quizTarget[2] - cy)
+    dpit := quizTarget[1] - cp
     far := (Abs(dyaw) > 80 || Abs(dpit) > 80)
     dyaw := Max(-80, Min(80, dyaw))
     dpit := Max(-80, Min(80, dpit))
@@ -2445,35 +2483,60 @@ QuizZoneDraw() {
     R := Round(QuizZoneSize * DpiK() * [1, 0.6, 0.35][quizZoneLv])
     px := tx + quizZoneOff[1] * R
     py := ty + quizZoneOff[2] * R
-    clamped := false
     nx := Max(x0 + R, Min(x0 + cw - R, px))
     ny := Max(y0 + R, Min(y0 + ch - R, py))
-    if (nx != px || ny != py || far)
-        clamped := true
+    clamped := (nx != px || ny != py || far)
+    ; lissage : le cercle rejoint sa position cible en douceur
+    if (!quizZoneShown || Abs(quizSx - nx) > 400 || Abs(quizSy - ny) > 400) {
+        quizSx := nx
+        quizSy := ny
+    } else {
+        quizSx += (nx - quizSx) * 0.6
+        quizSy += (ny - quizSy) * 0.6
+    }
     S := 2 * R + 8
+    dirq := 0
+    vx := tx - nx
+    vy := ty - ny
+    if clamped
+        dirq := Round(ATan2(vy, vx) / 0.087266)   ; direction du trait, par pas de 5°
+    key := R "|" (clamped ? 1 : 0) "|" dirq
+    x := Round(quizSx - S / 2)
+    y := Round(quizSy - S / 2)
     if !IsObject(quizZoneGui)
         quizZoneGui := NewLayered()
-    quizZoneGui.Show("NA x" Round(nx - S / 2) " y" Round(ny - S / 2) " w" S " h" S)
-    bg := PanelBegin(S, S)
-    gg := bg[2]
-    acc := Integer("0x" WinAccent)
-    br := 0
-    pen := 0
-    DllCall("gdiplus\GdipCreateSolidFill", "UInt", ((clamped ? 40 : 55) << 24) | acc, "Ptr*", &br)
-    DllCall("gdiplus\GdipFillEllipse", "Ptr", gg, "Ptr", br, "Float", 4, "Float", 4, "Float", 2 * R, "Float", 2 * R)
-    DllCall("gdiplus\GdipDeleteBrush", "Ptr", br)
-    DllCall("gdiplus\GdipCreatePen1", "UInt", (210 << 24) | acc, "Float", 3, "Int", 2, "Ptr*", &pen)
-    DllCall("gdiplus\GdipDrawEllipse", "Ptr", gg, "Ptr", pen, "Float", 4, "Float", 4, "Float", 2 * R, "Float", 2 * R)
-    if clamped {
-        ; le repère est hors de l'écran : un trait indique la direction
-        vx := tx - nx
-        vy := ty - ny
-        ln := Sqrt(vx * vx + vy * vy)
-        if (ln > 1)
-            DllCall("gdiplus\GdipDrawLine", "Ptr", gg, "Ptr", pen, "Float", R + 4, "Float", R + 4, "Float", R + 4 + vx / ln * R * 0.8, "Float", R + 4 + vy / ln * R * 0.8)
+    if (key != quizZoneSig || !quizZoneShown) {
+        quizZoneSig := key
+        quizZoneGui.Show("NA x" x " y" y " w" S " h" S)
+        bg := PanelBegin(S, S)
+        gg := bg[2]
+        acc := Integer("0x" WinAccent)
+        br := 0
+        pen := 0
+        DllCall("gdiplus\GdipCreateSolidFill", "UInt", ((clamped ? 40 : 55) << 24) | acc, "Ptr*", &br)
+        DllCall("gdiplus\GdipFillEllipse", "Ptr", gg, "Ptr", br, "Float", 4, "Float", 4, "Float", 2 * R, "Float", 2 * R)
+        DllCall("gdiplus\GdipDeleteBrush", "Ptr", br)
+        DllCall("gdiplus\GdipCreatePen1", "UInt", (210 << 24) | acc, "Float", 3, "Int", 2, "Ptr*", &pen)
+        DllCall("gdiplus\GdipDrawEllipse", "Ptr", gg, "Ptr", pen, "Float", 4, "Float", 4, "Float", 2 * R, "Float", 2 * R)
+        if clamped {
+            ln := Sqrt(vx * vx + vy * vy)
+            if (ln > 1)
+                DllCall("gdiplus\GdipDrawLine", "Ptr", gg, "Ptr", pen, "Float", R + 4, "Float", R + 4, "Float", R + 4 + Cos(dirq * 0.087266) * R * 0.8, "Float", R + 4 + Sin(dirq * 0.087266) * R * 0.8)
+        }
+        DllCall("gdiplus\GdipDeletePen", "Ptr", pen)
+        PanelEnd(quizZoneGui, bg, S, S, x, y)
+        quizZoneShown := true
+    } else {
+        DllCall("user32\SetWindowPos", "Ptr", quizZoneGui.Hwnd, "Ptr", 0, "Int", x, "Int", y, "Int", 0, "Int", 0, "UInt", 0x15)
     }
-    DllCall("gdiplus\GdipDeletePen", "Ptr", pen)
-    PanelEnd(quizZoneGui, bg, S, S, Round(nx - S / 2), Round(ny - S / 2))
+}
+
+ATan2(y, x) {
+    if (x > 0)
+        return ATan(y / x)
+    if (x < 0)
+        return ATan(y / x) + ((y >= 0) ? 3.14159265 : -3.14159265)
+    return (y > 0) ? 1.5707963 : (y < 0 ? -1.5707963 : 0)
 }
 
 ; Moment où la grenade part (clic gauche relâché) : compare ta visée à celle du stuff
@@ -2486,7 +2549,7 @@ QuizThrow() {
     dp := quizAng[1] - quizTarget[1]
     dy := Wrap180(quizAng[2] - quizTarget[2]) * Cos(quizTarget[1] * 0.0174533)
     err := Sqrt(dp * dp + dy * dy)
-    pct := Round(Max(0, 100 * (1 - err / QuizTol)))
+    pct := (err <= 0.3) ? 100 : Round(Max(0, 100 * (1 - (err - 0.3) / (QuizTol - 0.3))))   ; 100 % jusqu'à 0,3° d'écart
     quizScoreSum += pct
     quizScoreN += 1
     quizScoreLine := "Visée : " pct " %  (écart " StrReplace(Format("{:.1f}", err), ".", ",") "°)   moyenne " Round(quizScoreSum / quizScoreN) " % sur " quizScoreN
@@ -2498,6 +2561,7 @@ QuizStop() {
     quizOn := false
     quizCur := ""
     SetTimer(QuizAimTick, 0)
+    SetTimer(QuizZoneDraw, 0)
     QuizZoneHide()
     QzHide()
     HideShot()

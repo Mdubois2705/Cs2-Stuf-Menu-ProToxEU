@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.32.1
+
+- Score du quiz : 100 % jusqu'à 0,3° d'écart, puis dégressif jusqu'à 0 % à l'écart réglé.
+- Zone d'aide beaucoup plus fluide : lecture de la visée 25 fois par seconde, mouvement estimé entre deux lectures, cercle déplacé ~60 fois par seconde sans être redessiné et lissé.
+- Aide du quiz : la capture est aussi cherchée par position si elle est enregistrée sous un autre nom de map, et le bandeau indique « pas de capture pour ce stuff » quand il n'y en a pas.
+
 ## v2.32.0
 
 - **Zone d'aide du quiz** : une touche (Insert par défaut) affiche un cercle à l'écran qui contient le repère sans le centrer dessus. Le menu lit ton pitch et ton yaw en continu ; le cercle suit ta souris. Trois niveaux (de plus en plus petit), puis la zone disparaît. Hors écran, un trait indique la direction.
