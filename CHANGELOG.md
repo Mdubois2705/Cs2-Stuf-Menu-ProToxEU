@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.31.5
+
+- Les fenêtres du menu (réglages, quiz, gestion, packs, partage...) se rouvrent à l'endroit où tu les as laissées. La position est mémorisée par fenêtre dans `config.ini` (section `WinPos`) ; elle est recadrée si l'écran a changé.
+
 ## v2.31.4
 
 - Coordonnées plus fluides : elles se mettent à jour toutes les 120 ms au lieu de 300 ms (minimum réglable : 60 ms). L'ancienne valeur par défaut de `config.ini` est remplacée automatiquement, une seule fois. Si tu avais choisi une autre valeur, elle est conservée.

@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.31.4"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.31.5"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -1573,8 +1573,44 @@ WinNew(title, opts := "+AlwaysOnTop") {
     g := Gui(opts, title)
     g.BackColor := p["bg"]
     g.SetFont("s" WinSz() " c" p["txt"], WinFontName)
+    g.DefineProp("PosKey", {Value: WinPosKey(title)})
+    g.DefineProp("Show", {Call: WinShowSaved})   ; la fenêtre se rouvre là où tu l'as laissée
     return g
 }
+
+; Nom de mémorisation de la position d'une fenêtre : son titre sans ce qui varie après « : »
+WinPosKey(title) {
+    return Trim(RegExReplace(title, "\s*[:\-].*$", ""))
+}
+
+; Show() des fenêtres du menu : si une position a été mémorisée, elle remplace « Center » et x / y
+WinShowSaved(this, opts := "") {
+    sv := IniRead(IniFile, "WinPos", this.PosKey, "")
+    if RegExMatch(sv, "^(-?\d+),(-?\d+)$", &m) {
+        vl := SysGet(76)
+        vt := SysGet(77)
+        vw := SysGet(78)
+        vh := SysGet(79)
+        x := Max(vl - 200, Min(Integer(m[1]), vl + vw - 120))
+        y := Max(vt, Min(Integer(m[2]), vt + vh - 80))
+        opts := Trim(RegExReplace(opts, "i)\b(Center|xCenter|yCenter)\b|\b[xy]-?\d+\b", ""))
+        opts .= " x" x " y" y
+    }
+    Gui.Prototype.Show.Call(this, opts)
+}
+
+; Quand tu relâches une fenêtre déplacée, sa position est mémorisée (par fenêtre)
+WinMoved(wParam, lParam, msg, hwnd) {
+    g := GuiFromHwnd(hwnd)
+    if (!IsObject(g) || !g.HasProp("PosKey"))
+        return
+    try {
+        WinGetPos(&x, &y, , , "ahk_id " hwnd)
+        if (WinGetMinMax("ahk_id " hwnd) = 0)
+            IniWrite(x "," y, IniFile, "WinPos", g.PosKey)
+    }
+}
+OnMessage(0x232, WinMoved)
 
 BgrOf(hex) {
     r := Integer("0x" SubStr(hex, 1, 2))
