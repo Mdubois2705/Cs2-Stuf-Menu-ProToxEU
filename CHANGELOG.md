@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.31.2
+
+- Quiz : la liste des stuffs était illisible (grisée sur fond blanc) en mode « Aléatoire ». Elle reste lisible en permanence ; cocher un stuff ou un bouton de sélection passe tout seul en mode « Choisir les stuffs ».
+
 ## v2.31.1
 
 - Coordonnées : elles continuent de se mettre à jour quand le menu en jeu (F1) est ouvert.

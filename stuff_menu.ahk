@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.31.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.31.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -2099,12 +2099,12 @@ ShowQuizStart() {
     bKeys := d.Add("Button", "x12 y+8 w160", "Touches du quiz...")
     bGo := d.Add("Button", "x+240 yp w100 Default", "Démarrer")
     bNo := d.Add("Button", "x+8 yp w100", "Annuler")
-    Enable(*) {
-        lv.Enabled := rPick.Value ? true : false
-        for c in [ddC, bCatOn, bCatOff, bAllOn, bAllOff]
-            c.Enabled := rPick.Value ? true : false
+    ToPick(*) {
+        rPick.Value := 1   ; toucher à la liste passe en mode « choisir les stuffs »
+        rAll.Value := 0
     }
     SetCat(on, *) {
+        ToPick()
         cn := ddC.Text
         Loop lv.GetCount() {
             if (lv.GetText(A_Index, 1) = cn)
@@ -2112,6 +2112,7 @@ ShowQuizStart() {
         }
     }
     SetAll(on, *) {
+        ToPick()
         Loop lv.GetCount()
             lv.Modify(A_Index, on ? "Check" : "-Check")
     }
@@ -2145,8 +2146,7 @@ ShowQuizStart() {
         Shut()
         QuizBegin(run, target)
     }
-    rAll.OnEvent("Click", Enable)
-    rPick.OnEvent("Click", Enable)
+    lv.OnEvent("ItemCheck", ToPick)
     bCatOn.OnEvent("Click", SetCat.Bind(true))
     bCatOff.OnEvent("Click", SetCat.Bind(false))
     bAllOn.OnEvent("Click", SetAll.Bind(true))
@@ -2157,7 +2157,6 @@ ShowQuizStart() {
     d.OnEvent("Close", Shut)
     d.OnEvent("Escape", Shut)
     WinStyle(d)
-    Enable()
     d.Show("AutoSize Center")
 }
 
