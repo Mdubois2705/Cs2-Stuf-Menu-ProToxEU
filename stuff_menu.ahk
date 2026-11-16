@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.31.3"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.31.4"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -46,7 +46,13 @@ AutoBackupOn := (IniRead(IniFile, "Settings", "AutoBackup", "1") = "1")
 BackupKeep := Max(0, ToInt(IniRead(IniFile, "Settings", "BackupKeep", "14"), 14))
 AutoCheck := (IniRead(IniFile, "Settings", "AutoCheck", "1") = "1")
 AutoUpdate := (IniRead(IniFile, "Settings", "AutoUpdate", "1") = "1")
-HudInterval := Max(100, ToInt(IniRead(IniFile, "Settings", "HudInterval", "300"), 300))
+if (IniRead(IniFile, "State", "HudFast", "") != "1") {
+    ; une fois : l'ancienne valeur par défaut (300 ms) passe à 120 ms pour des coordonnées plus fluides
+    if (IniRead(IniFile, "Settings", "HudInterval", "") = "300")
+        IniWrite("120", IniFile, "Settings", "HudInterval")
+    IniWrite("1", IniFile, "State", "HudFast")
+}
+HudInterval := Max(60, ToInt(IniRead(IniFile, "Settings", "HudInterval", "120"), 120))
 HudAtStart := (IniRead(IniFile, "Settings", "HudAtStart", "0") = "1")
 HudAuto := (IniRead(IniFile, "Settings", "HudAuto", "1") = "1")      ; 1 = coin inférieur gauche, 0 = position libre
 HudX := ToInt(IniRead(IniFile, "Settings", "HudX", "12"), 12)

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.31.4
+
+- Coordonnées plus fluides : elles se mettent à jour toutes les 120 ms au lieu de 300 ms (minimum réglable : 60 ms). L'ancienne valeur par défaut de `config.ini` est remplacée automatiquement, une seule fois. Si tu avais choisi une autre valeur, elle est conservée.
+
 ## v2.31.3
 
 - Chrono : la position par défaut est maintenant à droite des coordonnées (avant : au-dessus), centrée sur leur hauteur.
