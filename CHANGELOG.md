@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.33.3
+
+- Journal d'erreurs (`data\menu_errors.log`) plus précis : il note maintenant la fonction concernée et l'endroit de l'appel en plus du message et de la ligne. Le rapport de diagnostic (« Aide ») reprend ces détails.
+
 ## v2.33.2
 
 - Nettoyage du code : suppression de variables et fonctions devenues inutiles (anciens contrôles du menu, liserés et textes remplacés par le dessin lissé, réglage et variable de bip du chrono, aide texte du bas du menu, arrêt de GDI+). Aucun changement de comportement.

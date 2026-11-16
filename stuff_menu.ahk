@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.2"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.3"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -9026,8 +9026,21 @@ ScriptError(exc, mode) {
         if (FileExist(lf) && FileGetSize(lf) > 200000)
             FileDelete(lf)
         ln := ""
+        wh := ""
+        st := ""
         try ln := exc.Line
-        FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " v" APP_VERSION " : " exc.Message " (ligne " ln ")`n", lf, "UTF-8")
+        try wh := exc.What
+        try st := exc.Stack
+        extra := ""
+        if (wh != "")
+            extra := " [" wh "]"
+        if (st != "") {
+            ; première ligne de la pile d'appels : indique où l'erreur s'est produite
+            sl := StrSplit(st, "`n", "`r")
+            if (sl.Length >= 1 && sl[1] != "")
+                extra .= " pile: " Trim(sl[1])
+        }
+        FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") " v" APP_VERSION " : " exc.Message extra " (ligne " ln ")`n", lf, "UTF-8")
         if (IniRead(IniFile, "State", "UpdateTrial", "0") = "1") {
             n := ToInt(IniRead(IniFile, "State", "TrialErrors", "0"), 0) + 1
             IniWrite(n, IniFile, "State", "TrialErrors")
