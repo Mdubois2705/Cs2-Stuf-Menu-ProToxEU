@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.29.12
+
+- God mode : « activer » envoie `sv_regeneration_force_on 1; buddha 1` et « désactiver » envoie `sv_regeneration_force_on 0; buddha 0`. Les lignes précédentes sont remplacées automatiquement.
+
+## v2.29.11
+
+- Correction : le menu ne démarrait plus (accolade en trop dans le code du God mode de la 2.29.10).
+
+## v2.29.10
+
+- God mode : `god` n'existe plus dans CS2. Les entrées utilisent maintenant `buddha` : « activer » (`buddha 1; buddha_ignore_bots 1`, tu ne meurs plus mais les bots peuvent mourir) et « désactiver » (`buddha 0`). Les lignes de la 2.29.8 sont remplacées automatiquement.
+
+## v2.29.9
+
+- « Changer de map » : une fois la nouvelle map chargée, le menu exécute le cfg d'entraînement puis redémarre le round, comme au lancement automatique (plus besoin de le faire à la main).
+
+## v2.29.8
+
+- God mode : l'ancienne commande `god` seule est une bascule qui se désynchronise (bloqué en god, ou impossible à activer). Deux entrées fiables la remplacent : « God mode - activer » (`god 1; buddha 1`) et « God mode - désactiver » (`god 0; buddha 0`). L'ancienne ligne est remplacée automatiquement une fois dans les utilitaires de chaque profil.
+
 ## v2.29.7
 
 - Touches à l'écran : le liseré du menu (couleur et épaisseur des réglages) entoure aussi l'overlay. Position par défaut : à droite, au milieu de l'écran.

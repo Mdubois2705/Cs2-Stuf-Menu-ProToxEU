@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.29.7"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.29.12"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -97,6 +97,7 @@ LaunchArgs := Trim(IniRead(IniFile, "Settings", "LaunchArgs", "-condebug -netcon
 netSock := -1          ; socket ouvert vers CS2 (-1 = aucun)
 netWsa := false        ; Winsock initialisé
 netFailTick := 0       ; moment de la dernière connexion ratée (pas de nouvel essai avant quelques secondes)
+autoWant := ""       ; map attendue après un changement de map par le menu
 execMap := ""       ; map pour laquelle le cfg d'entraînement a déjà été exécuté
 
 ; Apparence du menu (modifiable avec la touche de réglages)
@@ -1086,12 +1087,16 @@ AutoMapGo(tryNo := 1, *) {
 
 ; Attend la fin du chargement de la map (jusqu'à 2 minutes) puis exécute le cfg d'entraînement
 AutoPracticeWait(n := 0, *) {
-    global execMap, autoPracDone
+    global execMap, autoPracDone, autoWant
     if (autoPracDone || !ProcessExist("cs2.exe"))
         return
     txt := RunAndReadLog("status", "main lump")
+    ; après « Changer de map » : on attend que la nouvelle map soit celle chargée (l'ancienne répond encore pendant le chargement)
+    if (InStr(txt, "main lump") && autoWant != "" && n < 25 && MapFromStatus(txt) != autoWant)
+        txt := ""
     if InStr(txt, "main lump") {
         autoPracDone := true
+        autoWant := ""
         AutoLog("map chargée (essai " n "), attente avant l'exec")
         Sleep(5000)   ; laisse la partie et les bots se mettre en place
         LoadMaps()
@@ -1109,6 +1114,14 @@ AutoPracticeWait(n := 0, *) {
         SetTimer(AutoPracticeWait.Bind(n + 1), -2000)
     else
         AutoLog("abandon : la map n'a pas été détectée après 2 minutes")
+}
+
+; Après un changement de map depuis le menu : relance l'exec du cfg d'entraînement et le redémarrage du round
+PracticeAfterMapChange(nm) {
+    global autoPracDone, autoWant
+    autoPracDone := false
+    autoWant := nm
+    SetTimer(AutoPracticeWait.Bind(1), -6000)
 }
 
 ; Second passage : le jeu remet parfois les bots et la partie en place après le premier exec
@@ -1712,6 +1725,8 @@ ShowMapChange() {
         }
         if !NetSend("map " nm)
             NetWarn()
+        else
+            PracticeAfterMapChange(nm)
         Shut()
     }
     Shut(*) {
@@ -6502,6 +6517,29 @@ ProfData(name) {
     return ProfDir(name) "\data"
 }
 
+; God mode : la commande « god » n'existe plus dans CS2, c'est « buddha » (invincible, on ne meurt pas).
+; Remplace les anciennes lignes une fois, dans les utilitaires de chaque profil.
+FixGodMode() {
+    if (IniRead(IniFile, "State", "GodFix3", "") = "1")
+        return
+    newTxt := "Utilitaires | God mode - activer | sv_regeneration_force_on 1; buddha 1 | God mode activé`r`nUtilitaires | God mode - désactiver | sv_regeneration_force_on 0; buddha 0 | God mode désactivé"
+    for pn in ListProfiles() {
+        f := ProfMaps(pn) "\_commun.txt"
+        if !FileExist(f)
+            continue
+        try {
+            txt := FileRead(f, "UTF-8")
+            if RegExMatch(txt, "im)^Utilitaires \| God mode - activer[^\r\n]*\R^Utilitaires \| God mode - désactiver[^\r\n]*", &m)
+                || RegExMatch(txt, "im)^Utilitaires \| God mode \(activer/désactiver\)[^\r\n]*", &m) {
+                txt := StrReplace(txt, m[0], newTxt)
+                FileDelete(f)
+                FileAppend(txt, f, "UTF-8")
+            }
+        }
+    }
+    IniWrite("1", IniFile, "State", "GodFix3")
+}
+
 ListProfiles() {
     arr := [DEFAULT_PROFILE]
     Loop Files A_ScriptDir "\profiles\*", "D" {
@@ -8789,6 +8827,7 @@ if HudAtStart
 TmApply()
 KeysApply()
 ; Après une mise à jour : fenêtre des nouveautés (première installation : la dernière version seulement)
+FixGodMode()
 lastSeen := IniRead(IniFile, "State", "LastSeenVersion", "")
 if (lastSeen != APP_VERSION) {
     IniWrite(APP_VERSION, IniFile, "State", "LastSeenVersion")
