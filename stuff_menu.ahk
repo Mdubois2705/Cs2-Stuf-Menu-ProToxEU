@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.29.12"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.30.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -80,6 +80,8 @@ KeysAuto := (IniRead(IniFile, "Settings", "KeysAuto", "1") = "1")   ; 1 = à dro
 KeysX := ToInt(IniRead(IniFile, "Settings", "KeysX", "1500"), 1500)
 KeysY := ToInt(IniRead(IniFile, "Settings", "KeysY", "900"), 900)
 RethrowKey := Trim(IniRead(IniFile, "Settings", "RethrowKey", "k"))   ; touche liée à sv_rethrow_last_grenade (chrono : départ de la relance)
+KeysHideOut := (IniRead(IniFile, "Settings", "KeysHideOut", "0") = "1")   ; 1 = touches masquées quand CS2 n'est pas au premier plan
+TimerHideOut := (IniRead(IniFile, "Settings", "TimerHideOut", "0") = "1")   ; 1 = chrono masqué quand CS2 n'est pas au premier plan
 FlightAsk := (IniRead(IniFile, "Settings", "FlightAsk", "1") = "1")   ; proposer de mesurer le temps de vol après la création d'un stuff
 LogMaxMB := Max(0, ToInt(IniRead(IniFile, "Settings", "LogMaxMB", "10"), 10))   ; taille de console.log au-delà de laquelle il est vidé au lancement (0 = jamais)
 ShotOn := (IniRead(IniFile, "Settings", "Shot", "1") = "1")                         ; captures d'écran des stuffs
@@ -3297,7 +3299,7 @@ ShowSettings() {
     if setOpen
         return
     setOpen := true
-    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY, "Tm", TimerOn, "TmAuto", TimerAuto, "TmX", TimerX, "TmY", TimerY, "TmDur", TimerDur, "FlAsk", FlightAsk, "TmBeep", TimerBeep)
+    old := Map("Font", ovFont, "Scale", ovScale, "X", ovX, "Y", ovY, "Opacity", ovOpacity, "Bg", ovBg, "Theme", ovTheme, "Border", ovBorder, "Corner", ovCorner, "BorderCol", ovBorderCol, "ShotOn", ShotOn, "ShotSize", ShotSize, "ShotZoom", ShotZoom, "ShotPlace", ShotPlace, "ShotCorner", ShotCorner, "ShotX", ShotX, "ShotY", ShotY, "Hud", hudOn, "HudAuto", HudAuto, "HudX", HudX, "HudY", HudY, "Tm", TimerOn, "TmAuto", TimerAuto, "TmX", TimerX, "TmY", TimerY, "TmDur", TimerDur, "FlAsk", FlightAsk, "TmHide", TimerHideOut, "TmBeep", TimerBeep)
     vl := SysGet(76)
     vt := SysGet(77)
     vw := SysGet(78)
@@ -3528,6 +3530,8 @@ ShowSettings() {
     txTmDur := d.Add("Text", "x406 y" ty " w70", "")
     y += 44
     chkFlAsk := d.Add("CheckBox", "x22 y" y " w460" (FlightAsk ? " Checked" : ""), "Proposer de mesurer le temps de vol après la création d'un stuff")
+    y += 30
+    chkTmH := d.Add("CheckBox", "x22 y" y " w460" (TimerHideOut ? " Checked" : ""), "Masquer le chrono quand CS2 n'est pas au premier plan (alt-tab)")
     y += 36
     chkBeep := d.Add("CheckBox", "x-3000 y" y " w460 Hidden" (TimerBeep ? " Checked" : ""), "Bip juste avant l'arrivée de la grenade (si le temps de vol est connu)")
     ; la case du bip est repoussée hors de la fenêtre : le menu ne produit plus aucun son
@@ -3588,11 +3592,13 @@ ShowSettings() {
     ; ----- Onglet Touches (touches à l'écran) -----
     tabs.UseTab(7)
     y := 44
-    d.Add("Text", "x22 y" y " w500 r2", "Affiche les touches pressées en permanence, même en dehors de CS2 (comme les coordonnées). Les changements de cet onglet s'appliquent tout de suite.")
+    d.Add("Text", "x22 y" y " w500 r2", "Affiche les touches pressées en permanence, même en dehors de CS2, sauf si tu coches « Masquer » ci-dessous. Les changements de cet onglet s'appliquent tout de suite.")
     y += 50
     chkK := d.Add("CheckBox", "x22 y" y " w500" (KeysOn ? " Checked" : ""), "Afficher les touches à l'écran")
     y += 34
     chkKG := d.Add("CheckBox", "x22 y" y " w500" (KeysFromGame ? " Checked" : ""), "Utiliser les touches de CS2 (déplacement, marche, accroupi, saut)")
+    y += 34
+    chkKH := d.Add("CheckBox", "x22 y" y " w500" (KeysHideOut ? " Checked" : ""), "Masquer quand CS2 n'est pas au premier plan (alt-tab)")
     y += 34
     stKDet := d.Add("Text", "x22 y" y " w500 r2", KeysSummary())
     y += 50
@@ -3614,8 +3620,10 @@ ShowSettings() {
     yEnd7 := y
 
     KSync(*) {
-        global KeysOn, KeysSize, KeysOpacity, KeysAuto, KeysFromGame
+        global KeysOn, KeysSize, KeysOpacity, KeysAuto, KeysFromGame, KeysHideOut
         KeysOn := chkK.Value ? true : false
+        KeysHideOut := chkKH.Value ? true : false
+        IniWrite(KeysHideOut ? 1 : 0, IniFile, "Settings", "KeysHideOut")
         KeysFromGame := chkKG.Value ? true : false
         KeysSize := slKS.Value
         KeysOpacity := slKO.Value
@@ -3701,7 +3709,7 @@ ShowSettings() {
     SetTimer(LedTick, 2000)
 
     Sync(*) {
-        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep
+        global ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovBorder, ovCorner, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep, TimerHideOut
         ovFont := (ddFont.Value = 1) ? "" : ddFont.Text
         ovScale := slScale.Value
         ovX := vl + slX.Value
@@ -3744,6 +3752,7 @@ ShowSettings() {
         TimerY := vt + slTmY.Value
         TimerDur := slTmDur.Value
         FlightAsk := chkFlAsk.Value
+        TimerHideOut := chkTmH.Value ? true : false
         TimerBeep := chkBeep.Value
         txTmX.Text := TimerX
         txTmY.Text := TimerY
@@ -3861,6 +3870,7 @@ ShowSettings() {
             slTmY.Value := Max(0, Min(820 - vt, yr))
             slTmDur.Value := 6
             chkFlAsk.Value := 1
+            chkTmH.Value := 0
             chkBeep.Value := 1
         } else if (tv = 6) {
             ddWT.Choose(1)
@@ -3872,6 +3882,7 @@ ShowSettings() {
         } else if (tv = 7) {
             chkK.Value := 0
             chkKG.Value := 1
+            chkKH.Value := 0
             slKS.Value := 100
             slKO.Value := 220
             ddKP.Choose(1)
@@ -3960,7 +3971,7 @@ ShowSettings() {
     }
 
     Finish(save, *) {
-        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerBeep, WinThemeSel, WinAccent, WinFontName, WinScale
+        global setOpen, ovFont, ovScale, ovX, ovY, ovOpacity, ovBg, ovTheme, ovBorder, ovCorner, ovBorderCol, ShotOn, ShotSize, ShotZoom, ShotPlace, ShotCorner, ShotX, ShotY, HudAuto, HudX, HudY, TimerOn, TimerAuto, TimerX, TimerY, TimerDur, FlightAsk, TimerHideOut, TimerBeep, WinThemeSel, WinAccent, WinFontName, WinScale
         if save {
             IniWrite(ovTheme, IniFile, "Overlay", "Theme")
             IniWrite(ovFont, IniFile, "Overlay", "Font")
@@ -3989,6 +4000,7 @@ ShowSettings() {
             IniWrite(TimerY, IniFile, "Settings", "TimerY")
             IniWrite(TimerDur, IniFile, "Settings", "TimerDur")
             IniWrite(FlightAsk ? 1 : 0, IniFile, "Settings", "FlightAsk")
+            IniWrite(TimerHideOut ? 1 : 0, IniFile, "Settings", "TimerHideOut")
             IniWrite(TimerBeep ? 1 : 0, IniFile, "Settings", "TimerBeep")
             WinThemeSel := (ddWT.Value = 2) ? "light" : (ddWT.Value = 3) ? "menu" : "dark"
             WinAccent := waHex[ddWA.Value]
@@ -4025,6 +4037,7 @@ ShowSettings() {
             TimerY := old["TmY"]
             TimerDur := old["TmDur"]
             FlightAsk := old["FlAsk"]
+            TimerHideOut := old["TmHide"]
             TimerBeep := old["TmBeep"]
             TmApply()
             HudSet(old["Hud"])
@@ -4062,6 +4075,7 @@ ShowSettings() {
     slHudY.OnEvent("Change", Sync)
     chkTm.OnEvent("Click", Sync)
     chkFlAsk.OnEvent("Click", Sync)
+    chkTmH.OnEvent("Click", Sync)
     chkBeep.OnEvent("Click", Sync)
     ddTmPos.OnEvent("Change", Sync)
     slTmX.OnEvent("Change", Sync)
@@ -4086,6 +4100,7 @@ ShowSettings() {
     btnReset.OnEvent("Click", ResetClick)
     chkK.OnEvent("Click", KSync)
     chkKG.OnEvent("Click", KSync)
+    chkKH.OnEvent("Click", KSync)
     slKS.OnEvent("Change", KSync)
     slKO.OnEvent("Change", KSync)
     ddKP.OnEvent("Change", KSync)
@@ -5559,20 +5574,31 @@ GdipRoundStroke(g, argb, wd, x, y, w, h, r) {
 
 ; Texte dans un rectangle : ha 0 gauche / 1 centre / 2 droite, va 0 haut / 1 milieu, wrap = retour à la ligne
 GdipText(g, argb, txt, fnt, px, bold, x, y, w, h, ha := 0, va := 0, wrap := true) {
-    fam := 0
-    font := 0
-    fmt := 0
+    static fonts := Map(), fmts := Map()   ; polices et formats gardés en mémoire : on ne les recrée pas à chaque dessin
     br := 0
-    if (DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", fnt, "Ptr", 0, "Ptr*", &fam) != 0)
-        DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", "Segoe UI", "Ptr", 0, "Ptr*", &fam)
-    DllCall("gdiplus\GdipCreateFont", "Ptr", fam, "Float", px, "Int", bold ? 1 : 0, "Int", 2, "Ptr*", &font)
-    DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &fmt)
-    DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", fmt, "Int", ha)
-    DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", fmt, "Int", va)
-    if !wrap {
-        DllCall("gdiplus\GdipSetStringFormatFlags", "Ptr", fmt, "Int", 0x1000)   ; une seule ligne
-        DllCall("gdiplus\GdipSetStringFormatTrimming", "Ptr", fmt, "Int", 3)     ; coupe avec ...
+    fk := fnt "|" px "|" (bold ? 1 : 0)
+    if !fonts.Has(fk) {
+        fam := 0
+        font := 0
+        if (DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", fnt, "Ptr", 0, "Ptr*", &fam) != 0)
+            DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", "Segoe UI", "Ptr", 0, "Ptr*", &fam)
+        DllCall("gdiplus\GdipCreateFont", "Ptr", fam, "Float", px, "Int", bold ? 1 : 0, "Int", 2, "Ptr*", &font)
+        fonts[fk] := font
     }
+    font := fonts[fk]
+    mk := ha "|" va "|" (wrap ? 1 : 0)
+    if !fmts.Has(mk) {
+        fmt := 0
+        DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &fmt)
+        DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", fmt, "Int", ha)
+        DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", fmt, "Int", va)
+        if !wrap {
+            DllCall("gdiplus\GdipSetStringFormatFlags", "Ptr", fmt, "Int", 0x1000)   ; une seule ligne
+            DllCall("gdiplus\GdipSetStringFormatTrimming", "Ptr", fmt, "Int", 3)     ; coupe avec ...
+        }
+        fmts[mk] := fmt
+    }
+    fmt := fmts[mk]
     DllCall("gdiplus\GdipCreateSolidFill", "UInt", argb, "Ptr*", &br)
     rc := Buffer(16, 0)
     NumPut("Float", x, rc, 0)
@@ -5581,9 +5607,6 @@ GdipText(g, argb, txt, fnt, px, bold, x, y, w, h, ha := 0, va := 0, wrap := true
     NumPut("Float", h, rc, 12)
     DllCall("gdiplus\GdipDrawString", "Ptr", g, "WStr", txt, "Int", -1, "Ptr", font, "Ptr", rc, "Ptr", fmt, "Ptr", br)
     DllCall("gdiplus\GdipDeleteBrush", "Ptr", br)
-    DllCall("gdiplus\GdipDeleteStringFormat", "Ptr", fmt)
-    DllCall("gdiplus\GdipDeleteFont", "Ptr", font)
-    DllCall("gdiplus\GdipDeleteFontFamily", "Ptr", fam)
 }
 
 ; Taille [largeur, hauteur] d'un texte sur une ligne
@@ -6141,10 +6164,8 @@ KeysApply() {
     }
     keysCtl := []
     keysShown := false
-    if !KeysOn {
-        KeysGdiStop()
-        return
-    }
+    if !KeysOn
+        return   ; GDI+ reste actif toute la session : le menu, les coordonnées et le chrono s'en servent aussi
     KeysGdiStart()
     BuildKeys()
     SetTimer(KeysTick, 40)
@@ -6223,6 +6244,13 @@ KeysTick() {
     global keysShown
     if !IsObject(keysGui) {
         SetTimer(KeysTick, 0)
+        return
+    }
+    if (KeysHideOut && !WinActive("ahk_exe cs2.exe")) {
+        if keysShown {
+            try keysGui.Hide()
+            keysShown := false
+        }
         return
     }
     if !keysShown {
@@ -6485,6 +6513,19 @@ TmLiveTick() {
         return
     }
     try tmCtl.Text := tmLiveLabel " : " StrReplace(Format("{:.1f}", el / 1000), ".", ",") " s"
+}
+
+; Chrono masqué hors de CS2 (si l'option est cochée), réaffiché au retour dans le jeu
+TmOutTick() {
+    if (!IsObject(tmGui) || !tmVisible)
+        return
+    vis := DllCall("user32\IsWindowVisible", "Ptr", tmGui.Hwnd)
+    if (TimerHideOut && !WinActive("ahk_exe cs2.exe")) {
+        if vis
+            try tmGui.Hide()
+    } else if !vis {
+        try tmGui.Show("NA")
+    }
 }
 
 TmHide(force := false) {
@@ -7630,7 +7671,7 @@ AutoBackup() {
 ProfSettingKeys() {
     return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
         , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
-        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
+        , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "TimerBeep", "FlightAsk", "TimerHideOut", "KeysHideOut", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
 }
 
 ExportProfile(prof, ownerHwnd) {
@@ -8716,6 +8757,20 @@ CheckUpdate() {
         InstallUpdate()
 }
 
+; Vrai si le fichier de destination n'existe pas ou n'a pas le même contenu que la source
+FileChanged(srcFile, dstFile) {
+    if !FileExist(dstFile)
+        return true
+    if (FileGetSize(srcFile) != FileGetSize(dstFile))
+        return true
+    try {
+        a := FileRead(srcFile, "RAW")
+        b := FileRead(dstFile, "RAW")
+        return (DllCall("msvcrt\memcmp", "Ptr", a, "Ptr", b, "UPtr", a.Size, "Cdecl Int") != 0)
+    }
+    return true
+}
+
 InstallUpdate() {
     base := A_Temp "\cs2stuff_update"
     try DirDelete(base, true)
@@ -8745,13 +8800,15 @@ InstallUpdate() {
     PreUpdateBackup()
     try {
         for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1", "menu_stuf.ico", "install.bat", "install.ps1", "uninstall.bat", "uninstall.ps1", "rollback.bat"] {
-            if FileExist(src "\" fn)
-                FileCopy(src "\" fn, A_ScriptDir "\" fn, 1)
+            if (FileExist(src "\" fn) && FileChanged(src "\" fn, A_ScriptDir "\" fn))
+                FileCopy(src "\" fn, A_ScriptDir "\" fn, 1)   ; seuls les fichiers modifiés sont réécrits
         }
         if DirExist(src "\maps_default") {
             DirCreate(A_ScriptDir "\maps_default")
-            Loop Files src "\maps_default\*.txt"
-                FileCopy(A_LoopFileFullPath, A_ScriptDir "\maps_default\" A_LoopFileName, 1)
+            Loop Files src "\maps_default\*.txt" {
+                if FileChanged(A_LoopFileFullPath, A_ScriptDir "\maps_default\" A_LoopFileName)
+                    FileCopy(A_LoopFileFullPath, A_ScriptDir "\maps_default\" A_LoopFileName, 1)
+            }
         }
     } catch as err {
         try FileCopy(A_ScriptDir "\data\backup\stuff_menu.ahk.bak", A_ScriptDir "\stuff_menu.ahk", 1)
@@ -8826,6 +8883,7 @@ if HudAtStart
     HudToggle()
 TmApply()
 KeysApply()
+SetTimer(TmOutTick, 300)
 ; Après une mise à jour : fenêtre des nouveautés (première installation : la dernière version seulement)
 FixGodMode()
 lastSeen := IniRead(IniFile, "State", "LastSeenVersion", "")

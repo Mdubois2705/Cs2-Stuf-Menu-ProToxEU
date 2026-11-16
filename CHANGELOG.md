@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.30.0
+
+- Touches à l'écran et chrono : nouvelle case « Masquer quand CS2 n'est pas au premier plan (alt-tab) » (onglets Touches et Chrono). Par défaut, ils restent affichés en permanence.
+- Affichage plus léger : les polices et formats de texte sont gardés en mémoire au lieu d'être recréés à chaque dessin, et GDI+ n'est plus arrêté puis relancé quand on coupe les touches.
+- Mise à jour : seuls les fichiers qui ont changé sont réécrits (le téléchargement de l'archive reste complet).
+- Packs : une mise à jour d'un pack déjà importé passe par la même sauvegarde complète du profil que tout import (déjà le cas).
+
 ## v2.29.12
 
 - God mode : « activer » envoie `sv_regeneration_force_on 1; buddha 1` et « désactiver » envoie `sv_regeneration_force_on 0; buddha 0`. Les lignes précédentes sont remplacées automatiquement.
