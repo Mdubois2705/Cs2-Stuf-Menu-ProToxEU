@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.33.5
+
+- Fenêtre « Gestion des stuffs et des catégories » : la dernière colonne de chaque liste prend toute la largeur restante (plus de zone vide ni de bande bleue à droite), y compris après avoir agrandi une colonne ou la fenêtre. Les listes sont dessinées sans traces quand on déplace le bord d'une colonne.
+
 ## v2.33.4
 
 - « Refaire la capture » d'un stuff : le menu ferme les fenêtres et les affichages (coordonnées, touches, chrono, overlay), te téléporte à la position du stuff, prend la capture au centre du jeu puis rouvre tout comme avant. Il n'y a plus de compte à rebours pour viser : l'angle du stuff est appliqué par la téléportation.

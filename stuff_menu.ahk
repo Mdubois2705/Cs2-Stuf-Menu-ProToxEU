@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.4"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.5"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -5188,6 +5188,10 @@ ShowManager() {
     lvSt.ModifyCol(2, 45)
     lvSt.ModifyCol(3, 55)
     lvSt.ModifyCol(4, 150)
+    LvSmooth(lvCat)
+    LvSmooth(lvSt)
+    FitLastCol(lvCat)
+    FitLastCol(lvSt)
     lvCat.GetPos(&lx, &ly, &lw, &lh)
     row1 := ly + lh + 8
     row2 := row1 + 34
@@ -5282,6 +5286,8 @@ ShowManager() {
         dw := w - ui["w0"]
         lvCat.Move(, , , ui["lh0"] + dh)
         lvSt.Move(, , ui["lw0"] + dw, ui["lh0"] + dh)
+        FitLastCol(lvCat)
+        FitLastCol(lvSt)
         for c, y0 in ui["ys"]
             c.Move(, y0 + dh)
         edFind.Move(, , Max(120, ui["fw0"] + dw))
@@ -5624,6 +5630,18 @@ ShowManager() {
     edFind.OnEvent("Change", (*) => RefreshStuffs())
     lvSt.OnEvent("ContextMenu", StuffMenu)
     d.OnEvent("Size", ResizeMgr)
+    ; après avoir déplacé le bord d'une colonne, la dernière colonne reprend la largeur restante
+    ColDrag(gg, wp, lp, msg) {
+        try {
+            code := NumGet(lp, 2 * A_PtrSize, "Int")
+            if (code = -327 || code = -307) {
+                from := NumGet(lp, 0, "Ptr")
+                if (from = SendMessage(0x101F, 0, 0, lvSt) || from = SendMessage(0x101F, 0, 0, lvCat))
+                    SetTimer(() => (FitLastCol(lvCat), FitLastCol(lvSt)), -20)
+            }
+        }
+    }
+    d.OnMessage(0x4E, ColDrag)
     lvCat.OnEvent("ItemSelect", CatSelected)
     btnCatNew.OnEvent("Click", NewCat)
     btnCatRen.OnEvent("Click", RenCat)
@@ -5676,6 +5694,27 @@ ShowManager() {
         my := Max(vt, Min(my, vt + vh - 100))
         try d.Move(mx, my, mw, mh)
     }
+}
+
+; La dernière colonne d'une liste prend toute la largeur restante (plus de zone vide à droite des colonnes)
+FitLastCol(lv) {
+    try {
+        n := lv.GetCount("Col")
+        if (n < 1)
+            return
+        rc := Buffer(16, 0)
+        DllCall("user32\GetClientRect", "Ptr", lv.Hwnd, "Ptr", rc)
+        cw := NumGet(rc, 8, "Int")
+        used := 0
+        Loop n - 1
+            used += SendMessage(0x101D, A_Index - 1, 0, lv)   ; LVM_GETCOLUMNWIDTH
+        lv.ModifyCol(n, Max(40, cw - used))
+    }
+}
+
+; Active le double tampon d'une liste (supprime les traces de dessin quand on déplace ou agrandit une colonne)
+LvSmooth(lv) {
+    try SendMessage(0x1036, 0x10000, 0x10000, lv)   ; LVM_SETEXTENDEDLISTVIEWSTYLE : LVS_EX_DOUBLEBUFFER
 }
 
 ; =====================================================================
