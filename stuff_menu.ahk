@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.5"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.6"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -5631,8 +5631,14 @@ ShowManager() {
     lvSt.OnEvent("ContextMenu", StuffMenu)
     d.OnEvent("Size", ResizeMgr)
     ; après avoir déplacé le bord d'une colonne, la dernière colonne reprend la largeur restante
-    ColDrag(gg, wp, lp, msg) {
+    ColDrag(wp, lp, msg, hw) {
         try {
+            if !WinExist("ahk_id " d.Hwnd) {
+                OnMessage(0x4E, ColDrag, 0)   ; fenêtre fermée : on retire la surveillance
+                return
+            }
+            if (hw != d.Hwnd)
+                return
             code := NumGet(lp, 2 * A_PtrSize, "Int")
             if (code = -327 || code = -307) {
                 from := NumGet(lp, 0, "Ptr")
@@ -5641,7 +5647,7 @@ ShowManager() {
             }
         }
     }
-    d.OnMessage(0x4E, ColDrag)
+    OnMessage(0x4E, ColDrag)
     lvCat.OnEvent("ItemSelect", CatSelected)
     btnCatNew.OnEvent("Click", NewCat)
     btnCatRen.OnEvent("Click", RenCat)
