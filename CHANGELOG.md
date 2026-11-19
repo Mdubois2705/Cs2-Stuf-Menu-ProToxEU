@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.33.4
+
+- « Refaire la capture » d'un stuff : le menu ferme les fenêtres et les affichages (coordonnées, touches, chrono, overlay), te téléporte à la position du stuff, prend la capture au centre du jeu puis rouvre tout comme avant. Il n'y a plus de compte à rebours pour viser : l'angle du stuff est appliqué par la téléportation.
+
 ## v2.33.3
 
 - Journal d'erreurs (`data\menu_errors.log`) plus précis : il note maintenant la fonction concernée et l'endroit de l'appel en plus du message et de la ligne. Le rapport de diagnostic (« Aide ») reprend ces détails.

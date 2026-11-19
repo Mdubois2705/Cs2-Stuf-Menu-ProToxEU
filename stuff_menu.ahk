@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.3"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.4"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -4188,7 +4188,7 @@ ShowSettings() {
     btnPickS := d.Add("Button", "x140 y" y " w260", "Placer avec la souris")
     y += 46
     d.SetFont("s9 c8A8F96")
-    d.Add("Text", "x22 y" y " w460 r4", "Le liseré de la capture (épaisseur et couleur) suit automatiquement celui du menu (onglet Menu) et se dessine par-dessus l'image. La zone capturée s'applique aux prochaines captures. Pour refaire la capture d'un stuff : « Gérer les stuffs et les catégories » du menu, double-clic sur le stuff, bouton « Refaire la capture ».")
+    d.Add("Text", "x22 y" y " w460 r4", "Le liseré de la capture (épaisseur et couleur) suit automatiquement celui du menu (onglet Menu) et se dessine par-dessus l'image. La zone capturée s'applique aux prochaines captures. Pour refaire la capture d'un stuff : « Gérer les stuffs et les catégories » du menu, double-clic sur le stuff, bouton « Refaire la capture » (tu es téléporté au stuff, les fenêtres se ferment puis se rouvrent).")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
     y += 80
     yEnd3 := y
@@ -6012,32 +6012,68 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
         }
     }
 
-    ; Refait la capture : masque les fenêtres, laisse 3 secondes pour viser, puis capture le centre du jeu
+    ; Refait la capture : masque toutes les fenêtres, te téléporte au stuff, capture le centre du jeu puis rouvre tout
     ShotRedoClick(*) {
+        global keysShown, netFailTick
         sp := ShotPath(keyMap, edPos.Value)
         if (sp = "") {
             MsgBox("Renseigne d'abord une position valide (setpos x y z; setang pitch yaw).", "Modifier", 0x40030)
+            return
+        }
+        tpPos := NormalizePos(edPos.Value)
+        if (tpPos = "") {
+            MsgBox("La position doit contenir setpos x y z; setang pitch yaw.", "Modifier", 0x40030)
             return
         }
         if !ProcessExist("cs2.exe") {
             MsgBox("CS2 n'est pas lancé.", "Modifier", 0x40030)
             return
         }
-        ans := MsgBox("Place-toi au point du stuff en jeu et vise le point à capturer.`n`nAprès OK, les fenêtres se masquent et la capture se fait 3 secondes plus tard, au centre du jeu.", "Refaire la capture", 0x41)
+        netFailTick := 0
+        if !NetOpen() {
+            MsgBox("Pas de connexion à CS2 : ferme le jeu et relance le menu.", "Modifier", 0x40030)
+            return
+        }
+        ans := MsgBox("Les fenêtres et affichages vont se fermer, tu seras téléporté à la position du stuff et la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle de ce stuff.", "Refaire la capture", 0x41)
         if (ans != "OK")
             return
+        wasMenu := menuOpen
+        wasHud := hudOn
+        wasKeys := (KeysOn && IsObject(keysGui))
+        SetTimer(KeysTick, 0)
+        SetTimer(TmOutTick, 0)
         d.Hide()
         try WinHide("ahk_id " ownerHwnd)
+        if wasMenu
+            try g.Hide()
+        try HideShot()
+        try hudGui.Hide()
+        try keysGui.Hide()
+        keysShown := false
+        try tmGui.Hide()
         try WinActivate("ahk_exe cs2.exe")
-        WinWaitActive("ahk_exe cs2.exe", , 2)
-        Loop 3 {
-            left := 4 - A_Index
+        WinWaitActive("ahk_exe cs2.exe", , 3)
+        Sleep(200)
+        RunCmd(tpPos)
+        Loop 2 {
+            left := 3 - A_Index
             ToolTip("Capture dans " left " s...")
             Sleep(1000)
         }
         ToolTip()
-        Sleep(80)
+        Sleep(150)
         ok := CaptureShot(sp)
+        ; on rouvre tout comme avant
+        if wasHud
+            try ShowHud()
+        if wasKeys {
+            SetTimer(KeysTick, 40)
+        }
+        SetTimer(TmOutTick, 300)
+        if (tmVisible)
+            try tmGui.Show("NA")
+        if wasMenu
+            try g.Show("NA")
         try WinShow("ahk_id " ownerHwnd)
         d.Show()
         WinActivate("ahk_id " d.Hwnd)

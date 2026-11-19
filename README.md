@@ -228,7 +228,7 @@ Un cadenas apparaît à la fin des catégories et des stuffs verrouillés. Un é
 
 ### Captures d'écran des stuffs
 
-Quand tu sauvegardes un stuff, le menu prend une petite capture (100 x 100 px par défaut) au centre du jeu, autour du réticule, et la propose dans la fenêtre. Dans le menu, la capture du stuff sélectionné s'affiche dans le coin supérieur droit. Pour la refaire : « Gérer les stuffs », double-clic sur le stuff, « Refaire la capture (en jeu) » (place-toi au point du stuff : la capture se fait 3 secondes plus tard). Les captures sont dans `data\shots\`. Elles peuvent être jointes à un export vers un fichier `.stuffpack` (pas au code copié, trop lourd).
+Quand tu sauvegardes un stuff, le menu prend une petite capture (100 x 100 px par défaut) au centre du jeu, autour du réticule, et la propose dans la fenêtre. Dans le menu, la capture du stuff sélectionné s'affiche dans le coin supérieur droit. Pour la refaire : « Gérer les stuffs », double-clic sur le stuff, « Refaire la capture (en jeu) » (les fenêtres se ferment, tu es téléporté au stuff, la capture se fait 2 secondes plus tard, puis tout se rouvre). Les captures sont dans `data\shots\`. Elles peuvent être jointes à un export vers un fichier `.stuffpack` (pas au code copié, trop lourd).
 
 Le bouton **Nettoyer les captures et temps orphelins** (onglet Captures des réglages) supprime les captures et temps de vol qui ne correspondent plus à aucun stuff. Réglages : onglet Captures (zone, taille, placement, arrondi). Équivalents dans `config.ini` : `Shot`, `ShotSize`, `ShotZoom`, `ShotPos`, `ShotCorner`, `ShotX`, `ShotY`. Le jeu doit être en fenêtré ou en plein écran fenêtré.
 
