@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.9"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.10"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -6949,8 +6949,11 @@ HudGeom() {
 TmShow(txt, hold := false) {
     global tmGui, tmText, tmVisible, tmCtl, tmSt
     tmText := txt
-    if IsObject(tmGui)
-        try tmGui.Destroy()
+    if IsObject(tmGui) {
+        old := tmGui
+        tmGui := ""   ; plus de référence vers une fenêtre détruite (TmOutTick la lirait)
+        try old.Destroy()
+    }
     px := PxOf(FS(16))
     fnt := (ovFont = "") ? "Consolas" : ovFont
     sm := GdipMeasure("Incendiaire : 99,9 s", fnt, px, true)   ; largeur fixe pour tous les textes
@@ -7569,7 +7572,14 @@ TmLiveTick() {
 TmOutTick() {
     if (!IsObject(tmGui) || !tmVisible)
         return
-    vis := DllCall("user32\IsWindowVisible", "Ptr", tmGui.Hwnd)
+    try {
+        hw := tmGui.Hwnd
+    } catch {
+        return   ; fenêtre en cours de recréation ou détruite : on réessaie au prochain passage
+    }
+    if !hw
+        return
+    vis := DllCall("user32\IsWindowVisible", "Ptr", hw)
     if (TimerHideOut && !WinActive("ahk_exe cs2.exe")) {
         if vis
             try tmGui.Hide()

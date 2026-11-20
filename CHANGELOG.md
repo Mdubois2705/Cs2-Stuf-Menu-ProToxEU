@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.33.10
+
+- Correction de l'erreur « Gui has no window » liée au chronomètre de grenade : la vérification d'affichage ne lit plus une fenêtre en cours de recréation.
+
 ## v2.33.9
 
 - Correction d'un avertissement au démarrage (code inutile après un `return`) introduit en 2.33.8.
