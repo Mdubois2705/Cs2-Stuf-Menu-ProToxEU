@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.8"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.9"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3145,21 +3145,6 @@ AppendLine(path, line) {
 ; Renvoie la catégorie du stuff qui porte déjà ce nom, "" sinon. exCat / exName : le stuff en cours de modification (ignoré).
 StuffNameTaken(path, name, exCat := "", exName := "") {
     return ""   ; plusieurs stuffs peuvent porter le même nom (seuls les noms de catégories restent uniques)
-    nl := StrLower(Trim(name))
-    files := [path]
-    common := MapsDir "\_commun.txt"
-    if (StrLower(path) != StrLower(common))
-        files.Push(common)
-    for f in files {
-        for e in ReadEntries(f)[2] {
-            if (StrLower(Trim(e[2])) != nl)
-                continue
-            if (f = path && exCat != "" && e[1] = exCat && e[2] = exName)
-                continue
-            return e[1]
-        }
-    }
-    return ""
 }
 
 ; Renvoie le nom (tel qu'il est écrit) de la catégorie existante qui porte déjà ce nom, "" sinon. exCat : catégorie en cours de renommage (ignorée)

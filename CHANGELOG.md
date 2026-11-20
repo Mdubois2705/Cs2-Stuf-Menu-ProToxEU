@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.33.9
+
+- Correction d'un avertissement au démarrage (code inutile après un `return`) introduit en 2.33.8.
+
 ## v2.33.8
 
 - Gestion des stuffs : boutons ▲ et ▼ à côté de la recherche pour ranger les stuffs dans leur catégorie (l'ordre est aussi celui du menu en jeu).
