@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.34.3
+
+- Liste officielle des tags mise à jour : ajout des groupes STEP … JUMPTHROW et STEP SLOW … JUMPTHROW.
+
 ## v2.34.2
 
 - Tags : les lignes vides de `tags_officiels.txt` deviennent des espaces entre les groupes dans la liste du menu.
