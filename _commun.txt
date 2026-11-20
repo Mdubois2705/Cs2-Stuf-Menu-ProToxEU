@@ -3,7 +3,7 @@
 
 Utilitaires | Give kit complet | give weapon_ak47; give weapon_awp; give weapon_deagle; give weapon_hegrenade; give weapon_flashbang; give weapon_smokegrenade; give weapon_molotov
 Utilitaires | Noclip | noclip
-Utilitaires | God mode - activer | sv_regeneration_force_on 1; buddha 1 | God mode activé
+Utilitaires | God mode - activer | sv_regeneration_force_on 1; buddha 0 | God mode activé
 Utilitaires | God mode - désactiver | sv_regeneration_force_on 0; buddha 0 | God mode désactivé
 Utilitaires | Kill smokes | ent_fire smokegrenade_projectile kill; stopsound
 Utilitaires | Rethrow dernière grenade | sv_rethrow_last_grenade

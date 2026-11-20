@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.10"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.11"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -7620,9 +7620,9 @@ ProfData(name) {
 ; God mode : la commande « god » n'existe plus dans CS2, c'est « buddha » (invincible, on ne meurt pas).
 ; Remplace les anciennes lignes une fois, dans les utilitaires de chaque profil.
 FixGodMode() {
-    if (IniRead(IniFile, "State", "GodFix3", "") = "1")
+    if (IniRead(IniFile, "State", "GodFix4", "") = "1")
         return
-    newTxt := "Utilitaires | God mode - activer | sv_regeneration_force_on 1; buddha 1 | God mode activé`r`nUtilitaires | God mode - désactiver | sv_regeneration_force_on 0; buddha 0 | God mode désactivé"
+    newTxt := "Utilitaires | God mode - activer | sv_regeneration_force_on 1; buddha 0 | God mode activé`r`nUtilitaires | God mode - désactiver | sv_regeneration_force_on 0; buddha 0 | God mode désactivé"
     for pn in ListProfiles() {
         f := ProfMaps(pn) "\_commun.txt"
         if !FileExist(f)
@@ -7637,7 +7637,7 @@ FixGodMode() {
             }
         }
     }
-    IniWrite("1", IniFile, "State", "GodFix3")
+    IniWrite("1", IniFile, "State", "GodFix4")
 }
 
 ListProfiles() {
