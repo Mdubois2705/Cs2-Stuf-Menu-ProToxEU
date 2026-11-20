@@ -22,3 +22,9 @@ Desktop.ini
 .DS_Store
 .vscode/
 .idea/
+
+# Executable compile en local (build_exe.bat)
+*.exe
+
+# Guide administrateur (prive, ne doit jamais etre envoye sur GitHub)
+README_ADMIN.md
