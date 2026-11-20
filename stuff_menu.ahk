@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.34.3"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.34.4"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3127,11 +3127,6 @@ AppendLine(path, line) {
 
 ; Noms : plusieurs stuffs peuvent avoir le même nom ; un nom de catégorie, lui, ne peut exister qu'une fois par map
 ; (« communs » compris), sans tenir compte des majuscules.
-; Renvoie la catégorie du stuff qui porte déjà ce nom, "" sinon. exCat / exName : le stuff en cours de modification (ignoré).
-StuffNameTaken(path, name, exCat := "", exName := "") {
-    return ""   ; plusieurs stuffs peuvent porter le même nom (seuls les noms de catégories restent uniques)
-}
-
 ; Renvoie le nom (tel qu'il est écrit) de la catégorie existante qui porte déjà ce nom, "" sinon. exCat : catégorie en cours de renommage (ignorée)
 CatNameTaken(path, name, exCat := "") {
     nl := StrLower(Trim(name))
@@ -3211,10 +3206,7 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     btnCatAdd := d.Add("Button", "x+6 yp w78", "Nouvelle")
     d.Add("Text", "xm y+14 w95", "Nom")
     edName := d.Add("Edit", "x110 yp-3 w340")
-    d.SetFont("s9 c" WinPal()["bad"])
-    txNameErr := d.Add("Text", "x110 y+2 w340 h16", "")
-    d.SetFont("s" WinSz() " c" WinPal()["txt"])
-    d.Add("Text", "xm y+8 w95", "Tags")
+    d.Add("Text", "xm y+14 w95", "Tags")
     cbTag := d.Add("DropDownList", "x110 yp-3 w258", [])
     edTagKey := d.Add("Edit", "x+6 yp w76 Limit8")
     try SendMessage(0x1501, 1, StrPtr("Touche"), edTagKey)   ; texte grisé « Touche »
@@ -3258,11 +3250,6 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     }
     DetClick(*) {
         ShowDet(!detOpen["v"])
-    }
-    NameCheck(*) {
-        ncN := CleanField(edName.Value)
-        ncD := (ncN = "") ? "" : StuffNameTaken(mapFiles[ddMap.Value], ncN)
-        txNameErr.Text := (ncD != "") ? "Ce nom est déjà pris (catégorie « " ncD " »)." : ""
     }
 
     FillCats(*) {
@@ -3455,11 +3442,6 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
                 MsgBox("La catégorie « " sub " » n'existe pas.`n`nChoisis une catégorie dans la liste (tu peux taper pour la chercher), ou crée-la avec le bouton Nouvelle.", "Sauvegarde", 0x40030)
             return
         }
-        dupCat := StuffNameTaken(mapFiles[ddMap.Value], nm)
-        if (dupCat != "") {
-            MsgBox("Un stuff nommé « " nm " » existe déjà dans cette map (catégorie « " dupCat " »).`n`nChoisis un autre nom.", "Sauvegarde", 0x40030)
-            return
-        }
         cmdFull := pnorm
         if chkGive.Value {
             gv := GiveMap.Get(typ, "")
@@ -3517,8 +3499,7 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     }
     ShowDet(detOpen["v"], false)
     btnDet.OnEvent("Click", DetClick)
-    edName.OnEvent("Change", NameCheck)
-    ddMap.OnEvent("Change", (*) => (FillCats(), NameCheck()))
+    ddMap.OnEvent("Change", (*) => FillCats())
     cbCat.OnEvent("Change", CatChange)
     btnCatAdd.OnEvent("Click", CatAddClick)
     btnTagAdd.OnEvent("Click", TagAddClick)
@@ -5607,11 +5588,6 @@ ShowManager() {
         nm := CleanField(AskText("Renommer le stuff", "Nouveau nom de « " old " » :", old, "ahk_id " d.Hwnd))
         if (nm = "" || nm == old)
             return
-        exDn := StuffNameTaken(MapPath(), nm, sc, old)
-        if (exDn != "") {
-            Say("Un stuff « " nm " » existe déjà (catégorie « " exDn " »)")
-            return
-        }
         if (DupCount(sc, old) = 1)
             Rekey(StuffKey(sc, old), StuffKey(sc, nm))   ; favoris et verrou suivent seulement si aucun autre stuff ne porte l'ancien nom
         RenameStuffInFile(MapPath(), sc, old, nm, occ)
@@ -5816,7 +5792,7 @@ ShowManager() {
             if (code = -327 || code = -307) {
                 from := NumGet(lp, 0, "Ptr")
                 if (from = SendMessage(0x101F, 0, 0, lvSt) || from = SendMessage(0x101F, 0, 0, lvCat))
-                    SetTimer(() => (FitLastCol(lvCat), FitLastCol(lvSt, 4)), -20)
+                    SetTimer(() => (lvSt.ModifyCol(5, 0), lvSt.ModifyCol(6, 0), FitLastCol(lvCat), FitLastCol(lvSt, 4)), -20)   ; les colonnes cachées restent à 0
             }
         }
     }
@@ -5953,9 +5929,6 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     cbCat := d.Add("ComboBox", "x130 yp-3 w380", [])
     d.Add("Text", "xm y+14 w110", "Nom")
     edName := d.Add("Edit", "x130 yp-3 w380", oldName)
-    d.SetFont("s9 c" WinPal()["bad"])
-    txNameErr := d.Add("Text", "x130 y+2 w380 h16", "")
-    d.SetFont("s" WinSz() " c" WinPal()["txt"])
     fl := Map("v", "")
     flOld := FlightTime(cmd)
     d.Add("Text", "xm y+10 w110", "Temps de vol")
@@ -6078,13 +6051,6 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     btnTagDel.OnEvent("Click", TagDelClick)
     btnTagInfo.OnEvent("Click", TagInfoClick)
 
-    NameCheck(*) {
-        ncN := CleanField(edName.Value)
-        ncD := (ncN = "" || ncN = oldName) ? "" : StuffNameTaken(path, ncN, oldCat, oldName)
-        txNameErr.Text := (ncD != "") ? "Ce nom est déjà pris (catégorie « " ncD " »)." : ""
-    }
-    edName.OnEvent("Change", NameCheck)
-
     CatSync(*) {
         tx2 := Trim(cbCat.Text)
         ty2 := NO_TYPE
@@ -6184,11 +6150,6 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         exCat := CatNameTaken(path, nCat)
         if (exCat != "")
             nCat := exCat   ; la catégorie existe déjà (même nom à la casse près) : on utilise celle qui existe
-        exDup := (nName = oldName) ? "" : StuffNameTaken(path, nName, oldCat, oldName)   ; le nom n'a pas changé : pas de contrôle (anciens doublons éditables)
-        if (exDup != "") {
-            MsgBox("Un stuff nommé « " nName " » existe déjà dans cette map (catégorie « " exDup " »).`n`nChoisis un autre nom.", "Modifier", 0x40030)
-            return
-        }
         nPos := Trim(edPos.Value)
         if (nPos != "") {
             nPos := NormalizePos(nPos)

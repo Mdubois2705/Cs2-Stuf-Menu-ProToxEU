@@ -26,7 +26,7 @@ Le script [AutoHotkey v2](https://www.autohotkey.com/) affiche le menu par-dessu
 - Infos du stuff affichées dans l'overlay et dans le **chat** au lancement
 - **Sauvegarde d'un repère depuis le jeu** (position et angle capturés automatiquement), ou du dernier lancer
 - **Ajout / suppression** de stuffs et de catégories depuis le menu
-- Utilitaires : bots (placer, accroupi, immobile…), God mode, noclip, kit d'armes
+- Utilitaires : bots (placer, accroupi, immobile…), God mode (vie qui se régénère), noclip, kit d'armes
 - **Chronomètre de grenade** : temps entre le lâcher et l'explosion, en direct pour les relances, et **temps de vol mémorisé par stuff**
 - **Quiz** : entraîne-toi à retrouver les lineups, avec les stuffs de ton choix ou au hasard sans répétition
 - **Captures d'écran** des stuffs, **coordonnées en temps réel**
@@ -180,8 +180,8 @@ Chaque commande du menu envoie aussi `sv_cheats 1` d'abord, donc les stuffs, le 
 
 **Depuis le jeu** : place-toi au bon endroit, vise, ouvre le menu (`F1`) et choisis « Sauvegarder la position actuelle », puis remplis la map, le type, la catégorie, le nom et le message du chat. La position est dans une zone « Détails : position » repliable (ouverte si elle n'a pas pu être lue).
 
-- **Catégorie** : la liste propose les catégories de la map ; tape quelques lettres pour la filtrer. Pour en créer une, utilise le bouton **+** : elle est créée avec exactement le nom tapé.
-- **Tags** : la liste est officielle et identique pour tout le monde (fichier `tags_officiels.txt`, mis à jour avec le menu). Personne ne peut en créer ni en supprimer de la liste : seul l'auteur modifie ce fichier. Choisis un tag dans la liste, tape si tu veux une **touche** dans la case à côté (elle s'insère juste avant le dernier mot du tag : `RIGHT CLICK RUNTHROW` + `Z` donne `RIGHT CLICK Z RUNTHROW`, `STEP LEFT CLICK THROW` + `2` donne `STEP LEFT CLICK 2 THROW`), puis clique sur **Ajouter**. **Retirer** enlève un tag du stuff, **→ Info** recopie les tags dans le message du chat. Les tags s'affichent sous l'info, se cherchent dans la recherche rapide (`#facile` ou `facile`), se modifient dans « Modifier le stuff » et sont inclus dans l'export.
+- **Catégorie** : la liste propose les catégories de la map ; tape quelques lettres pour la filtrer. Pour en créer une, utilise le bouton **Nouvelle** : elle est créée avec exactement le nom tapé.
+- **Tags** : la liste est officielle et identique pour tout le monde (fichier `tags_officiels.txt`, mis à jour avec le menu). Personne ne peut en créer ni en supprimer de la liste : seul l'auteur modifie ce fichier. Choisis un tag dans la liste, tape si tu veux une **touche** dans la case à côté (elle s'insère juste avant le dernier mot du tag : `RIGHT CLICK RUNTHROW` + `Z` donne `RIGHT CLICK Z RUNTHROW`, `STEP LEFT CLICK THROW` + `2` donne `STEP LEFT CLICK 2 THROW`), puis clique sur **Ajouter**. **Retirer** enlève un tag du stuff, **→ Info** recopie les tags dans le message du chat. Les tags s'affichent sous l'info, se cherchent dans la recherche rapide (`#facile` ou `facile`), se modifient dans « Modifier le stuff » et sont inclus dans l'export. Les anciens tags libres créés avant la liste officielle sont retirés des stuffs une seule fois, au premier lancement de cette version (une copie des maps est faite avant, dans `data\backup\avant_tags_<profil>`).
 
 **À la main** : édite `maps/de_<map>.txt`, une ligne par stuff :
 
@@ -215,7 +215,7 @@ L'entrée « Gérer les stuffs et les catégories » ouvre une fenêtre redimens
 
 ### Dernier lancer en stuff
 
-L'entrée « Enregistrer le dernier lancer comme stuff » reprend, pour la dernière grenade lancée au clic, ta position, ton angle et le temps mesuré par le chronomètre. La fenêtre de sauvegarde s'ouvre déjà remplie (position, type de grenade, « give » coché, temps de vol) : il suffit de choisir la catégorie et le nom. Le chronomètre doit être actif. Les relances avec la touche K relancent la même trajectoire et mettent à jour son temps. Pas de capture d'écran dans ce cas.
+L'entrée « Enregistrer le dernier lancer comme stuff » reprend, pour la dernière grenade lancée au clic, ta position, ton angle et le temps mesuré par le chronomètre. La fenêtre de sauvegarde s'ouvre déjà remplie (position, type de grenade, temps de vol ; la case « give » reste décochée, à toi de la cocher) : il suffit de choisir la catégorie et le nom. Le chronomètre doit être actif. Les relances avec la touche K relancent la même trajectoire et mettent à jour son temps. Pas de capture d'écran dans ce cas.
 
 ### Cadenas
 
@@ -388,6 +388,7 @@ Le bouton « Signaler un problème » du launcher (ou « Créer un rapport » da
 - **La map n'est pas détectée** : vérifie `-condebug` dans les options de lancement de CS2, ou règle `AutoDetectMap=0`.
 - **« Pas de connexion à CS2 »** : CS2 n'a pas été lancé par le menu (ou sans `-netconport`). Ferme le jeu et relance-le avec « Lancer CS2 ». En ligne de commande : `netstat -ano | findstr 2121` doit afficher `LISTENING` quand le jeu tourne.
 - **CS2 ne se lance pas depuis le menu** : vérifie que Steam est installé et connecté. En dernier recours, ajoute `-condebug -netconport 2121 -insecure` dans les options de lancement de Steam et lance le jeu toi-même.
+- **God mode : ma vie descend puis remonte** : c'est normal, le God mode active la régénération de vie (`sv_regeneration_force_on`) sans `buddha`, pour éviter la croix rouge à l'écran. Un très gros dégât d'un coup peut quand même te tuer.
 - **TP, give, God mode ou bot ne marchent plus** : ces commandes exigent `sv_cheats 1` (envoyé avant chaque commande). Vérifie que tu es dans une partie locale. Test : tape `setpos 0 0 0` dans la console.
 - **Rien ne se passe au choix d'un stuff** : même vérification (partie locale, connexion directe active).
 - **Des armes changent toutes seules** : d'anciennes versions liaient des touches du pavé numérique ; le menu les retire de `cs2_practice.cfg` au lancement. Relance CS2 depuis le menu et vérifie qu'aucun logiciel (Discord, clavier, souris) ne répète une touche.
@@ -403,6 +404,7 @@ install.bat / .ps1    installateur (dossier au choix, raccourcis, reprise de l'a
 uninstall.bat / .ps1  retire les raccourcis (tes stuffs sont conservés)
 update.bat / .ps1     mise à jour sans lancer le script
 rollback.bat          retour à la version précédente du script
+tags_officiels.txt   liste officielle des tags (identique pour tout le monde, mise à jour avec le menu)
 cs2_practice.cfg      réglages d'entraînement (copié dans le cfg de CS2 au premier lancement)
 config.example.ini    modèle de configuration (copié en config.ini)
 maps_default/         modèles de maps vides (copiés dans maps/ au premier lancement)

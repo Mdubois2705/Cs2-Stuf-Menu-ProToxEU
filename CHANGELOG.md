@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.34.4
+
+- Nettoyage du code : suppression des contrôles de noms de stuffs en double devenus inutiles (le message rouge sous le champ Nom a disparu) et protection des colonnes cachées de la liste des stuffs.
+- README mis à jour (bouton Nouvelle, case give, God mode, liste officielle des tags).
+
 ## v2.34.3
 
 - Liste officielle des tags mise à jour : ajout des groupes STEP … JUMPTHROW et STEP SLOW … JUMPTHROW.
