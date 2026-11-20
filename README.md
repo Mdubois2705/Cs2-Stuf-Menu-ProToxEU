@@ -205,7 +205,7 @@ Smoke - Site A | Smoke CT depuis T spawn | setpos -456 -2288 -163; setang -39 57
 
 L'entrée « Gérer les stuffs et les catégories » ouvre une fenêtre redimensionnable (elle se rouvre à la taille et à la place où tu l'as laissée) :
 
-- **Catégories** (à gauche) : créer, renommer, supprimer, verrouiller.
+- **Catégories** (à gauche) : créer, renommer, supprimer, verrouiller, ranger dans l'ordre voulu avec les boutons ▲ et ▼ (l'ordre est aussi celui du menu en jeu).
 - **Stuffs** (à droite) : recherche par nom ou info, colonne du temps de vol, tri par clic sur un titre de colonne, clic droit (modifier, renommer, info, cadenas, supprimer).
 - **Modifier un stuff** : double-clic (ou « Modifier… ») pour changer le type, la catégorie, le nom, le message, les **coordonnées** et les autres commandes. « Recapturer ma position actuelle » reprend ta position en jeu.
 - **Déplacer vers** : choisis une catégorie (ou tape un nouveau nom) puis « Déplacer ». Sélection multiple avec `Ctrl` ou `Maj`.

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.33.7
+
+- Gestion des stuffs : boutons ▲ et ▼ au-dessus de la liste des catégories pour les ranger dans l'ordre voulu. L'ordre est enregistré dans le fichier de la map et c'est aussi celui du menu en jeu. Une copie de secours du fichier est faite avant chaque déplacement.
+
 ## v2.33.6
 
 - Correction d'une erreur à l'ouverture de « Gestion des stuffs et des catégories » introduite en 2.33.5 (surveillance du déplacement des colonnes).

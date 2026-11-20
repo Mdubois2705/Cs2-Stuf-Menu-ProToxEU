@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.6"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.7"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -5105,6 +5105,71 @@ RenameCatInFile(path, oldCat, newCat) {
     return TransformFile(path, Fn)
 }
 
+; Déplace une catégorie d'un cran vers le haut (dir = -1) ou vers le bas (dir = 1) dans l'ordre d'affichage.
+; L'ordre est celui du fichier : on regroupe donc les lignes de chaque catégorie (avec les commentaires qui les précèdent).
+; Renvoie true si l'ordre a changé.
+MoveCatInFile(path, cat, dir) {
+    if !FileExist(path)
+        return false
+    order := ReadEntries(path)[1]
+    idx := 0
+    for k, c in order {
+        if (c = cat)
+            idx := k
+    }
+    ni := idx + dir
+    if (idx = 0 || ni < 1 || ni > order.Length)
+        return false
+    tmp := order[idx]
+    order[idx] := order[ni]
+    order[ni] := tmp
+    header := []
+    groups := Map()
+    pending := []
+    seenData := false
+    total := 0
+    src := ReadLines(path)
+    for line in src {
+        t := Trim(line)
+        if IsDataLine(t) {
+            p := StrSplit(t, "|", " `t", 4)
+            c := (p[1] = "@cat") ? ((p.Length >= 2) ? p[2] : "") : p[1]
+            if !groups.Has(c)
+                groups[c] := []
+            if !seenData {
+                for l in pending
+                    header.Push(l)
+                pending := []
+                seenData := true
+            }
+            for l in pending
+                groups[c].Push(l)
+            pending := []
+            groups[c].Push(line)
+            total += 1
+        } else {
+            pending.Push(line)
+        }
+    }
+    out := []
+    if !seenData
+        return false
+    for l in header
+        out.Push(l)
+    for c in order {
+        if groups.Has(c) {
+            for l in groups[c]
+                out.Push(l)
+        }
+    }
+    for l in pending
+        out.Push(l)
+    if (out.Length != src.Length)
+        return false   ; sécurité : on ne réécrit pas si une ligne s'est perdue
+    RewriteFile(path, out)
+    return true
+}
+
 ; Supprime une catégorie SANS supprimer ses stuffs : ils sont déplacés dans dest.
 ; Renvoie le nombre de stuffs déplacés.
 DeleteCatKeepStuffs(path, src, dest) {
@@ -5188,6 +5253,8 @@ ShowManager() {
     lvSt.ModifyCol(2, 45)
     lvSt.ModifyCol(3, 55)
     lvSt.ModifyCol(4, 150)
+    btnCatUp := d.Add("Button", "x200 y47 w34 h26", "▲")
+    btnCatDn := d.Add("Button", "x238 y47 w34 h26", "▼")
     LvSmooth(lvCat)
     LvSmooth(lvSt)
     FitLastCol(lvCat)
@@ -5375,6 +5442,21 @@ ShowManager() {
         RenameCatInFile(MapPath(), oc, nm)
         RefreshCats(nm)
         Say("Catégorie renommée : " oc " > " nm)
+    }
+
+    ; Monte ou descend la catégorie sélectionnée (l'ordre est aussi celui du menu en jeu)
+    MoveCat(dir, *) {
+        oc := SelCat()
+        if (oc = "") {
+            Say("Sélectionne une catégorie")
+            return
+        }
+        if MoveCatInFile(MapPath(), oc, dir) {
+            RefreshCats(oc)
+            Say("Catégorie déplacée : " oc)
+        } else {
+            Say(dir < 0 ? "Déjà en haut de la liste" : "Déjà en bas de la liste")
+        }
     }
 
     DelCat(*) {
@@ -5651,6 +5733,8 @@ ShowManager() {
     lvCat.OnEvent("ItemSelect", CatSelected)
     btnCatNew.OnEvent("Click", NewCat)
     btnCatRen.OnEvent("Click", RenCat)
+    btnCatUp.OnEvent("Click", MoveCat.Bind(-1))
+    btnCatDn.OnEvent("Click", MoveCat.Bind(1))
     btnCatDel.OnEvent("Click", DelCat)
     btnCatLock.OnEvent("Click", LockCat)
     btnUndo.OnEvent("Click", UndoStuff)
