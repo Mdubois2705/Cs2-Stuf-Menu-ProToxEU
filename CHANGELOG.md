@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.35.0
+
+- Nouvel onglet **Binds** dans les réglages : chacun choisit ses touches pour relancer la dernière grenade, le noclip, effacer les smokes et le kit d'armes (par défaut K, N, L, P). Le menu les envoie à CS2 tout de suite et après chaque exec ; l'ancienne touche est déliée. La touche de relance est aussi celle du chronomètre.
+- `cs2_practice.cfg` ne lie plus ces touches (le menu s'en charge). Les alias `giveall` et `killsmoke` restent dans le cfg.
+- Les fenêtres de réglages sont un peu plus larges (dix onglets).
+
 ## v2.34.4
 
 - Nettoyage du code : suppression des contrôles de noms de stuffs en double devenus inutiles (le message rouge sous le champ Nom a disparu) et protection des colonnes cachées de la liste des stuffs.

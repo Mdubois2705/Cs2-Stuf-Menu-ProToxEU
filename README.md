@@ -116,7 +116,7 @@ Une seule touche en jeu : **`F1`** ouvre le **menu principal**. Tout le reste s'
 | Gérer les stuffs et les catégories | Fenêtre de gestion |
 | Profils et partage de stuffs | Profils, export, import, sauvegardes |
 | Nouveautés | Historique des dernières versions |
-| Réglages du menu | Neuf onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Quiz, Aide |
+| Réglages du menu | Dix onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Quiz, Binds, Aide |
 | Relancer l'exec de cs2_practice | Relance le cfg d'entraînement |
 | Vérifier l'installation | Contrôle de l'installation |
 
@@ -159,7 +159,7 @@ L'entrée « Changer de map » du menu principal ouvre une liste (tes maps, plus
 
 ### Exec automatique
 
-Les réglages d'entraînement (`cs2_practice.cfg` : argent, munitions infinies, `sv_cheats`, bots, touches K / N / L / P…) se remettent à zéro à chaque chargement de map. Le menu les relance pour toi :
+Les réglages d'entraînement (`cs2_practice.cfg` : argent, munitions infinies, `sv_cheats`, bots…) se remettent à zéro à chaque chargement de map. Le menu les relance pour toi :
 
 - juste après la map chargée automatiquement par le launcher ;
 - à l'ouverture du menu des stuffs, **une fois par map détectée** (la détection demande `-condebug`) ;
@@ -215,7 +215,7 @@ L'entrée « Gérer les stuffs et les catégories » ouvre une fenêtre redimens
 
 ### Dernier lancer en stuff
 
-L'entrée « Enregistrer le dernier lancer comme stuff » reprend, pour la dernière grenade lancée au clic, ta position, ton angle et le temps mesuré par le chronomètre. La fenêtre de sauvegarde s'ouvre déjà remplie (position, type de grenade, temps de vol ; la case « give » reste décochée, à toi de la cocher) : il suffit de choisir la catégorie et le nom. Le chronomètre doit être actif. Les relances avec la touche K relancent la même trajectoire et mettent à jour son temps. Pas de capture d'écran dans ce cas.
+L'entrée « Enregistrer le dernier lancer comme stuff » reprend, pour la dernière grenade lancée au clic, ta position, ton angle et le temps mesuré par le chronomètre. La fenêtre de sauvegarde s'ouvre déjà remplie (position, type de grenade, temps de vol ; la case « give » reste décochée, à toi de la cocher) : il suffit de choisir la catégorie et le nom. Le chronomètre doit être actif. Les relances avec la touche de relance (K par défaut) relancent la même trajectoire et mettent à jour son temps. Pas de capture d'écran dans ce cas.
 
 ### Cadenas
 
@@ -259,7 +259,7 @@ Au **premier quiz**, une page te laisse choisir ces touches (clavier ou boutons 
 
 Après chaque grenade (smoke, flash, HE, molotov, incendiaire, leurre), le menu affiche le temps entre le moment où tu la **lâches** et celui où elle **explose**, par exemple `Smoke : 2,9 s`. Le panneau reste affiché en permanence, même en alt-tab (« Chrono : -- » en attente) ; le résultat s'affiche le temps choisi, puis le panneau revient à l'attente.
 
-- **Départ** : le relâchement du clic gauche, ou la touche de relance `sv_rethrow_last_grenade` (touche `K` du cfg d'entraînement ; si tu l'as changée, mets la même dans `RethrowKey`). Chaque grenade en vol garde son propre départ.
+- **Départ** : le relâchement du clic gauche, ou la touche de relance `sv_rethrow_last_grenade` (`K` par défaut ; elle se change dans Réglages > Binds). Chaque grenade en vol garde son propre départ.
 - **Fin** : la ligne `threw smokegrenade [x y z]` écrite dans `console.log` à l'explosion. Le menu active tout seul le journal du serveur (`log on`, `mp_logdetail 3`), ce qui crée aussi des fichiers dans `game\csgo\logs\` ; pour l'éviter, désactive le chronomètre.
 - **Chrono en direct** : le compteur tourne à l'écran dès le lâcher (type connu par la ligne `sv_throw_...`), puis s'arrête sur le temps final. Avec la touche de relance, il démarre avec le type de la dernière grenade vue.
 - **Précision** : environ un dixième de seconde (lecture du fichier toutes les 50 ms).
@@ -304,7 +304,7 @@ Format de `packs\index.txt` : une ligne par pack, `fichier.stuffpack | Titre | D
 
 ## Réglages
 
-« Réglages du menu » (neuf onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Quiz, Aide) :
+« Réglages du menu » (dix onglets : Menu, Couleurs, Captures, Coords, Chrono, Fenêtres, Touches, Quiz, Binds, Aide) :
 
 - Un voyant indique en direct si CS2 est connecté au menu (vert) ou non (rouge).
 - Chaque position (menu, capture, coordonnées, chrono) a un bouton **Placer avec la souris** : tu cliques à l'endroit voulu à l'écran.
@@ -320,6 +320,10 @@ Le menu demande `getpos` au jeu par la connexion directe et lit la réponse dans
 ### Touches à l'écran
 
 « Réglages du menu » > onglet **Touches** : un petit overlay affiche en direct les touches pressées (Maj, Ctrl, Espace, **Z Q S D** et les clics de la souris), affiché en permanence, même en alt-tab (comme les coordonnées). Les touches s'allument à la couleur d'accent des fenêtres. Réglages : activer, taille, opacité, position (à droite au milieu de l'écran par défaut, ou libre avec « Placer avec la souris »). Il suit les couleurs, la police, les coins et le liseré du menu. Équivalents dans `config.ini` : `KeysOn` (désactivé par défaut), `KeysHideOut` (1 = masquer hors de CS2), `KeysSize`, `KeysOpacity`, `KeysAuto`, `KeysX`, `KeysY`. Il lit seulement l'état des touches de Windows (rien n'est lu dans le jeu). L'overlay **reprend tes touches de CS2** (fichier `cs2_user_keys_0_slot0.vcfg` de ton dossier Steam `userdata`) : déplacement, marche, accroupi, saut et tir. Par exemple, avec la marche sur MOUSE4, la case de gauche affiche « SOURIS 4 » et s'allume quand tu appuies sur ce bouton. Si tu changes tes touches dans CS2, clique sur « Relire les touches ». Décoche « Utiliser les touches de CS2 » (`KeysFromGame=0`) pour garder les touches par défaut (Maj, Ctrl, Espace, ZQSD). CS2 note les touches par leur position sur le clavier : le menu suit cette position, donc avec un clavier AZERTY les cases affichent Z, Q, S, D (et W, A, S, D avec un QWERTY). Les changements de l'onglet s'appliquent tout de suite.
+
+### Touches d'entraînement (Binds)
+
+Onglet **Binds** : le menu lie pour toi quatre actions à des touches de CS2. Par défaut : `K` relancer la dernière grenade (`sv_rethrow_last_grenade`), `N` noclip, `L` effacer les smokes, `P` kit d'armes et de grenades. Clique sur une action, puis appuie sur la touche voulue (lettre, chiffre, F1 à F12, Espace, Tab ou bouton de souris) ; « Aucune » retire la touche, « Touches par défaut » remet les quatre. Deux actions ne peuvent pas avoir la même touche. Le changement est envoyé tout de suite à CS2 s'il est connecté, puis à chaque exec du cfg d'entraînement ; l'ancienne touche est déliée. La touche de relance sert aussi au chronomètre (il démarre quand tu l'appuies). Les touches sont repérées par leur position, comme dans CS2 : avec un clavier AZERTY, la touche affichée est celle qui est écrite sur ton clavier. Équivalents dans `config.ini` : `RethrowKey`, `BindNoclip`, `BindKill`, `BindGive` (noms de touches CS2 : `k`, `f5`, `space`, `mouse4`… ; vide = aucune).
 
 ### Style des fenêtres
 

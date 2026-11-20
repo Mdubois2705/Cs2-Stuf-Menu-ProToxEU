@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.34.4"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.35.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -85,6 +85,15 @@ KeysAuto := (IniRead(IniFile, "Settings", "KeysAuto", "1") = "1")   ; 1 = à dro
 KeysX := ToInt(IniRead(IniFile, "Settings", "KeysX", "1500"), 1500)
 KeysY := ToInt(IniRead(IniFile, "Settings", "KeysY", "900"), 900)
 RethrowKey := Trim(IniRead(IniFile, "Settings", "RethrowKey", "k"))   ; touche liée à sv_rethrow_last_grenade (chrono : départ de la relance)
+; Touches des actions d'entraînement dans CS2 (noms de touches CS2 : lettre, chiffre, f1..f12, space, tab, mouse3..mouse5 ; vide = aucune)
+BindActs := [["rethrow", "Relancer la dernière grenade", "sv_rethrow_last_grenade", "k"]
+    , ["noclip", "Noclip (traverser les murs)", "noclip", "n"]
+    , ["kill", "Effacer les smokes", "killsmoke", "l"]
+    , ["give", "Kit d'armes et de grenades", "giveall", "p"]]
+BindKeys := Map("rethrow", StrLower(RethrowKey)
+    , "noclip", StrLower(Trim(IniRead(IniFile, "Settings", "BindNoclip", "n")))
+    , "kill", StrLower(Trim(IniRead(IniFile, "Settings", "BindKill", "l")))
+    , "give", StrLower(Trim(IniRead(IniFile, "Settings", "BindGive", "p"))))
 MenuSound := (IniRead(IniFile, "Settings", "MenuSound", "1") = "1")   ; petits sons quand on défile, avance ou recule dans le menu
 MenuSoundVol := Max(10, Min(100, ToInt(IniRead(IniFile, "Settings", "MenuSoundVol", "25"), 25)))
 snd := Map()   ; sons du menu en mémoire (WAV)
@@ -1963,6 +1972,199 @@ QuizBind() {
         try {
             Hotkey("~" k, QuizKeyAct.Bind(a), "On")
             quizBound[a] := k
+        }
+    }
+    HotIf()
+}
+
+; ---------- Touches d'entraînement (noclip, rethrow...) ----------
+; Numéro de scancode d'une touche CS2 (CS2 note les touches par leur position sur un clavier QWERTY), 0 si ce n'est pas une touche du clavier
+CsKeySc(k) {
+    k := StrLower(k)
+    if (StrLen(k) = 1 && InStr("abcdefghijklmnopqrstuvwxyz1234567890", k))
+        return CsScan(StrUpper(k))
+    if RegExMatch(k, "^f(\d+)$", &m) {
+        n := Integer(m[1])
+        if (n >= 1 && n <= 10)
+            return 58 + n
+        if (n = 11)
+            return 87
+        if (n = 12)
+            return 88
+    }
+    if (k = "space")
+        return 57
+    if (k = "tab")
+        return 15
+    return 0
+}
+
+; Inverse : nom CS2 de la touche qui a ce scancode ("" si non gérée)
+CsKeyOfSc(sc) {
+    for ch in StrSplit("abcdefghijklmnopqrstuvwxyz1234567890") {
+        if (CsScan(StrUpper(ch)) = sc)
+            return ch
+    }
+    if (sc >= 59 && sc <= 68)
+        return "f" (sc - 58)
+    if (sc = 87)
+        return "f11"
+    if (sc = 88)
+        return "f12"
+    if (sc = 57)
+        return "space"
+    if (sc = 15)
+        return "tab"
+    return ""
+}
+
+; Texte affiché pour une touche CS2 : la touche telle qu'elle est écrite sur TON clavier
+CsKeyLabel(k) {
+    if (k = "")
+        return "(aucune)"
+    if (k = "mouse3")
+        return "Souris 3 (molette)"
+    if (k = "mouse4")
+        return "Souris 4"
+    if (k = "mouse5")
+        return "Souris 5"
+    sc := CsKeySc(k)
+    if (sc = 57)
+        return "Espace"
+    if sc {
+        nm := GetKeyName("sc" Format("{:03X}", sc))
+        return (nm != "") ? StrUpper(nm) : StrUpper(k)
+    }
+    return StrUpper(k)
+}
+
+; Nom AutoHotkey pour écouter la touche (par position, donc identique au réglage de CS2)
+CsKeyHotkey(k) {
+    if (k = "mouse3")
+        return "MButton"
+    if (k = "mouse4")
+        return "XButton1"
+    if (k = "mouse5")
+        return "XButton2"
+    sc := CsKeySc(k)
+    return sc ? "SC" Format("{:03X}", sc) : k
+}
+
+; Attend l'appui sur une touche : renvoie son nom CS2 ("" si annulé ou touche non gérée)
+CaptureCsKey() {
+    scs := []
+    for r in [[2, 11], [16, 25], [30, 38], [44, 50], [59, 68], [87, 88], [57, 57], [15, 15]] {
+        sc := r[1]
+        while (sc <= r[2]) {
+            scs.Push(sc)
+            sc += 1
+        }
+    }
+    ToolTip("Appuie sur la touche voulue... (Échap pour annuler)")
+    KeyWait("LButton")
+    t0 := A_TickCount
+    res := ""
+    while (A_TickCount - t0 < 15000) {
+        if GetKeyState("Escape", "P")
+            break
+        for nm, cs in Map("MButton", "mouse3", "XButton1", "mouse4", "XButton2", "mouse5") {
+            if GetKeyState(nm, "P")
+                res := cs
+        }
+        if (res = "") {
+            for sc in scs {
+                if GetKeyState("sc" Format("{:03X}", sc), "P") {
+                    res := CsKeyOfSc(sc)
+                    break
+                }
+            }
+        }
+        if (res != "")
+            break
+        Sleep(15)
+    }
+    ToolTip()
+    Loop 60 {
+        if !GetKeyState("Escape", "P") && !GetKeyState("LButton", "P")
+            break
+        Sleep(15)
+    }
+    Sleep(150)
+    return res
+}
+
+; Enregistre la touche d'une action
+BindSet(id, k) {
+    global RethrowKey
+    BindKeys[id] := k
+    if (id = "rethrow") {
+        RethrowKey := k
+        IniWrite(k, IniFile, "Settings", "RethrowKey")
+        SetRethrowHotkey()
+    } else if (id = "noclip") {
+        IniWrite(k, IniFile, "Settings", "BindNoclip")
+    } else if (id = "kill") {
+        IniWrite(k, IniFile, "Settings", "BindKill")
+    } else if (id = "give") {
+        IniWrite(k, IniFile, "Settings", "BindGive")
+    }
+}
+
+; Envoie les touches à CS2 (bind) et retire les anciennes. Renvoie true si CS2 était connecté.
+ApplyBinds() {
+    cur := Map()
+    cmds := ""
+    for a in BindActs {
+        k := BindKeys[a[1]]
+        if (k != "") {
+            cmds .= (cmds = "" ? "" : "; ") 'bind "' k '" "' a[3] '"'
+            cur[k] := 1
+        }
+    }
+    old := Map()
+    for k in StrSplit(IniRead(IniFile, "State", "BindsApplied", "k,n,l,p"), ",")
+        old[k] := 1
+    for k in ["k", "n", "l", "p"]   ; anciennes touches du cfg : une ancienne copie du cfg peut encore les lier
+        old[k] := 1
+    uns := ""
+    for k in old {
+        if (k != "" && !cur.Has(k))
+            uns .= (uns = "" ? "" : "; ") 'unbind "' k '"'
+    }
+    if !(ProcessExist("cs2.exe") && NetOpen())
+        return false
+    full := uns
+    if (cmds != "")
+        full .= (full = "" ? "" : "; ") cmds
+    if (full = "")
+        return true
+    RunCmd(full)
+    keys := ""
+    for k in cur
+        keys .= (keys = "" ? "" : ",") k
+    IniWrite(keys, IniFile, "State", "BindsApplied")
+    return true
+}
+
+TmRethrowCb(*) {
+    TmRethrow()
+}
+
+; (Re)crée l'écoute de la touche de relance pour le chronomètre
+SetRethrowHotkey() {
+    static cur := ""
+    HotIf(InGame)
+    if (cur != "") {
+        try Hotkey(cur, "Off")
+        cur := ""
+    }
+    if (RethrowKey != "") {
+        hk := "~" CsKeyHotkey(RethrowKey)
+        try {
+            Hotkey(hk, TmRethrowCb, "On")
+            cur := hk
+        } catch {
+            MsgBox("La touche « " RethrowKey " » (RethrowKey) n'est pas valide : elle est ignorée.", "Menu Stuf", 0x40030)
         }
     }
     HotIf()
@@ -4018,7 +4220,7 @@ ShowSettings() {
 
     d := WinNew("Réglages du menu", "+AlwaysOnTop")
     pv := Map("g", "")
-    tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Touches", "Quiz", "Aide"], 6, 8, 620)
+    tabs := WinTabs(d, ["Menu", "Couleurs", "Captures", "Coords", "Chrono", "Fenêtres", "Touches", "Quiz", "Binds", "Aide"], 6, 8, 700)
     tabs.UseTab(1)
     y := 44
     ty := y + 4
@@ -4398,8 +4600,65 @@ ShowSettings() {
         IniWrite(QuizTol, IniFile, "Settings", "QuizTol")
     }
 
-    ; ----- Onglet Aide -----
+    ; ----- Onglet Binds -----
     tabs.UseTab(9)
+    y := 44
+    d.Add("Text", "x22 y" y " w640 r3", "Touches des actions d'entraînement dans CS2. Clique sur une touche, puis appuie sur celle que tu veux (lettre, chiffre, F1 à F12, Espace, Tab ou bouton de souris). Elles s'appliquent tout de suite si CS2 est connecté, puis à chaque exec du cfg d'entraînement.")
+    y += 64
+    bindBtns := Map()
+    for a in BindActs {
+        d.Add("Text", "x22 y" (y + 5) " w230", a[2])
+        bb := d.Add("Button", "x256 y" y " w190", CsKeyLabel(BindKeys[a[1]]))
+        bc := d.Add("Button", "x452 y" y " w110", "Aucune")
+        bindBtns[a[1]] := bb
+        bb.OnEvent("Click", BindPick.Bind(a[1]))
+        bc.OnEvent("Click", BindClear.Bind(a[1]))
+        y += 38
+    }
+    bBindDef := d.Add("Button", "x256 y" y " w190", "Touches par défaut")
+    y += 50
+    d.SetFont("s9 c8A8F96")
+    d.Add("Text", "x22 y" y " w640 r4", "Les touches sont repérées par leur position, comme dans CS2 : sur un clavier AZERTY, la touche affichée est celle qui est écrite sur ton clavier. « Noclip », « Effacer les smokes » et « Kit d'armes » sont de simples touches liées dans CS2. « Relancer la dernière grenade » sert aussi au chronomètre (il démarre quand tu l'appuies).")
+    d.SetFont("s" WinSz() " c" WinPal()["txt"])
+    y += 84
+    yEnd9 := y
+    BindPick(id, *) {
+        k := CaptureCsKey()
+        if (k = "")
+            return
+        for a in BindActs {
+            if (a[1] != id && BindKeys[a[1]] = k) {
+                ToolTip("Cette touche est déjà utilisée par : " a[2])
+                SetTimer(() => ToolTip(), -2500)
+                return
+            }
+        }
+        BindSet(id, k)
+        bindBtns[id].Text := CsKeyLabel(k)
+        BindApplyTip()
+    }
+    BindClear(id, *) {
+        BindSet(id, "")
+        bindBtns[id].Text := CsKeyLabel("")
+        BindApplyTip()
+    }
+    BindDefaults(*) {
+        for a in BindActs {
+            BindSet(a[1], a[4])
+            bindBtns[a[1]].Text := CsKeyLabel(a[4])
+        }
+        BindApplyTip()
+    }
+    BindApplyTip() {
+        if !ApplyBinds() {
+            ToolTip("CS2 n'est pas connecté : les touches seront appliquées au prochain exec du cfg")
+            SetTimer(() => ToolTip(), -2500)
+        }
+    }
+    bBindDef.OnEvent("Click", BindDefaults)
+
+    ; ----- Onglet Aide -----
+    tabs.UseTab(10)
     y := 44
     btnChkS := d.Add("Button", "x22 y" y " w440", "Vérifier l'installation")
     y += 44
@@ -4411,18 +4670,18 @@ ShowSettings() {
     d.Add("Text", "x22 y" y " w440 r6", "Vérifier l'installation : contrôle le dossier cfg, console.log et la connexion directe.`n`nCopier le diagnostic : met dans le presse-papiers un rapport sans données personnelles, à coller quand tu demandes de l'aide.`n`nNettoyer : supprime les captures et temps de vol qui ne correspondent plus à aucun stuff.")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
     y += 120
-    yEnd9 := y
+    yEnd10 := y
     tabs.UseTab(0)
-    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4, yEnd5, yEnd6, yEnd7, yEnd8, yEnd9) + 6
-    tabs.Move(6, 6, 620, tabH)
+    tabH := Max(yEnd1, yEnd2, yEnd3, yEnd4, yEnd5, yEnd6, yEnd7, yEnd8, yEnd9, yEnd10) + 6
+    tabs.Move(6, 6, 700, tabH)
     y := tabH + 18
     d.SetFont("s" WinSz() " bold")
-    ledTx := d.Add("Text", "x14 y" y " w560", "")
+    ledTx := d.Add("Text", "x14 y" y " w640", "")
     d.SetFont("s" WinSz() " norm")
     y += 28
     btnReset := d.Add("Button", "x12 y" y " w150", "Réinitialiser")
     btnCancel := d.Add("Button", "x+8 yp w150", "Annuler")
-    btnSave := d.Add("Button", "x476 yp w150 Default", "Enregistrer")
+    btnSave := d.Add("Button", "x556 yp w150 Default", "Enregistrer")
 
     LedTick() {
         if !ProcessExist("cs2.exe") {
@@ -4616,6 +4875,9 @@ ShowSettings() {
             slKO.Value := 220
             ddKP.Choose(1)
             KSync()
+            return
+        } else if (tv = 9) {
+            BindDefaults()
             return
         } else {
             return
@@ -4860,6 +5122,7 @@ ShowSettings() {
 RunPractice() {
     global tmSentSock
     WriteAndExec("exec " PracticeCfg)
+    ApplyBinds()   ; touches d'entraînement choisies dans les réglages
     tmSentSock := 0   ; le journal du serveur est réactivé au prochain passage du chronomètre
     Sleep(400)
 }
@@ -8682,7 +8945,7 @@ AutoBackup() {
 ; =====================================================================
 ; Réglages emportés avec le profil (jamais les chemins de ce PC)
 ProfSettingKeys() {
-    return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
+    return ["MenuKey", "FavKey", "LockKey", "AddKey", "RethrowKey", "BindNoclip", "BindKill", "BindGive", "TpZOffset", "CloseAfterRun", "AutoDetectMap", "AutoExec"
         , "Shot", "ShotSize", "ShotZoom", "ShotPos", "ShotCorner", "ShotX", "ShotY"
         , "HudAtStart", "HudAuto", "HudX", "HudY", "TimerOn", "TimerAuto", "TimerX", "TimerY", "TimerDur", "FlightAsk", "TimerHideOut", "KeysHideOut", "MenuSound", "MenuSoundVol", "QuizNoRepeat", "QuizHintShot", "QuizMode", "QuizZoneOn", "QuizZoneSize", "QuizFovPct", "QuizScoreOn", "QuizTol", "QuizKeyZone", "QuizKeyNext", "QuizKeyPrev", "QuizKeyHint", "QuizKeyAns", "KeysOn", "KeysFromGame", "KeysSize", "KeysOpacity", "KeysAuto", "KeysX", "KeysY"]
 }
@@ -9865,8 +10128,7 @@ SafeHotkey(key, fn) {
 HotIf(InGame)
 SafeHotkey(MenuKey, (*) => Toggle())
 Hotkey("~LButton Up", (*) => (TmClick(), QuizThrow()))   ; chronomètre : moment où la grenade est lâchée
-if (RethrowKey != "")
-    SafeHotkey("~" RethrowKey, (*) => TmRethrow())   ; chronomètre : relance avec la touche de sv_rethrow_last_grenade
+SetRethrowHotkey()   ; chronomètre : relance avec la touche de sv_rethrow_last_grenade
 
 HotIf(MenuActive)
 Hotkey("Up", (*) => Move(-1))
