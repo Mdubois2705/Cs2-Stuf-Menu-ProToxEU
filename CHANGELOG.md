@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.34.2
+
+- Tags : les lignes vides de `tags_officiels.txt` deviennent des espaces entre les groupes dans la liste du menu.
+- Au premier lancement, les anciens tags libres créés avant la liste officielle sont retirés des stuffs (seuls les tags de la liste, avec ou sans touche, sont conservés). Une copie des maps est faite avant dans `data\backup\avant_tags_<profil>`.
+
 ## v2.34.1
 
 - Tags : la liste est maintenant officielle et la même pour tout le monde (`tags_officiels.txt`, mis à jour automatiquement). Les joueurs choisissent dans la liste et ne peuvent plus en créer ; seul l'auteur modifie le fichier.

@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.34.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.34.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3052,6 +3052,7 @@ InfoDisp(raw) {
 }
 
 ; Tags proposés : la liste officielle (tags_officiels.txt, fournie avec le menu), dans l'ordre du fichier.
+; Une ligne vide du fichier devient une ligne vide dans la liste (le menu l'ignore si on la choisit).
 ; Les joueurs ne peuvent pas en créer : seul l'auteur modifie ce fichier.
 AllTags() {
     seen := Map()
@@ -3061,7 +3062,13 @@ AllTags() {
         try {
             for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
                 ln := Trim(ln)
-                if (ln = "" || SubStr(ln, 1, 2) = "//" || SubStr(ln, 1, 1) = "#")
+                if (ln = "") {
+                    ; ligne vide du fichier = espace entre deux groupes de tags dans la liste
+                    if (out.Length > 0 && out[out.Length] != " ")
+                        out.Push(" ")
+                    continue
+                }
+                if (SubStr(ln, 1, 2) = "//" || SubStr(ln, 1, 1) = "#")
                     continue
                 t := CleanTag(ln)
                 if (t != "" && !seen.Has(StrLower(t))) {
@@ -3069,6 +3076,8 @@ AllTags() {
                     out.Push(t)
                 }
             }
+            if (out.Length > 0 && out[out.Length] = " ")
+                out.Pop()
         }
     }
     return out
@@ -9943,7 +9952,65 @@ QuizKeysLoad()
 QuizBind()
 SetTimer(TmOutTick, 300)
 ; Après une mise à jour : fenêtre des nouveautés (première installation : la dernière version seulement)
+; Ce tag fait-il partie de la liste officielle ? (avec ou sans touche insérée avant le dernier mot)
+IsOfficialTag(t, offSet) {
+    tl := StrLower(CleanTag(t))
+    if offSet.Has(tl)
+        return true
+    parts := StrSplit(tl, " ")
+    n := parts.Length
+    if (n < 2)
+        return false
+    base := ""
+    for i, w in parts {
+        if (i = n - 1)
+            continue
+        base .= (base = "" ? "" : " ") w
+    }
+    return offSet.Has(base)
+}
+
+; Une seule fois : retire des stuffs les anciens tags libres créés avant la liste officielle (ceux qui ne sont pas dans la liste).
+; Une copie des maps de chaque profil est faite avant, dans data\backup\avant_tags_<profil>.
+CleanOldTags() {
+    if (IniRead(IniFile, "State", "TagsClean1", "") = "1")
+        return
+    offSet := Map()
+    for t in AllTags() {
+        if (Trim(t) != "")
+            offSet[StrLower(t)] := 1
+    }
+    if (offSet.Count = 0)
+        return   ; pas de liste officielle (fichier absent) : on ne touche à rien
+    CleanFn(p, line) {
+        if (p[1] = "@cat" || p.Length < 4)
+            return line
+        sp := SplitInfo(p[4])
+        if (sp[2] = "")
+            return line
+        tgAll := TagList(sp[2])
+        keep := []
+        for tg in tgAll {
+            if IsOfficialTag(tg, offSet)
+                keep.Push(tg)
+        }
+        if (keep.Length = tgAll.Length)
+            return line
+        return BuildLine(p[1], p[2], p[3], JoinInfo(sp[1], TagsToStr(keep)))
+    }
+    for pn in ListProfiles() {
+        dir := ProfMaps(pn)
+        if !DirExist(dir)
+            continue
+        try DirCopy(dir, A_ScriptDir "\data\backup\avant_tags_" pn, 1)
+        Loop Files dir "\*.txt" {
+            try TransformFile(A_LoopFileFullPath, CleanFn)
+        }
+    }
+    IniWrite("1", IniFile, "State", "TagsClean1")
+}
 FixGodMode()
+CleanOldTags()
 lastSeen := IniRead(IniFile, "State", "LastSeenVersion", "")
 if (lastSeen != APP_VERSION) {
     IniWrite(APP_VERSION, IniFile, "State", "LastSeenVersion")
