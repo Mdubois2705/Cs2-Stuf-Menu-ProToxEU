@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.11"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.12"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3522,7 +3522,7 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
         for ptT in Types {
             if (ptT = pt) {
                 ddType.Choose(ptT)
-                chkGive.Value := (GiveMap.Get(ptT, "") != "") ? 1 : 0
+                chkGive.Value := 0   ; la case « give » reste décochée par défaut
             }
         }
     }

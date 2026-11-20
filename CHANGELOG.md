@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.33.12
+
+- « Enregistrer le dernier lancer comme stuff » : la case « Donner la grenade du type choisi (give) » est maintenant décochée par défaut.
+
 ## v2.33.11
 
 - God mode : il n'utilise plus `buddha` (qui affichait une croix rouge à l'écran dès la première blessure). Il active seulement la régénération de vie (`sv_regeneration_force_on 1`) et coupe `buddha` s'il était resté actif. La ligne est mise à jour automatiquement dans `maps\_commun.txt` de chaque profil.
