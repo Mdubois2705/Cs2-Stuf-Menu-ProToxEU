@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.33.8
+
+- Gestion des stuffs : boutons ▲ et ▼ à côté de la recherche pour ranger les stuffs dans leur catégorie (l'ordre est aussi celui du menu en jeu).
+- Plusieurs stuffs peuvent maintenant porter le même nom, même dans la même catégorie. Renommer, modifier, changer l'info, déplacer et supprimer agissent sur le stuff choisi et pas sur ses homonymes. Favoris, cadenas et récents se basent sur le nom : deux stuffs de même nom partagent ces réglages. Les noms de catégories restent uniques.
+
 ## v2.33.7
 
 - Gestion des stuffs : boutons ▲ et ▼ au-dessus de la liste des catégories pour les ranger dans l'ordre voulu. L'ordre est enregistré dans le fichier de la map et c'est aussi celui du menu en jeu. Une copie de secours du fichier est faite avant chaque déplacement.

@@ -176,9 +176,9 @@ Chaque commande du menu envoie aussi `sv_cheats 1` d'abord, donc les stuffs, le 
 
 ### Ajouter des stuffs
 
-**Noms uniques** : dans une map, deux stuffs ne peuvent pas porter le même nom, même dans des catégories différentes (les majuscules ne comptent pas). Deux catégories non plus. Le menu refuse l'enregistrement, le renommage ou le déplacement qui créerait un doublon.
+**Noms** : plusieurs stuffs peuvent porter le même nom (même dans la même catégorie). Les favoris, le cadenas et les récents se basent sur le nom : deux stuffs de même nom partagent donc ces réglages. Deux catégories ne peuvent pas porter le même nom (les majuscules ne comptent pas) : le menu refuse la création ou le renommage qui créerait un doublon de catégorie.
 
-**Depuis le jeu** : place-toi au bon endroit, vise, ouvre le menu (`F1`) et choisis « Sauvegarder la position actuelle », puis remplis la map, le type, la catégorie, le nom et le message du chat. La position est dans une zone « Détails : position » repliable (ouverte si elle n'a pas pu être lue). Un message rouge sous le nom signale un nom déjà pris.
+**Depuis le jeu** : place-toi au bon endroit, vise, ouvre le menu (`F1`) et choisis « Sauvegarder la position actuelle », puis remplis la map, le type, la catégorie, le nom et le message du chat. La position est dans une zone « Détails : position » repliable (ouverte si elle n'a pas pu être lue).
 
 - **Catégorie** : la liste propose les catégories de la map ; tape quelques lettres pour la filtrer. Pour en créer une, utilise le bouton **+** : elle est créée avec exactement le nom tapé.
 - **Tags** : choisis-en un ou tape-en un nouveau, puis **+** pour l'ajouter (les tags sont gardés dans `data\tags.txt`). **-** retire un tag, **→ Info** recopie les tags dans le message du chat. Les tags s'affichent sous l'info, se cherchent dans la recherche rapide (`#facile` ou `facile`), se modifient dans « Modifier le stuff » et sont inclus dans l'export.
@@ -206,7 +206,7 @@ Smoke - Site A | Smoke CT depuis T spawn | setpos -456 -2288 -163; setang -39 57
 L'entrée « Gérer les stuffs et les catégories » ouvre une fenêtre redimensionnable (elle se rouvre à la taille et à la place où tu l'as laissée) :
 
 - **Catégories** (à gauche) : créer, renommer, supprimer, verrouiller, ranger dans l'ordre voulu avec les boutons ▲ et ▼ (l'ordre est aussi celui du menu en jeu).
-- **Stuffs** (à droite) : recherche par nom ou info, colonne du temps de vol, tri par clic sur un titre de colonne, clic droit (modifier, renommer, info, cadenas, supprimer).
+- **Stuffs** (à droite) : recherche par nom ou info, colonne du temps de vol, tri par clic sur un titre de colonne, boutons ▲ et ▼ pour ranger les stuffs dans la catégorie (recherche vidée), clic droit (modifier, renommer, info, cadenas, supprimer).
 - **Modifier un stuff** : double-clic (ou « Modifier… ») pour changer le type, la catégorie, le nom, le message, les **coordonnées** et les autres commandes. « Recapturer ma position actuelle » reprend ta position en jeu.
 - **Déplacer vers** : choisis une catégorie (ou tape un nouveau nom) puis « Déplacer ». Sélection multiple avec `Ctrl` ou `Maj`.
 - La liste « Map » permet de choisir la map, ou « Communs (toutes les maps) » pour gérer `maps/_commun.txt`.

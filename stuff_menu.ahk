@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.7"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.33.8"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3140,10 +3140,11 @@ AppendLine(path, line) {
     FileAppend(prefix line "`n", path, "UTF-8-RAW")
 }
 
-; Noms uniques : un nom de stuff ne peut exister qu'une fois par map (toutes catégories, « communs » compris)
-; et un nom de catégorie qu'une fois par map, sans tenir compte des majuscules.
+; Noms : plusieurs stuffs peuvent avoir le même nom ; un nom de catégorie, lui, ne peut exister qu'une fois par map
+; (« communs » compris), sans tenir compte des majuscules.
 ; Renvoie la catégorie du stuff qui porte déjà ce nom, "" sinon. exCat / exName : le stuff en cours de modification (ignoré).
 StuffNameTaken(path, name, exCat := "", exName := "") {
+    return ""   ; plusieurs stuffs peuvent porter le même nom (seuls les noms de catégories restent uniques)
     nl := StrLower(Trim(name))
     files := [path]
     common := MapsDir "\_commun.txt"
@@ -3586,19 +3587,24 @@ IsDataLine(t) {
     return !(t = "" || SubStr(t, 1, 1) = "#" || SubStr(t, 1, 2) = "//")
 }
 
-DeleteLineFrom(path, cat, name) {
+; occ : numéro du stuff parmi ceux qui portent le même nom dans la catégorie (1, 2...) ; 0 = le premier trouvé
+DeleteLineFrom(path, cat, name, occ := 0) {
     if !FileExist(path)
         return false
     keep := []
     removed := false
+    seen := 0
     for line in ReadLines(path) {
         t := Trim(line)
         if (!removed && IsDataLine(t)) {
             p := StrSplit(t, "|", " `t", 4)
             if (p.Length >= 3 && p[1] = cat && p[2] = name) {
-                removed := true
-                gone := p
-                continue
+                seen += 1
+                if (occ <= 0 || seen = occ) {
+                    removed := true
+                    gone := p
+                    continue
+                }
             }
         }
         keep.Push(line)
@@ -5058,15 +5064,20 @@ EnsureCatDeclared(path, cat) {
     AppendLine(path, "@cat | " cat)
 }
 
-MoveStuffsInFile(path, src, names, dest) {
-    nameSet := Map()
-    for nm in names
-        nameSet[nm] := 1
+; sel : liste de [nom, numéro d'occurrence] (voir DeleteLineFrom)
+MoveStuffsInFile(path, src, sel, dest) {
+    want := Map()
+    for it in sel
+        want[it[1] "|" it[2]] := 1
+    seen := Map()
     cnt := Map("n", 0)
     Fn(p, line) {
-        if (p[1] != "@cat" && p.Length >= 3 && p[1] = src && nameSet.Has(p[2])) {
-            cnt["n"] += 1
-            return BuildLine(dest, p[2], p[3], (p.Length >= 4) ? p[4] : "")
+        if (p[1] != "@cat" && p.Length >= 3 && p[1] = src) {
+            seen[p[2]] := seen.Get(p[2], 0) + 1
+            if want.Has(p[2] "|" seen[p[2]]) {
+                cnt["n"] += 1
+                return BuildLine(dest, p[2], p[3], (p.Length >= 4) ? p[4] : "")
+            }
         }
         return line
     }
@@ -5074,20 +5085,28 @@ MoveStuffsInFile(path, src, names, dest) {
     return cnt["n"]
 }
 
-RenameStuffInFile(path, cat, oldName, newName) {
+RenameStuffInFile(path, cat, oldName, newName, occ := 0) {
+    seen := Map("n", 0)
     Fn(p, line) {
-        if (p[1] != "@cat" && p.Length >= 3 && p[1] = cat && p[2] = oldName)
-            return BuildLine(cat, newName, p[3], (p.Length >= 4) ? p[4] : "")
+        if (p[1] != "@cat" && p.Length >= 3 && p[1] = cat && p[2] = oldName) {
+            seen["n"] += 1
+            if (occ <= 0 || seen["n"] = occ)
+                return BuildLine(cat, newName, p[3], (p.Length >= 4) ? p[4] : "")
+        }
         return line
     }
     return TransformFile(path, Fn)
 }
 
-SetInfoInFile(path, cat, name, info) {
+SetInfoInFile(path, cat, name, info, occ := 0) {
+    seen := Map("n", 0)
     Fn(p, line) {
         if (p[1] != "@cat" && p.Length >= 3 && p[1] = cat && p[2] = name) {
-            old := (p.Length >= 4) ? p[4] : ""
-            return BuildLine(cat, name, p[3], JoinInfo(info, SplitInfo(old)[2]))
+            seen["n"] += 1
+            if (occ <= 0 || seen["n"] = occ) {
+                old := (p.Length >= 4) ? p[4] : ""
+                return BuildLine(cat, name, p[3], JoinInfo(info, SplitInfo(old)[2]))
+            }
         }
         return line
     }
@@ -5170,6 +5189,33 @@ MoveCatInFile(path, cat, dir) {
     return true
 }
 
+; Déplace un stuff d'un cran vers le haut (dir = -1) ou le bas (dir = 1) dans sa catégorie.
+; pos = position du stuff parmi ceux de la catégorie (1 = premier). Renvoie la nouvelle position, 0 si rien n'a changé.
+MoveStuffPosInFile(path, cat, pos, dir) {
+    if !FileExist(path)
+        return 0
+    src := ReadLines(path)
+    idxs := []
+    for i, line in src {
+        t := Trim(line)
+        if !IsDataLine(t)
+            continue
+        p := StrSplit(t, "|", " `t", 4)
+        if (p[1] != "@cat" && p.Length >= 3 && p[1] = cat)
+            idxs.Push(i)
+    }
+    np := pos + dir
+    if (pos < 1 || pos > idxs.Length || np < 1 || np > idxs.Length)
+        return 0
+    a := idxs[pos]
+    b := idxs[np]
+    tmp := src[a]
+    src[a] := src[b]
+    src[b] := tmp
+    RewriteFile(path, src)
+    return np
+}
+
 ; Supprime une catégorie SANS supprimer ses stuffs : ils sont déplacés dans dest.
 ; Renvoie le nombre de stuffs déplacés.
 DeleteCatKeepStuffs(path, src, dest) {
@@ -5242,10 +5288,12 @@ ShowManager() {
     ddMap := d.Add("DropDownList", "x64 y12 w320 Choose" selMap, labels)
     d.Add("Text", "x12 y54 w260", "Catégories")
     d.Add("Text", "x290 y54 w170", "Stuffs de la catégorie")
-    edFind := d.Add("Edit", "x460 y50 w300")
+    edFind := d.Add("Edit", "x460 y50 w230")
+    btnStUp := d.Add("Button", "x694 y47 w32 h26", "▲")
+    btnStDn := d.Add("Button", "x728 y47 w32 h26", "▼")
     SendMessage(0x1501, 1, StrPtr("Rechercher un stuff..."), edFind)   ; texte grisé quand le champ est vide
     lvCat := d.Add("ListView", "x12 y78 w260 r14 -Multi", ["Catégorie", "Stuffs", "Cad."])
-    lvSt := d.Add("ListView", "x290 y78 w470 r14", ["Nom", "Cad.", "Vol", "Info"])
+    lvSt := d.Add("ListView", "x290 y78 w470 r14", ["Nom", "Cad.", "Vol", "Info", "N°", "Pos"])
     lvCat.ModifyCol(1, 140)
     lvCat.ModifyCol(2, 50)
     lvCat.ModifyCol(3, 45)
@@ -5253,12 +5301,14 @@ ShowManager() {
     lvSt.ModifyCol(2, 45)
     lvSt.ModifyCol(3, 55)
     lvSt.ModifyCol(4, 150)
+    lvSt.ModifyCol(5, 0)   ; colonnes cachées : numéro parmi les stuffs de même nom, position dans la catégorie
+    lvSt.ModifyCol(6, 0)
     btnCatUp := d.Add("Button", "x200 y47 w34 h26", "▲")
     btnCatDn := d.Add("Button", "x238 y47 w34 h26", "▼")
     LvSmooth(lvCat)
     LvSmooth(lvSt)
     FitLastCol(lvCat)
-    FitLastCol(lvSt)
+    FitLastCol(lvSt, 4)
     lvCat.GetPos(&lx, &ly, &lw, &lh)
     row1 := ly + lh + 8
     row2 := row1 + 34
@@ -5310,23 +5360,69 @@ ShowManager() {
             out.Push(lvSt.GetText(r, 1))
         return out
     }
+    ; Lignes sélectionnées : [nom, numéro parmi les stuffs de même nom, position dans la catégorie]
+    SelRows() {
+        out := []
+        r := 0
+        while (r := lvSt.GetNext(r))
+            out.Push([lvSt.GetText(r, 1), ToInt(lvSt.GetText(r, 5), 1), ToInt(lvSt.GetText(r, 6), 1)])
+        return out
+    }
+    ; Combien de stuffs portent ce nom dans cette catégorie
+    DupCount(cat, name) {
+        n := 0
+        for ent in ReadEntries(MapPath())[2] {
+            if (ent[1] = cat && ent[2] = name)
+                n += 1
+        }
+        return n
+    }
     StuffKey(cat, name) {
         return KeyMap() "|" cat "|" name
     }
 
-    RefreshStuffs() {
+    RefreshStuffs(selPos := 0) {
         lvSt.Delete()
         cc := SelCat()
         if (cc = "")
             return
         q := Trim(edFind.Value)
+        occN := Map()
+        pos := 0
+        pick := 0
         for ent in ReadEntries(MapPath())[2] {
             if (ent[1] != cc)
                 continue
+            pos += 1
+            occN[ent[2]] := occN.Get(ent[2], 0) + 1
             if (q != "" && !InStr(ent[2], q) && !InStr(InfoDisp(ent[4]), q))
                 continue
             ft := FlightTime(ent[3])
-            lvSt.Add("", ent[2], locks.Has("it|" StuffKey(cc, ent[2])) ? LOCK_ICON : "", (ft != "") ? FlightText(ft) : "", InfoDisp(ent[4]))
+            r := lvSt.Add("", ent[2], locks.Has("it|" StuffKey(cc, ent[2])) ? LOCK_ICON : "", (ft != "") ? FlightText(ft) : "", InfoDisp(ent[4]), occN[ent[2]], pos)
+            if (selPos = pos)
+                pick := r
+        }
+        if pick
+            lvSt.Modify(pick, "Select Focus Vis")
+    }
+
+    ; Monte ou descend le stuff sélectionné dans sa catégorie
+    MoveStuffRow(dir, *) {
+        rows := SelRows()
+        if (rows.Length != 1) {
+            Say("Sélectionne un seul stuff à déplacer")
+            return
+        }
+        if (Trim(edFind.Value) != "") {
+            Say("Vide d'abord la recherche pour ranger les stuffs")
+            return
+        }
+        np := MoveStuffPosInFile(MapPath(), SelCat(), rows[1][3], dir)
+        if np {
+            RefreshStuffs(np)
+            Say("Stuff déplacé : " rows[1][1])
+        } else {
+            Say(dir < 0 ? "Déjà en haut de la liste" : "Déjà en bas de la liste")
         }
     }
 
@@ -5354,10 +5450,12 @@ ShowManager() {
         lvCat.Move(, , , ui["lh0"] + dh)
         lvSt.Move(, , ui["lw0"] + dw, ui["lh0"] + dh)
         FitLastCol(lvCat)
-        FitLastCol(lvSt)
+        FitLastCol(lvSt, 4)
         for c, y0 in ui["ys"]
             c.Move(, y0 + dh)
-        edFind.Move(, , Max(120, ui["fw0"] + dw))
+        edFind.Move(, , Max(120, ui["fw0"] + dw - 70))
+        btnStUp.Move(ui["bx0"] + dw)
+        btnStDn.Move(ui["bx1"] + dw)
     }
 
     RefreshCats(keep := "") {
@@ -5527,6 +5625,7 @@ ShowManager() {
             return
         }
         old := names[1]
+        occ := SelRows()[1][2]
         if locks.Has("it|" StuffKey(sc, old)) {
             Say(LOCK_ICON " Stuff verrouillé : déverrouille-le d'abord")
             return
@@ -5539,8 +5638,9 @@ ShowManager() {
             Say("Un stuff « " nm " » existe déjà (catégorie « " exDn " »)")
             return
         }
-        Rekey(StuffKey(sc, old), StuffKey(sc, nm))
-        RenameStuffInFile(MapPath(), sc, old, nm)
+        if (DupCount(sc, old) = 1)
+            Rekey(StuffKey(sc, old), StuffKey(sc, nm))   ; favoris et verrou suivent seulement si aucun autre stuff ne porte l'ancien nom
+        RenameStuffInFile(MapPath(), sc, old, nm, occ)
         RefreshStuffs()
         Say("Stuff renommé : " nm)
     }
@@ -5553,14 +5653,19 @@ ShowManager() {
             return
         }
         cur := ""
+        occ := SelRows()[1][2]
+        k := 0
         for ent in ReadEntries(MapPath())[2] {
-            if (ent[1] = sc && ent[2] = names[1])
-                cur := SplitInfo(ent[4])[1]
+            if (ent[1] = sc && ent[2] = names[1]) {
+                k += 1
+                if (k = occ)
+                    cur := SplitInfo(ent[4])[1]
+            }
         }
         inf := AskText("Info du chat", "Message affiché dans le chat pour « " names[1] " » :", cur, "ahk_id " d.Hwnd)
         if (inf == "" && cur == "")
             return
-        SetInfoInFile(MapPath(), sc, names[1], CleanInfo(inf))
+        SetInfoInFile(MapPath(), sc, names[1], CleanInfo(inf), occ)
         RefreshStuffs()
         Say("Info mise à jour")
     }
@@ -5599,9 +5704,19 @@ ShowManager() {
         }
         if (MsgBox("Supprimer définitivement " names.Length " stuff(s) ?", "Gestion", 0x40024) != "Yes")
             return
-        for nm in names {
-            DeleteLineFrom(MapPath(), sc, nm)
-            PurgeKey(StuffKey(sc, nm))
+        ; du dernier au premier, pour que les numéros des stuffs de même nom restent valables
+        rowsD := SelRows()
+        Loop rowsD.Length {
+            best := 0
+            for i, rw in rowsD {
+                if (IsObject(rw) && (best = 0 || rw[3] > rowsD[best][3]))
+                    best := i
+            }
+            rw := rowsD[best]
+            rowsD[best] := ""
+            DeleteLineFrom(MapPath(), sc, rw[1], rw[2])
+            if (DupCount(sc, rw[1]) = 0)
+                PurgeKey(StuffKey(sc, rw[1]))
         }
         RefreshCats(sc)
         Say(names.Length " stuff(s) supprimé(s)")
@@ -5631,22 +5746,19 @@ ShowManager() {
             return
         }
         for nm in names {
-            for ent in ReadEntries(MapPath())[2] {
-                if (ent[1] = dest && ent[2] = nm) {
-                    Say("« " nm " » existe déjà dans « " dest " »")
-                    return
-                }
-            }
-        }
-        for nm in names {
             if locks.Has("it|" StuffKey(sc, nm)) {
                 Say(LOCK_ICON " « " nm " » est verrouillé : déverrouille-le d'abord")
                 return
             }
         }
-        for nm in names
-            Rekey(StuffKey(sc, nm), StuffKey(dest, nm))
-        moved := MoveStuffsInFile(MapPath(), sc, names, dest)
+        rowsM := SelRows()
+        sel := []
+        for rw in rowsM {
+            if (DupCount(sc, rw[1]) = 1)
+                Rekey(StuffKey(sc, rw[1]), StuffKey(dest, rw[1]))
+            sel.Push([rw[1], rw[2]])
+        }
+        moved := MoveStuffsInFile(MapPath(), sc, sel, dest)
         EnsureCatDeclared(MapPath(), sc)
         RefreshCats(dest)
         Say(moved " stuff(s) déplacé(s) vers « " dest " »")
@@ -5660,17 +5772,22 @@ ShowManager() {
             return
         }
         target := ""
+        occ := SelRows()[1][2]
+        k := 0
         for ent in ReadEntries(MapPath())[2] {
             if (ent[1] = sc && ent[2] = names[1]) {
-                target := ent
-                break
+                k += 1
+                if (k = occ) {
+                    target := ent
+                    break
+                }
             }
         }
         if !IsObject(target) {
             Say("Stuff introuvable")
             return
         }
-        editedCat := EditStuffDialog(MapPath(), target, KeyMap(), d.Hwnd)
+        editedCat := EditStuffDialog(MapPath(), target, KeyMap(), d.Hwnd, occ)
         if (editedCat != "") {
             RefreshCats(editedCat)
             Say("Stuff modifié")
@@ -5725,7 +5842,7 @@ ShowManager() {
             if (code = -327 || code = -307) {
                 from := NumGet(lp, 0, "Ptr")
                 if (from = SendMessage(0x101F, 0, 0, lvSt) || from = SendMessage(0x101F, 0, 0, lvCat))
-                    SetTimer(() => (FitLastCol(lvCat), FitLastCol(lvSt)), -20)
+                    SetTimer(() => (FitLastCol(lvCat), FitLastCol(lvSt, 4)), -20)
             }
         }
     }
@@ -5733,6 +5850,8 @@ ShowManager() {
     lvCat.OnEvent("ItemSelect", CatSelected)
     btnCatNew.OnEvent("Click", NewCat)
     btnCatRen.OnEvent("Click", RenCat)
+    btnStUp.OnEvent("Click", MoveStuffRow.Bind(-1))
+    btnStDn.OnEvent("Click", MoveStuffRow.Bind(1))
     btnCatUp.OnEvent("Click", MoveCat.Bind(-1))
     btnCatDn.OnEvent("Click", MoveCat.Bind(1))
     btnCatDel.OnEvent("Click", DelCat)
@@ -5757,6 +5876,10 @@ ShowManager() {
     d.GetClientPos(, , &cw0, &ch0)
     lvSt.GetPos(, , &lw0, &lh0)
     edFind.GetPos(, , &fw0)
+    btnStUp.GetPos(&bx0)
+    btnStDn.GetPos(&bx1)
+    ui["bx0"] := bx0
+    ui["bx1"] := bx1
     ui["w0"] := cw0
     ui["h0"] := ch0
     ui["lw0"] := lw0
@@ -5787,9 +5910,10 @@ ShowManager() {
 }
 
 ; La dernière colonne d'une liste prend toute la largeur restante (plus de zone vide à droite des colonnes)
-FitLastCol(lv) {
+FitLastCol(lv, n := 0) {
     try {
-        n := lv.GetCount("Col")
+        if (n < 1)
+            n := lv.GetCount("Col")
         if (n < 1)
             return
         rc := Buffer(16, 0)
@@ -5810,12 +5934,15 @@ LvSmooth(lv) {
 ; =====================================================================
 ;  Modification complète d'un stuff (fenêtre ouverte depuis la gestion)
 ; =====================================================================
-ReplaceStuffInFile(path, oldCat, oldName, newCat, newName, newCmd, newInfo) {
-    done := Map("v", false)
+ReplaceStuffInFile(path, oldCat, oldName, newCat, newName, newCmd, newInfo, occ := 0) {
+    done := Map("v", false, "n", 0)
     Fn(p, line) {
         if (!done["v"] && p[1] != "@cat" && p.Length >= 3 && p[1] = oldCat && p[2] = oldName) {
-            done["v"] := true
-            return BuildLine(newCat, newName, newCmd, newInfo)
+            done["n"] += 1
+            if (occ <= 0 || done["n"] = occ) {
+                done["v"] := true
+                return BuildLine(newCat, newName, newCmd, newInfo)
+            }
         }
         return line
     }
@@ -5824,7 +5951,7 @@ ReplaceStuffInFile(path, oldCat, oldName, newCat, newName, newCmd, newInfo) {
 }
 
 ; Renvoie la catégorie (nouvelle) du stuff si enregistré, "" si annulé
-EditStuffDialog(path, ent, keyMap, ownerHwnd) {
+EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     oldCat := ent[1]
     oldName := ent[2]
     oldKey := keyMap "|" oldCat "|" oldName
@@ -6105,7 +6232,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd) {
             MsgBox(LOCK_ICON " Stuff verrouillé : son nom et sa catégorie ne peuvent pas changer.", "Modifier", 0x40030)
             return
         }
-        ReplaceStuffInFile(path, oldCat, oldName, nCat, nName, nCmd, JoinInfo(CleanInfo(edInfo.Value), TagsToStr(tagSel)))
+        ReplaceStuffInFile(path, oldCat, oldName, nCat, nName, nCmd, JoinInfo(CleanInfo(edInfo.Value), TagsToStr(tagSel)), occ)
         ; temps de vol : nouveau temps mesuré, ou temps retiré si la position ou l'angle ont changé
         oldTK := TimeKey(cmd)
         newTK := TimeKey(nCmd)
