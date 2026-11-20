@@ -181,7 +181,7 @@ Chaque commande du menu envoie aussi `sv_cheats 1` d'abord, donc les stuffs, le 
 **Depuis le jeu** : place-toi au bon endroit, vise, ouvre le menu (`F1`) et choisis « Sauvegarder la position actuelle », puis remplis la map, le type, la catégorie, le nom et le message du chat. La position est dans une zone « Détails : position » repliable (ouverte si elle n'a pas pu être lue).
 
 - **Catégorie** : la liste propose les catégories de la map ; tape quelques lettres pour la filtrer. Pour en créer une, utilise le bouton **+** : elle est créée avec exactement le nom tapé.
-- **Tags** : choisis-en un ou tape-en un nouveau, puis **+** pour l'ajouter (les tags sont gardés dans `data\tags.txt`). **-** retire un tag, **→ Info** recopie les tags dans le message du chat. Les tags s'affichent sous l'info, se cherchent dans la recherche rapide (`#facile` ou `facile`), se modifient dans « Modifier le stuff » et sont inclus dans l'export.
+- **Tags** : la liste est officielle et identique pour tout le monde (fichier `tags_officiels.txt`, mis à jour avec le menu). Personne ne peut en créer ni en supprimer de la liste : seul l'auteur modifie ce fichier. Choisis un tag dans la liste, tape si tu veux une **touche** dans la case à côté (elle s'insère juste avant le dernier mot du tag : `RIGHT CLICK RUNTHROW` + `Z` donne `RIGHT CLICK Z RUNTHROW`, `STEP LEFT CLICK THROW` + `2` donne `STEP LEFT CLICK 2 THROW`), puis clique sur **Ajouter**. **Retirer** enlève un tag du stuff, **→ Info** recopie les tags dans le message du chat. Les tags s'affichent sous l'info, se cherchent dans la recherche rapide (`#facile` ou `facile`), se modifient dans « Modifier le stuff » et sont inclus dans l'export.
 
 **À la main** : édite `maps/de_<map>.txt`, une ligne par stuff :
 

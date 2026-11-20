@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.34.1
+
+- Tags : la liste est maintenant officielle et la même pour tout le monde (`tags_officiels.txt`, mis à jour automatiquement). Les joueurs choisissent dans la liste et ne peuvent plus en créer ; seul l'auteur modifie le fichier.
+- Une case « Touche » à côté du tag insère un caractère juste avant le dernier mot du tag (`RIGHT CLICK RUNTHROW` + Z = `RIGHT CLICK Z RUNTHROW`). Les tags déjà enregistrés sur les stuffs restent affichés.
+
 ## v2.33.12
 
 - « Enregistrer le dernier lancer comme stuff » : la case « Donner la grenade du type choisi (give) » est maintenant décochée par défaut.

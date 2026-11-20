@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.33.12"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.34.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3051,62 +3051,38 @@ InfoDisp(raw) {
     return (sp[1] != "") ? sp[1] "  " tg : tg
 }
 
-; Tags connus : ceux créés (data\tags.txt) et ceux déjà utilisés dans les maps du profil
+; Tags proposés : la liste officielle (tags_officiels.txt, fournie avec le menu), dans l'ordre du fichier.
+; Les joueurs ne peuvent pas en créer : seul l'auteur modifie ce fichier.
 AllTags() {
     seen := Map()
     out := []
-    AddTag(t) {
-        t := CleanTag(t)
-        if (t != "" && !seen.Has(StrLower(t))) {
-            seen[StrLower(t)] := 1
-            out.Push(t)
-        }
-    }
-    f := DataDir "\tags.txt"
+    f := A_ScriptDir "\tags_officiels.txt"
     if FileExist(f) {
         try {
-            for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r")
-                AddTag(ln)
-        }
-    }
-    Loop Files MapsDir "\*.txt" {
-        try {
-            for e in ReadEntries(A_LoopFileFullPath)[2] {
-                for t in TagList(SplitInfo(e[4])[2])
-                    AddTag(t)
+            for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
+                ln := Trim(ln)
+                if (ln = "" || SubStr(ln, 1, 2) = "//" || SubStr(ln, 1, 1) = "#")
+                    continue
+                t := CleanTag(ln)
+                if (t != "" && !seen.Has(StrLower(t))) {
+                    seen[StrLower(t)] := 1
+                    out.Push(t)
+                }
             }
         }
-    }
-    ; tri alphabétique simple
-    i := 2
-    while (i <= out.Length) {
-        v := out[i]
-        j := i - 1
-        while (j >= 1 && StrCompare(out[j], v) > 0) {
-            out[j + 1] := out[j]
-            j -= 1
-        }
-        out[j + 1] := v
-        i += 1
     }
     return out
 }
 
-; Ajoute le tag à la liste des tags connus (data\tags.txt) s'il n'y est pas déjà
-SaveTag(t) {
-    t := CleanTag(t)
-    if (t = "")
-        return
-    f := DataDir "\tags.txt"
-    try {
-        if FileExist(f) {
-            for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
-                if (StrLower(CleanTag(ln)) = StrLower(t))
-                    return
-            }
-        }
-        AppendLine(f, t)
-    }
+; Insère la touche juste avant le dernier mot du tag : RIGHT CLICK RUNTHROW + Z = RIGHT CLICK Z RUNTHROW
+TagWithKey(tag, key) {
+    key := StrUpper(CleanTag(key))
+    if (key = "" || tag = "")
+        return tag
+    pos := InStr(tag, " ", , -1)   ; dernier espace
+    if !pos
+        return CleanTag(key " " tag)
+    return CleanTag(SubStr(tag, 1, pos - 1) " " key SubStr(tag, pos))
 }
 
 AllCategories(path) {
@@ -3230,7 +3206,9 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     txNameErr := d.Add("Text", "x110 y+2 w340 h16", "")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
     d.Add("Text", "xm y+8 w95", "Tags")
-    cbTag := d.Add("ComboBox", "x110 yp-3 w340", [])
+    cbTag := d.Add("DropDownList", "x110 yp-3 w258", [])
+    edTagKey := d.Add("Edit", "x+6 yp w76 Limit8")
+    try SendMessage(0x1501, 1, StrPtr("Touche"), edTagKey)   ; texte grisé « Touche »
     btnTagAdd := d.Add("Button", "x110 y+6 w104", "Ajouter")
     btnTagDel := d.Add("Button", "x+6 yp w104", "Retirer")
     btnTagInfo := d.Add("Button", "x+6 yp w116", "→ Info")
@@ -3290,7 +3268,7 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     ; Tags du stuff en cours de création
     tagSel := []
     ShowTags() {
-        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur Ajouter" : "Tags : " TagsDisp(TagsToStr(tagSel))
+        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis un tag dans la liste (touche facultative), puis clique sur Ajouter" : "Tags : " TagsDisp(TagsToStr(tagSel))
     }
     FillTags() {
         ftTxt := cbTag.Text
@@ -3298,27 +3276,28 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
         ftLst := AllTags()
         if (ftLst.Length > 0)
             cbTag.Add(ftLst)
-        cbTag.Text := ftTxt
+        try cbTag.Text := ftTxt
     }
     TagAddClick(*) {
-        taT := CleanTag(cbTag.Text)
-        if (taT = "")
+        taBase := CleanTag(cbTag.Text)
+        if (taBase = "") {
+            MsgBox("Choisis d'abord un tag dans la liste.", "Tags", 0x40030)
             return
+        }
+        taT := TagWithKey(taBase, edTagKey.Value)
         taHave := false
         for taX in tagSel {
             if (StrLower(taX) = StrLower(taT))
                 taHave := true
         }
-        if !taHave {
+        if !taHave
             tagSel.Push(taT)
-            SaveTag(taT)
-        }
-        FillTags()
-        cbTag.Text := ""
+        try cbTag.Choose(0)
+        edTagKey.Value := ""
         ShowTags()
     }
     TagDelClick(*) {
-        tdT := CleanTag(cbTag.Text)
+        tdT := TagWithKey(CleanTag(cbTag.Text), edTagKey.Value)
         tdI := 0
         if (tdT != "") {
             for tdK, tdX in tagSel {
@@ -3330,7 +3309,8 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
         }
         if (tdI > 0)
             tagSel.RemoveAt(tdI)
-        cbTag.Text := ""
+        try cbTag.Choose(0)
+        edTagKey.Value := ""
         ShowTags()
     }
 
@@ -5975,7 +5955,9 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     btnFlightDel := d.Add("Button", "x+8 yp w90", "Supprimer")
     btnFlightDel.Enabled := (flOld != "")
     d.Add("Text", "xm y+14 w110", "Tags")
-    cbTag := d.Add("ComboBox", "x130 yp-3 w380", [])
+    cbTag := d.Add("DropDownList", "x130 yp-3 w298", [])
+    edTagKey := d.Add("Edit", "x+6 yp w76 Limit8")
+    try SendMessage(0x1501, 1, StrPtr("Touche"), edTagKey)   ; texte grisé « Touche »
     btnTagAdd := d.Add("Button", "x130 y+6 w120", "Ajouter")
     btnTagDel := d.Add("Button", "x+6 yp w120", "Retirer")
     btnTagInfo := d.Add("Button", "x+6 yp w128", "→ Info")
@@ -6023,7 +6005,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     ; Tags du stuff (déjà présents + ceux qu'on ajoute ici)
     tagSel := TagList(SplitInfo(ent[4])[2])
     ShowTags() {
-        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis ou tape un tag, puis clique sur Ajouter" : "Tags : " TagsDisp(TagsToStr(tagSel))
+        txTags.Text := (tagSel.Length = 0) ? "Aucun tag : choisis un tag dans la liste (touche facultative), puis clique sur Ajouter" : "Tags : " TagsDisp(TagsToStr(tagSel))
     }
     FillTags() {
         ftTxt := cbTag.Text
@@ -6031,27 +6013,28 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         ftLst := AllTags()
         if (ftLst.Length > 0)
             cbTag.Add(ftLst)
-        cbTag.Text := ftTxt
+        try cbTag.Text := ftTxt
     }
     TagAddClick(*) {
-        taT := CleanTag(cbTag.Text)
-        if (taT = "")
+        taBase := CleanTag(cbTag.Text)
+        if (taBase = "") {
+            MsgBox("Choisis d'abord un tag dans la liste.", "Tags", 0x40030)
             return
+        }
+        taT := TagWithKey(taBase, edTagKey.Value)
         taHave := false
         for taX in tagSel {
             if (StrLower(taX) = StrLower(taT))
                 taHave := true
         }
-        if !taHave {
+        if !taHave
             tagSel.Push(taT)
-            SaveTag(taT)
-        }
-        FillTags()
-        cbTag.Text := ""
+        try cbTag.Choose(0)
+        edTagKey.Value := ""
         ShowTags()
     }
     TagDelClick(*) {
-        tdT := CleanTag(cbTag.Text)
+        tdT := TagWithKey(CleanTag(cbTag.Text), edTagKey.Value)
         tdI := 0
         if (tdT != "") {
             for tdK, tdX in tagSel {
@@ -6063,7 +6046,8 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         }
         if (tdI > 0)
             tagSel.RemoveAt(tdI)
-        cbTag.Text := ""
+        try cbTag.Choose(0)
+        edTagKey.Value := ""
         ShowTags()
     }
     ; Recopie le nom des tags dans le message d'info du chat (le tag reste aussi enregistré comme tag)
@@ -9871,7 +9855,7 @@ InstallUpdate() {
     try FileCopy(A_ScriptFullPath, A_ScriptDir "\data\backup\stuff_menu.ahk.bak", 1)
     PreUpdateBackup()
     try {
-        for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1", "menu_stuf.ico", "install.bat", "install.ps1", "uninstall.bat", "uninstall.ps1", "rollback.bat"] {
+        for fn in ["stuff_menu.ahk", "README.md", "CHANGELOG.md", "LICENSE", "config.example.ini", "cs2_practice.cfg", "VERSION", "update.bat", "update.ps1", "menu_stuf.ico", "install.bat", "install.ps1", "uninstall.bat", "uninstall.ps1", "rollback.bat", "tags_officiels.txt"] {
             if (FileExist(src "\" fn) && FileChanged(src "\" fn, A_ScriptDir "\" fn))
                 FileCopy(src "\" fn, A_ScriptDir "\" fn, 1)   ; seuls les fichiers modifiés sont réécrits
         }
