@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.37.3
+
+- Chronomètre : les stuffs longs (plus de 9 secondes entre le lâcher et l'explosion) sont maintenant mesurés. Avant, le départ était oublié après 9 s et le temps ignoré (limite portée à 25 s).
+
 ## v2.37.2
 
 - Chronomètre / mesure du temps de vol : les lancers au clic droit ou avec les deux clics (gauche + droit) sont maintenant détectés. Le relâchement du clic droit compte comme moment du lâcher, et si les deux clics sont relâchés à la suite, seul le premier est retenu.

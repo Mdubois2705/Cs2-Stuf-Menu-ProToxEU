@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.37.2"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.37.3"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -7878,8 +7878,8 @@ TmThrowLine(now) {
 
 TmFinish(kind, now) {
     global tmStarts, tmLive, tmMeasured, tmLastLabel
-    ; on oublie les grenades trop anciennes (jamais explosées ou jamais vues)
-    while (tmStarts.Length >= 1 && now - tmStarts[1][1] > 9000)
+    ; on oublie les grenades trop anciennes (jamais explosées ou jamais vues) : 25 s, certains stuffs durent plus de 9 s
+    while (tmStarts.Length >= 1 && now - tmStarts[1][1] > 25000)
         tmStarts.RemoveAt(1)
     start := 0
     src := "clic (secours)"
@@ -7890,7 +7890,7 @@ TmFinish(kind, now) {
     } else {
         i := tmClicks.Length
         while (i >= 1) {
-            if (now - tmClicks[i] < 9000) {
+            if (now - tmClicks[i] < 25000) {
                 start := tmClicks[i]
                 tmClicks.RemoveAt(i)
                 break
