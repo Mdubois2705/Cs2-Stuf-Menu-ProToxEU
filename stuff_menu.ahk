@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.36.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.36.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -6527,7 +6527,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
             return
         }
         if (nn = 2)
-            ans := MsgBox("Les fenêtres et affichages vont se fermer et tu seras téléporté à la position du stuff.`n`nTu auras ensuite 6 secondes pour te placer sur ton 2e repère (sans toucher à la souris si c'est le but), puis la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle de ce stuff.", "Repère 2", 0x41)
+            ans := MsgBox("Les fenêtres et affichages vont se fermer et tu seras téléporté à la position du stuff.`n`nTu auras ensuite 12 secondes pour te placer sur ton 2e repère (sans toucher à la souris si c'est le but), puis la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle de ce stuff.", "Repère 2", 0x41)
         else
             ans := MsgBox("Les fenêtres et affichages vont se fermer, tu seras téléporté à la position du stuff et la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle de ce stuff.", "Refaire la capture", 0x41)
         if (ans != "OK")
@@ -6550,7 +6550,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         WinWaitActive("ahk_exe cs2.exe", , 3)
         Sleep(200)
         RunCmd(tpPos)
-        cdTot := (nn = 2) ? 6 : 2
+        cdTot := (nn = 2) ? 12 : 2
         Loop cdTot {
             left := cdTot + 1 - A_Index
             ToolTip((nn = 2) ? "Place-toi sur le repère 2 : capture dans " left " s..." : "Capture dans " left " s...")

@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.36.2
+
+- Repère 2 : 12 secondes (au lieu de 6) pour te placer avant la capture.
+
 ## v2.36.1
 
 - Liste officielle des tags : ajout du groupe RUNJUMPTHROW (LEFT / RIGHT / MIDDLE CLICK).
