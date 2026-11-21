@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.36.3"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.36.5"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -1331,7 +1331,24 @@ ShotDir(prof := "") {
 ShotPath(mapName, cmd, prof := "", n := 1) {
     if !RegExMatch(cmd, "i)setpos\s+(" NUM ")\s+(" NUM ")\s+(" NUM ")", &m)
         return ""
-    return ShotDir(prof) "\" mapName "_" ShotCoordKey(cmd) ((n = 2) ? "_r2" : "") ".bmp"
+    return ShotDir(prof) "\" mapName "_" ShotFullKey(cmd) ((n = 2) ? "_r2" : "") ".bmp"
+}
+
+; Lecture : si la capture propre à ce stuff (position + angle) n'existe pas, on prend l'ancienne (position seule, créée avant la 2.36.4)
+ShotPathR(mapName, cmd, prof := "", n := 1) {
+    p := ShotPath(mapName, cmd, prof, n)
+    if (p = "" || FileExist(p))
+        return p
+    old := ShotDir(prof) "\" mapName "_" ShotCoordKey(cmd) ((n = 2) ? "_r2" : "") ".bmp"
+    return FileExist(old) ? old : p
+}
+
+; Position + angle : deux stuffs au même endroit mais avec une visée différente ont chacun leur capture
+ShotFullKey(cmd) {
+    k := ShotCoordKey(cmd)
+    if (k != "" && RegExMatch(cmd, "i)setang\s+(" NUM ")\s+(" NUM ")", &m))
+        k .= "_a" StrReplace(StrReplace(m[1] "_" m[2], "-", "m"), ".", "p")
+    return k
 }
 
 ; Partie « coordonnées » du nom de fichier d'une capture ("" si le stuff n'a pas de position)
@@ -2554,15 +2571,18 @@ QuizHint(*) {
     quizInfoLine := (info != "") ? "Info : " info : "Pas d'info pour ce stuff"
     QuizBanner()
     if QuizHintShot {
-        sp := ShotPath(quizMap, quizCur[3])
+        sp := ShotPathR(quizMap, quizCur[3])
         if !FileExist(sp) {
-            ; capture enregistrée sous un autre nom de map : on cherche par position
-            ck := ShotCoordKey(quizCur[3])
-            if (ck != "") {
+            ; capture enregistrée sous un autre nom de map : on cherche par position (+ angle), puis par position seule
+            for ck in [ShotFullKey(quizCur[3]), ShotCoordKey(quizCur[3])] {
+                if (ck = "")
+                    continue
                 Loop Files, ShotDir() "\*_" ck ".bmp" {
                     sp := A_LoopFileFullPath
                     break
                 }
+                if FileExist(sp)
+                    break
             }
         }
         if ShotValid(sp) {
@@ -3370,6 +3390,7 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     tmpShot := ShotDir() "\_pending.bmp"
     shotPending := false
     chkShot := ""
+    btnShotGo := ""
     if (ShotOn && !IsObject(preset) && WinActive("ahk_exe cs2.exe")) {
         Sleep(100)
         shotPending := CaptureShot(tmpShot)
@@ -3427,6 +3448,16 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
         picShot.GetPos(, &picY, , &picH)
         giveTop := picY + picH + 16
         giveY := "y" giveTop   ; sous l'image, jamais dessus
+    } else if (IsObject(preset) && ShotOn) {
+        ; dernier lancer : tu n'es plus à la position du stuff, la capture se fait à la demande (téléportation puis capture)
+        d.Add("Text", "xm y+14 w95", "Capture")
+        btnShotGo := d.Add("Button", "x110 yp-3 w250", "Faire la capture (en jeu)")
+        picShot := d.Add("Picture", "x110 y+8 w" ShotSize " h" ShotSize " Hidden", "")
+        chkDy := ShotSize // 2 - 10
+        chkShot := d.Add("CheckBox", "x+14 yp+" chkDy " Hidden", "Joindre cette capture au stuff")
+        picShot.GetPos(, &picY, , &picH)
+        giveTop := picY + picH + 16
+        giveY := "y" giveTop
     }
     chkGive := d.Add("CheckBox", "xm " giveY, "Donner la grenade du type choisi (give)")
     chkFav := d.Add("CheckBox", "xm y+6", "Ajouter aux favoris")
@@ -3450,6 +3481,66 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     }
     DetClick(*) {
         ShowDet(!detOpen["v"])
+    }
+
+    ; Capture à la demande : masque les fenêtres, te téléporte à la position du stuff, capture le centre du jeu puis rouvre tout
+    ShotGoClick(*) {
+        global keysShown, netFailTick
+        tpPos := NormalizePos(edPos.Value)
+        if (tpPos = "") {
+            MsgBox("Position invalide : impossible de se téléporter.", "Capture", 0x40030)
+            return
+        }
+        if !ProcessExist("cs2.exe") {
+            MsgBox("CS2 n'est pas lancé.", "Capture", 0x40030)
+            return
+        }
+        netFailTick := 0
+        if !NetOpen() {
+            MsgBox("Pas de connexion à CS2 : ferme le jeu et relance le menu.", "Capture", 0x40030)
+            return
+        }
+        if (MsgBox("Les fenêtres vont se fermer, tu seras téléporté à la position du stuff et la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle du stuff.", "Capture", 0x41) != "OK")
+            return
+        wasHud := hudOn
+        wasKeys := (KeysOn && IsObject(keysGui))
+        SetTimer(KeysTick, 0)
+        SetTimer(TmOutTick, 0)
+        d.Hide()
+        try HideShot()
+        try hudGui.Hide()
+        try keysGui.Hide()
+        keysShown := false
+        try tmGui.Hide()
+        try WinActivate("ahk_exe cs2.exe")
+        WinWaitActive("ahk_exe cs2.exe", , 3)
+        Sleep(200)
+        RunCmd(tpPos)
+        Loop 3 {
+            ToolTip("Capture dans " (4 - A_Index) " s...")
+            Sleep(1000)
+        }
+        ToolTip()
+        Sleep(150)
+        ok := CaptureShot(tmpShot)
+        if wasHud
+            try ShowHud()
+        if wasKeys
+            SetTimer(KeysTick, 40)
+        SetTimer(TmOutTick, 300)
+        if (tmVisible)
+            try tmGui.Show("NA")
+        d.Show()
+        WinActivate("ahk_id " d.Hwnd)
+        if ok {
+            try picShot.Value := tmpShot
+            picShot.Visible := true
+            chkShot.Visible := true
+            chkShot.Value := 1
+            btnShotGo.Text := "Refaire la capture (en jeu)"
+        } else {
+            MsgBox("Capture impossible.", "Capture", 0x40030)
+        }
     }
 
     FillCats(*) {
@@ -3702,6 +3793,8 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     ddMap.OnEvent("Change", (*) => FillCats())
     cbCat.OnEvent("Change", CatChange)
     btnCatAdd.OnEvent("Click", CatAddClick)
+    if IsObject(btnShotGo)
+        btnShotGo.OnEvent("Click", ShotGoClick)
     btnTagAdd.OnEvent("Click", TagAddClick)
     btnTagDel.OnEvent("Click", TagDelClick)
     btnTagInfo.OnEvent("Click", TagInfoClick)
@@ -4022,6 +4115,9 @@ CleanOrphans() {
             k := ShotCoordKey(p[3])
             if (k != "")
                 validShots[k] := 1
+            k := ShotFullKey(p[3])
+            if (k != "")
+                validShots[k] := 1
             tk := TimeKey(p[3])
             if (tk != "")
                 validTimes[tk] := 1
@@ -4032,7 +4128,7 @@ CleanOrphans() {
     Loop Files ShotDir() "\*.bmp" {
         if (SubStr(A_LoopFileName, 1, 1) = "_")
             continue
-        if RegExMatch(A_LoopFileName, "i)_([mp\d]+_[mp\d]+_[mp\d]+)(?:_r2)?\.bmp$", &m) {
+        if RegExMatch(A_LoopFileName, "i)_([mp\d]+_[mp\d]+_[mp\d]+(?:_a[mp\d]+_[mp\d]+)?)(?:_r2)?\.bmp$", &m) {
             if !validShots.Has(m[1]) {
                 orphShots.Push(A_LoopFileFullPath)
                 bytes += A_LoopFileSize
@@ -6218,6 +6314,13 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     d.Add("Text", "xm y+6 w500", "Exemples : give weapon_smokegrenade ou sv_rethrow_last_grenade. Sépare les commandes par un point-virgule.")
     d.SetFont("s" WinSz() " c" WinPal()["txt"])
     shotFile := ShotPath(keyMap, cmd)
+    ; anciennes captures (position seule, parfois partagées avec un autre stuff) : ce stuff en reçoit sa propre copie
+    for nn0 in [1, 2] {
+        newP := ShotPath(keyMap, cmd, "", nn0)
+        oldP := ShotPathR(keyMap, cmd, "", nn0)
+        if (newP != "" && oldP != newP && FileExist(oldP) && !FileExist(newP))
+            try FileCopy(oldP, newP)
+    }
     curShot := shotFile
     shotRedone := false
     picSz := Min(ShotZoom, 160)
@@ -7318,7 +7421,7 @@ UpdateShot(preview := false, forcePath := "") {
     } else {
         cur := CurrentItem()
         if IsObject(cur)
-            path := ShotPath(StrSplit(cur[5], "|")[1], cur[2])
+            path := ShotPathR(StrSplit(cur[5], "|")[1], cur[2])
         if !ShotValid(path) {
             HideShot()
             return
@@ -8150,10 +8253,10 @@ B64ToFile(b64, path) {
 CountShots(list) {
     n := 0
     for e in list {
-        sp := ShotPath(e[1], e[4])
+        sp := ShotPathR(e[1], e[4])
         if (sp != "" && FileExist(sp))
             n += 1
-        sp2 := ShotPath(e[1], e[4], "", 2)
+        sp2 := ShotPathR(e[1], e[4], "", 2)
         if (sp2 != "" && FileExist(sp2))
             n += 1
     }
@@ -8174,7 +8277,7 @@ BuildPack(list, withImgs := false) {
         tmp := A_Temp "\stuffshot_export.jpg"
         for e in list {
             for nn in [1, 2] {
-                sp := ShotPath(e[1], e[4], "", nn)
+                sp := ShotPathR(e[1], e[4], "", nn)
                 if (sp = "" || !FileExist(sp))
                     continue
                 try FileDelete(tmp)

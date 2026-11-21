@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.36.5
+
+- « Enregistrer le dernier lancer comme stuff » : la fenêtre propose maintenant « Faire la capture (en jeu) » : les fenêtres se ferment, tu es téléporté à la position du stuff, la capture se fait 3 secondes plus tard puis tout se rouvre. La case « Joindre cette capture » est cochée automatiquement.
+
+## v2.36.4
+
+- Captures : deux stuffs à la même position mais avec une visée différente ont maintenant chacun leur capture (avant, la capture était liée à la position seule, donc refaire l'une changeait l'autre). Les anciennes captures restent affichées ; en ouvrant « Modifier » sur un stuff, il reçoit sa propre copie, que tu peux refaire sans toucher à l'autre.
+
 ## v2.36.3
 
 - Mise à jour : le message « Une nouvelle version est disponible » ne s'affiche plus en double quand le launcher est ouvert (sa ligne « Version … disponible » sert alors d'annonce) et n'est demandé qu'une fois par lancement.
