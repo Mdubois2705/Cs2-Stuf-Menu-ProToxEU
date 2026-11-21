@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.36.1
+
+- Liste officielle des tags : ajout du groupe RUNJUMPTHROW (LEFT / RIGHT / MIDDLE CLICK).
+
 ## v2.36.0
 
 - **Repère 2 (facultatif)** : un stuff peut avoir une seconde capture, pour les lancers où l'on prend un premier repère, on bouge sans toucher à la souris, puis on prend un second repère. Elle s'affiche à droite de la première (numérotées 1 et 2), dans le menu et dans l'aide du quiz. Les stuffs sans repère 2 s'affichent comme avant.
