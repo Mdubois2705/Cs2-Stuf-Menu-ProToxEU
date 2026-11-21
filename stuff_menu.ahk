@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.36.5"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.37.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -2790,6 +2790,7 @@ QzHide() {
 }
 
 Render() {
+    global catIdx
     names := []
     sel := 1
     title := ""
@@ -2802,6 +2803,11 @@ Render() {
         sel := mapIdx
         title := "MAPS"
     } else if (level = 1) {
+        Loop cats.Length {
+            if !IsSepCat(cats[catIdx])
+                break   ; le curseur ne reste jamais sur un séparateur
+            catIdx := Mod(catIdx, cats.Length) + 1
+        }
         for c in cats
             names.Push(locks.Has("cat|" c) ? c "  " LOCK_ICON : c)
         sel := catIdx
@@ -2993,7 +2999,11 @@ Move(d) {
     } else if (level = 0) {
         mapIdx := Mod(mapIdx - 1 + d + n, n) + 1
     } else if (level = 1) {
-        catIdx := Mod(catIdx - 1 + d + n, n) + 1
+        Loop n {
+            catIdx := Mod(catIdx - 1 + d + n, n) + 1
+            if !IsSepCat(cats[catIdx])
+                break   ; les séparateurs sont sautés
+        }
     } else if (level = 2) {
         itemIdx := Mod(itemIdx - 1 + d + n, n) + 1
     } else {
@@ -3019,6 +3029,8 @@ Select() {
         level := 1
         catIdx := 1
     } else if (level = 1) {
+        if IsSepCat(cats[catIdx])
+            return
         level := 2
         itemIdx := 1
     } else {
@@ -3314,6 +3326,21 @@ TagWithKey(tag, key) {
     return CleanTag(key " " tag)
 }
 
+; Séparateur : catégorie vide dont le nom commence par ── ; le menu la saute et on ne peut rien y mettre
+IsSepCat(c) {
+    return (SubStr(c, 1, 2) = "──")
+}
+
+; Catégories où l'on peut ranger des stuffs (sans les séparateurs)
+StuffCats(path) {
+    out := []
+    for c in AllCategories(path) {
+        if !IsSepCat(c)
+            out.Push(c)
+    }
+    return out
+}
+
 AllCategories(path) {
     out := []
     seen := Map()
@@ -3546,7 +3573,7 @@ ShowSaveDialog(presetCat := "", presetMap := "", preset := "") {
     FillCats(*) {
         fcTxt := cbCat.Text
         cbCat.Delete()
-        fcLst := AllCategories(mapFiles[ddMap.Value])
+        fcLst := StuffCats(mapFiles[ddMap.Value])
         if (fcLst.Length > 0)
             cbCat.Add(fcLst)
         cbCat.Text := fcTxt
@@ -5630,8 +5657,9 @@ ShowManager() {
     bottom := status + 28
     btnCatNew := d.Add("Button", "x12 y" row1 " w126", "Nouvelle catégorie")
     btnCatRen := d.Add("Button", "x+8 yp w126", "Renommer")
-    btnCatDel := d.Add("Button", "x12 y" row2 " w126", "Supprimer")
-    btnCatLock := d.Add("Button", "x+8 yp w126", "Cadenas")
+    btnCatDel := d.Add("Button", "x12 y" row2 " w78", "Supprimer")
+    btnCatLock := d.Add("Button", "x+8 yp w78", "Cadenas")
+    btnCatSep := d.Add("Button", "x+8 yp w84", "Séparateur")
     btnStEdit := d.Add("Button", "x290 y" row1 " w86", "Modifier…")
     btnStRen := d.Add("Button", "x+8 yp w86", "Renommer")
     btnStInfo := d.Add("Button", "x+8 yp w86", "Info chat")
@@ -5782,12 +5810,17 @@ ShowManager() {
         cbDest.Delete()
         pick := 0
         for k, cn in ents[1] {
-            lvCat.Add("", cn, cnt.Has(cn) ? cnt[cn] : 0, locks.Has("cat|" cn) ? LOCK_ICON : "")
+            lvCat.Add("", cn, IsSepCat(cn) ? "" : (cnt.Has(cn) ? cnt[cn] : 0), locks.Has("cat|" cn) ? LOCK_ICON : "")
             if (cn = keep)
                 pick := k
         }
-        if (ents[1].Length > 0)
-            cbDest.Add(ents[1])
+        dests := []
+        for cn in ents[1] {
+            if !IsSepCat(cn)
+                dests.Push(cn)
+        }
+        if (dests.Length > 0)
+            cbDest.Add(dests)
         if pick
             lvCat.Modify(pick, "Select Focus")
         ui["busy"] := false
@@ -5821,6 +5854,20 @@ ShowManager() {
         AppendLine(MapPath(), "@cat | " nm)
         RefreshCats(nm)
         Say("Catégorie ajoutée : " nm)
+    }
+
+    ; Séparateur : ligne de séparation dans la liste des catégories du menu (sautée à la navigation, rien ne peut y être rangé)
+    NewSep(*) {
+        lbl := CleanField(AskText("Séparateur", "Texte du séparateur (par exemple : CT SIDE).`nPour une simple ligne, tape un tiret : -", "", "ahk_id " d.Hwnd))
+        if (lbl = "")
+            return
+        plain := (lbl = "-")
+        nm := plain ? "──────" : "── " lbl " ──"
+        while (CatNameTaken(MapPath(), nm) != "")
+            nm .= plain ? "─" : " "   ; nom unique
+        AppendLine(MapPath(), "@cat | " nm)
+        RefreshCats(nm)
+        Say("Séparateur ajouté en bas : place-le avec les flèches ▲▼")
     }
 
     RenCat(*) {
@@ -6162,6 +6209,7 @@ ShowManager() {
     btnCatUp.OnEvent("Click", MoveCat.Bind(-1))
     btnCatDn.OnEvent("Click", MoveCat.Bind(1))
     btnCatDel.OnEvent("Click", DelCat)
+    btnCatSep.OnEvent("Click", NewSep)
     btnCatLock.OnEvent("Click", LockCat)
     btnUndo.OnEvent("Click", UndoStuff)
     HotIfWinActive("ahk_id " d.Hwnd)
@@ -6193,7 +6241,7 @@ ShowManager() {
     ui["lh0"] := lh0
     ui["fw0"] := fw0
     ys := Map()
-    for c in [btnCatNew, btnCatRen, btnCatDel, btnCatLock, btnStEdit, btnStRen, btnStInfo, btnStLock, btnStDel, cbDest, btnMove, stText, btnClose, btnUndo, txMoveLbl, txNote] {
+    for c in [btnCatNew, btnCatRen, btnCatDel, btnCatLock, btnCatSep, btnStEdit, btnStRen, btnStInfo, btnStLock, btnStDel, cbDest, btnMove, stText, btnClose, btnUndo, txMoveLbl, txNote] {
         c.GetPos(, &cy)
         ys[c] := cy
     }
@@ -6362,7 +6410,7 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     btnCancel := d.Add("Button", "xm y" saveTop " w180", "Annuler")
     btnSave := d.Add("Button", "x330 y" saveTop " w180 Default", "Enregistrer")
 
-    for ec in AllCategories(path)
+    for ec in StuffCats(path)
         cbCat.Add([ec])
     ddType.Choose(typeSel)
     cbCat.Text := oldCat

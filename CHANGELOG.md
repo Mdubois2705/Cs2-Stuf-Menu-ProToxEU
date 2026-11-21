@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.37.0
+
+- **Séparateurs** : nouveau bouton « Séparateur » dans la gestion des stuffs. Il ajoute une ligne de séparation (avec un texte au choix, ou une simple ligne) dans la liste des catégories : le menu la saute quand on défile, on ne peut pas y entrer ni y ranger de stuff. Place-la avec les flèches ▲▼ ; supprime-la ou renomme-la comme une catégorie.
+
 ## v2.36.5
 
 - « Enregistrer le dernier lancer comme stuff » : la fenêtre propose maintenant « Faire la capture (en jeu) » : les fenêtres se ferment, tu es téléporté à la position du stuff, la capture se fait 3 secondes plus tard puis tout se rouvre. La case « Joindre cette capture » est cochée automatiquement.
