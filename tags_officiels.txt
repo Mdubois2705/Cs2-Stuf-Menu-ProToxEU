@@ -1,8 +1,8 @@
 // Liste officielle des tags : la même pour tout le monde (fournie avec le menu, mise à jour automatiquement).
 // Un tag par ligne. Les lignes qui commencent par // sont ignorées.
 // Les joueurs ne peuvent ni en créer ni en retirer : seul l'auteur modifie ce fichier.
-// Dans la fenêtre du stuff, la case « Touche » à côté du tag insère un caractère juste avant le dernier mot du tag :
-// « RIGHT CLICK RUNTHROW » + Z = « RIGHT CLICK Z RUNTHROW », « STEP LEFT CLICK THROW » + 2 = « STEP LEFT CLICK 2 THROW ».
+// Dans la fenêtre du stuff, la case « Touche » à côté du tag colle un caractère devant le tag :
+// « LEFT CLICK JUMPTHROW » + Z = « Z LEFT CLICK JUMPTHROW », « STEP LEFT CLICK THROW » + 2 = « 2 STEP LEFT CLICK THROW ».
 
 LEFT CLICK RUNTHROW
 RIGHT CLICK RUNTHROW

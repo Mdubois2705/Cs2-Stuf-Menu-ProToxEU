@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.35.1
+
+- Tags : la touche se colle maintenant devant le tag (`LEFT CLICK JUMPTHROW` + Z = `Z LEFT CLICK JUMPTHROW`). Les tags déjà enregistrés avec l'ancien format restent valides.
+
 ## v2.35.0
 
 - Nouvel onglet **Binds** dans les réglages : chacun choisit ses touches pour relancer la dernière grenade, le noclip, effacer les smokes et le kit d'armes (par défaut K, N, L, P). Le menu les envoie à CS2 tout de suite et après chaque exec ; l'ancienne touche est déliée. La touche de relance est aussi celle du chronomètre.

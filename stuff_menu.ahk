@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.35.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.35.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -3285,15 +3285,12 @@ AllTags() {
     return out
 }
 
-; Insère la touche juste avant le dernier mot du tag : RIGHT CLICK RUNTHROW + Z = RIGHT CLICK Z RUNTHROW
+; Colle la touche devant le tag : LEFT CLICK JUMPTHROW + Z = Z LEFT CLICK JUMPTHROW
 TagWithKey(tag, key) {
     key := StrUpper(CleanTag(key))
     if (key = "" || tag = "")
         return tag
-    pos := InStr(tag, " ", , -1)   ; dernier espace
-    if !pos
-        return CleanTag(key " " tag)
-    return CleanTag(SubStr(tag, 1, pos - 1) " " key SubStr(tag, pos))
+    return CleanTag(key " " tag)
 }
 
 AllCategories(path) {
@@ -10184,13 +10181,15 @@ IsOfficialTag(t, offSet) {
     n := parts.Length
     if (n < 2)
         return false
+    if offSet.Has(SubStr(tl, InStr(tl, " ") + 1))
+        return true   ; touche devant le tag (format actuel)
     base := ""
     for i, w in parts {
         if (i = n - 1)
             continue
         base .= (base = "" ? "" : " ") w
     }
-    return offSet.Has(base)
+    return offSet.Has(base)   ; touche avant le dernier mot (ancien format 2.34)
 }
 
 ; Une seule fois : retire des stuffs les anciens tags libres créés avant la liste officielle (ceux qui ne sont pas dans la liste).
