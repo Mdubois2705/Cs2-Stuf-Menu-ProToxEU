@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.36.0
+
+- **Repère 2 (facultatif)** : un stuff peut avoir une seconde capture, pour les lancers où l'on prend un premier repère, on bouge sans toucher à la souris, puis on prend un second repère. Elle s'affiche à droite de la première (numérotées 1 et 2), dans le menu et dans l'aide du quiz. Les stuffs sans repère 2 s'affichent comme avant.
+- Dans « Modifier un stuff » : « Capturer le repère 2 (en jeu) » (téléportation au stuff, 6 secondes pour te placer, puis capture) et « Supprimer le repère 2 ».
+- Le repère 2 suit le stuff si on change ses coordonnées, est inclus dans les exports `.stuffpack` avec captures, et dans le nettoyage des orphelins.
+
 ## v2.35.1
 
 - Tags : la touche se colle maintenant devant le tag (`LEFT CLICK JUMPTHROW` + Z = `Z LEFT CLICK JUMPTHROW`). Les tags déjà enregistrés avec l'ancien format restent valides.

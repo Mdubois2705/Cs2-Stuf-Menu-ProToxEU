@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.35.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.36.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -1327,10 +1327,11 @@ ShotDir(prof := "") {
 }
 
 ; Fichier image d'un stuff : lié à la map et à la position (donc stable si on renomme ou déplace le stuff)
-ShotPath(mapName, cmd, prof := "") {
+; n = 2 : « repère 2 » facultatif (même nom + _r2)
+ShotPath(mapName, cmd, prof := "", n := 1) {
     if !RegExMatch(cmd, "i)setpos\s+(" NUM ")\s+(" NUM ")\s+(" NUM ")", &m)
         return ""
-    return ShotDir(prof) "\" mapName "_" ShotCoordKey(cmd) ".bmp"
+    return ShotDir(prof) "\" mapName "_" ShotCoordKey(cmd) ((n = 2) ? "_r2" : "") ".bmp"
 }
 
 ; Partie « coordonnées » du nom de fichier d'une capture ("" si le stuff n'a pas de position)
@@ -4031,7 +4032,7 @@ CleanOrphans() {
     Loop Files ShotDir() "\*.bmp" {
         if (SubStr(A_LoopFileName, 1, 1) = "_")
             continue
-        if RegExMatch(A_LoopFileName, "i)_([mp\d]+_[mp\d]+_[mp\d]+)\.bmp$", &m) {
+        if RegExMatch(A_LoopFileName, "i)_([mp\d]+_[mp\d]+_[mp\d]+)(?:_r2)?\.bmp$", &m) {
             if !validShots.Has(m[1]) {
                 orphShots.Push(A_LoopFileFullPath)
                 bytes += A_LoopFileSize
@@ -6235,6 +6236,25 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     btnShotDel.Enabled := hasShot
     picShot.GetPos(, &pY0, , &pH0)
     btnShotDel.GetPos(, &bY0, , &bH0)
+    ; Repère 2 (facultatif) : seconde capture, affichée à droite de la première dans le menu
+    shotFile2 := ShotPath(keyMap, cmd, "", 2)
+    curShot2 := shotFile2
+    shotRedone2 := false
+    hasShot2 := ShotValid(shotFile2)
+    d.Add("Text", "xm y" (Max(pY0 + pH0, bY0 + bH0) + 12) " w110", "Repère 2`n(facultatif)")
+    picShot2 := d.Add("Picture", "x130 yp w" picSz " h" picSz, "")
+    if hasShot2 {
+        try {
+            picShot2.Value := "*w" picSz " *h" picSz " " shotFile2
+        } catch {
+            hasShot2 := false
+        }
+    }
+    btnShot2New := d.Add("Button", "x+12 yp w210", "Capturer le repère 2 (en jeu)")
+    btnShot2Del := d.Add("Button", "xp y+6 w210", "Supprimer le repère 2")
+    btnShot2Del.Enabled := hasShot2
+    picShot2.GetPos(, &pY0, , &pH0)
+    btnShot2Del.GetPos(, &bY0, , &bH0)
     saveTop := Max(pY0 + pH0, bY0 + bH0) + 16
     btnCancel := d.Add("Button", "xm y" saveTop " w180", "Annuler")
     btnSave := d.Add("Button", "x330 y" saveTop " w180 Default", "Enregistrer")
@@ -6446,6 +6466,9 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         newShot := ShotPath(keyMap, nCmd)
         if (!shotRedone && shotFile != "" && newShot != "" && newShot != shotFile && FileExist(shotFile))
             try FileMove(shotFile, newShot, 1)
+        newShot2 := ShotPath(keyMap, nCmd, "", 2)
+        if (!shotRedone2 && shotFile2 != "" && newShot2 != "" && newShot2 != shotFile2 && FileExist(shotFile2))
+            try FileMove(shotFile2, newShot2, 1)
         if changedId {
             Rekey(oldKey, keyMap "|" nCat "|" nName)
             if (nCat !== oldCat)
@@ -6467,10 +6490,24 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         }
     }
 
+    ShotDel2Click(*) {
+        if (MsgBox("Supprimer le repère 2 de ce stuff ?", "Modifier", 0x24) = "Yes") {
+            try FileDelete(curShot2)
+            btnShot2Del.Enabled := false
+            picShot2.Value := ""
+        }
+    }
+
     ; Refait la capture : masque toutes les fenêtres, te téléporte au stuff, capture le centre du jeu puis rouvre tout
     ShotRedoClick(*) {
+        ShotRedo(1)
+    }
+    ShotRedo2Click(*) {
+        ShotRedo(2)
+    }
+    ShotRedo(nn) {
         global keysShown, netFailTick
-        sp := ShotPath(keyMap, edPos.Value)
+        sp := ShotPath(keyMap, edPos.Value, "", nn)
         if (sp = "") {
             MsgBox("Renseigne d'abord une position valide (setpos x y z; setang pitch yaw).", "Modifier", 0x40030)
             return
@@ -6489,7 +6526,10 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
             MsgBox("Pas de connexion à CS2 : ferme le jeu et relance le menu.", "Modifier", 0x40030)
             return
         }
-        ans := MsgBox("Les fenêtres et affichages vont se fermer, tu seras téléporté à la position du stuff et la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle de ce stuff.", "Refaire la capture", 0x41)
+        if (nn = 2)
+            ans := MsgBox("Les fenêtres et affichages vont se fermer et tu seras téléporté à la position du stuff.`n`nTu auras ensuite 6 secondes pour te placer sur ton 2e repère (sans toucher à la souris si c'est le but), puis la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle de ce stuff.", "Repère 2", 0x41)
+        else
+            ans := MsgBox("Les fenêtres et affichages vont se fermer, tu seras téléporté à la position du stuff et la capture se fera au centre du jeu. Tout se rouvre ensuite.`n`nLa map du jeu doit être celle de ce stuff.", "Refaire la capture", 0x41)
         if (ans != "OK")
             return
         wasMenu := menuOpen
@@ -6510,9 +6550,10 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         WinWaitActive("ahk_exe cs2.exe", , 3)
         Sleep(200)
         RunCmd(tpPos)
-        Loop 2 {
-            left := 3 - A_Index
-            ToolTip("Capture dans " left " s...")
+        cdTot := (nn = 2) ? 6 : 2
+        Loop cdTot {
+            left := cdTot + 1 - A_Index
+            ToolTip((nn = 2) ? "Place-toi sur le repère 2 : capture dans " left " s..." : "Capture dans " left " s...")
             Sleep(1000)
         }
         ToolTip()
@@ -6532,7 +6573,13 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
         try WinShow("ahk_id " ownerHwnd)
         d.Show()
         WinActivate("ahk_id " d.Hwnd)
-        if ok {
+        if (ok && nn = 2) {
+            shotRedone2 := true
+            curShot2 := sp
+            shotOk[sp] := 1
+            try picShot2.Value := "*w" picSz " *h" picSz " " sp
+            btnShot2Del.Enabled := true
+        } else if ok {
             shotRedone := true
             curShot := sp
             shotOk[sp] := 1
@@ -6547,6 +6594,8 @@ EditStuffDialog(path, ent, keyMap, ownerHwnd, occ := 0) {
     btnFlightDel.OnEvent("Click", FlightDelClick)
     btnShotNew.OnEvent("Click", ShotRedoClick)
     btnShotDel.OnEvent("Click", ShotDelClick)
+    btnShot2New.OnEvent("Click", ShotRedo2Click)
+    btnShot2Del.OnEvent("Click", ShotDel2Click)
     cbCat.OnEvent("Change", CatChange)
     ddType.OnEvent("Change", TypeChange)
     btnRecap.OnEvent("Click", Recap)
@@ -7261,7 +7310,7 @@ UpdateShot(preview := false, forcePath := "") {
         }
     } else if preview {
         Loop Files, ShotDir() "\*.bmp" {
-            if (SubStr(A_LoopFileName, 1, 1) != "_") {
+            if (SubStr(A_LoopFileName, 1, 1) != "_" && !RegExMatch(A_LoopFileName, "i)_r2\.bmp$")) {
                 path := A_LoopFileFullPath
                 break
             }
@@ -7278,45 +7327,59 @@ UpdateShot(preview := false, forcePath := "") {
     if (preview && forcePath = "" && path != "" && !ShotValid(path))
         path := ""
     tw := Round(ShotZoom * DpiK())
+    ; « repère 2 » facultatif : affiché à droite du repère 1 s'il existe
+    paths := [path]
+    if (path != "" && (!preview || forcePath != "")) {
+        p2 := RegExReplace(path, "i)\.bmp$", "_r2.bmp")
+        if (p2 != path && ShotValid(p2))
+            paths.Push(p2)
+    }
+    gap := Round(8 * DpiK())
+    ww := tw * paths.Length + gap * (paths.Length - 1)
     vl := SysGet(76)
     vt := SysGet(77)
     vw := SysGet(78)
     vh := SysGet(79)
     if (ShotPlace = 1) {
         MonitorGet(MonitorGetPrimary(), &ml, &mt, &mr, &mb)
-        px := mr - tw - 12
+        px := mr - ww - 12
         py := mt + 12
     } else {
-        px := Max(vl, Min(ShotX, vl + vw - tw))
+        px := Max(vl, Min(ShotX, vl + vw - ww))
         py := Max(vt, Min(ShotY, vt + vh - tw))
     }
     if !IsObject(gs)
         gs := NewLayered()
-    gs.Show("NA x" px " y" py " w" tw " h" tw)
+    gs.Show("NA x" px " y" py " w" ww " h" tw)
     rr := Min(Round(ShotCorner * DpiK()), tw // 2)
-    bg := PanelBegin(tw, tw)
+    bg := PanelBegin(ww, tw)
     gg := bg[2]
-    drawn := false
-    if (path != "") {
-        img := 0
-        if (DllCall("gdiplus\GdipCreateBitmapFromFile", "WStr", path, "Ptr*", &img) = 0 && img) {
-            clip := GdipRoundPath(0, 0, tw, tw, rr)
-            DllCall("gdiplus\GdipSetClipPath", "Ptr", gg, "Ptr", clip, "Int", 0)
-            DllCall("gdiplus\GdipSetInterpolationMode", "Ptr", gg, "Int", 7)
-            DllCall("gdiplus\GdipDrawImageRectI", "Ptr", gg, "Ptr", img, "Int", 0, "Int", 0, "Int", tw, "Int", tw)
-            DllCall("gdiplus\GdipResetClip", "Ptr", gg)
-            DllCall("gdiplus\GdipDeletePath", "Ptr", clip)
-            DllCall("gdiplus\GdipDisposeImage", "Ptr", img)
-            drawn := true
+    for idx, pth in paths {
+        ox := (idx - 1) * (tw + gap)
+        drawn := false
+        if (pth != "") {
+            img := 0
+            if (DllCall("gdiplus\GdipCreateBitmapFromFile", "WStr", pth, "Ptr*", &img) = 0 && img) {
+                clip := GdipRoundPath(ox, 0, tw, tw, rr)
+                DllCall("gdiplus\GdipSetClipPath", "Ptr", gg, "Ptr", clip, "Int", 0)
+                DllCall("gdiplus\GdipSetInterpolationMode", "Ptr", gg, "Int", 7)
+                DllCall("gdiplus\GdipDrawImageRectI", "Ptr", gg, "Ptr", img, "Int", ox, "Int", 0, "Int", tw, "Int", tw)
+                DllCall("gdiplus\GdipResetClip", "Ptr", gg)
+                DllCall("gdiplus\GdipDeletePath", "Ptr", clip)
+                DllCall("gdiplus\GdipDisposeImage", "Ptr", img)
+                drawn := true
+            }
         }
+        if !drawn {
+            GdipRoundFill(gg, 0xFF000000 | Integer("0x" SelColor()), ox, 0, tw, tw, rr)
+            GdipText(gg, 0xFFA0A6AE, "Aperçu de la capture", (ovFont = "") ? "Segoe UI" : ovFont, PxOf(FS(10)), 0, ox, 0, tw, tw, 1, 1, false)
+        }
+        if (ovBorder > 0)
+            GdipRoundStroke(gg, 0xFF000000 | Integer("0x" BorderColor()), ovBorder, ox, 0, tw, tw, rr)
+        if (paths.Length > 1)
+            GdipText(gg, 0xFFFFFFFF, String(idx), (ovFont = "") ? "Segoe UI" : ovFont, PxOf(FS(10)), 1, ox + 6, 4, 24, 24, 0, 0, false)
     }
-    if !drawn {
-        GdipRoundFill(gg, 0xFF000000 | Integer("0x" SelColor()), 0, 0, tw, tw, rr)
-        GdipText(gg, 0xFFA0A6AE, "Aperçu de la capture", (ovFont = "") ? "Segoe UI" : ovFont, PxOf(FS(10)), 0, 0, 0, tw, tw, 1, 1, false)
-    }
-    if (ovBorder > 0)
-        GdipRoundStroke(gg, 0xFF000000 | Integer("0x" BorderColor()), ovBorder, 0, 0, tw, tw, rr)
-    PanelEnd(gs, bg, tw, tw, px, py, Max(ovOpacity, 200))
+    PanelEnd(gs, bg, ww, tw, px, py, Max(ovOpacity, 200))
 }
 
 ; ---- Dessin lissé (GDI+) : une seule fenêtre à transparence par pixel, bords et textes sans effet d'escalier ----
@@ -8090,6 +8153,9 @@ CountShots(list) {
         sp := ShotPath(e[1], e[4])
         if (sp != "" && FileExist(sp))
             n += 1
+        sp2 := ShotPath(e[1], e[4], "", 2)
+        if (sp2 != "" && FileExist(sp2))
+            n += 1
     }
     return n
 }
@@ -8107,15 +8173,17 @@ BuildPack(list, withImgs := false) {
     if withImgs {
         tmp := A_Temp "\stuffshot_export.jpg"
         for e in list {
-            sp := ShotPath(e[1], e[4])
-            if (sp = "" || !FileExist(sp))
-                continue
-            try FileDelete(tmp)
-            if !ConvertImage(sp, tmp, "jpeg")
-                continue
-            b := FileToB64(tmp)
-            if (b != "")
-                out .= "@IMG | " e[1] " | " e[2] " | " e[3] " | " b "`n"
+            for nn in [1, 2] {
+                sp := ShotPath(e[1], e[4], "", nn)
+                if (sp = "" || !FileExist(sp))
+                    continue
+                try FileDelete(tmp)
+                if !ConvertImage(sp, tmp, "jpeg")
+                    continue
+                b := FileToB64(tmp)
+                if (b != "")
+                    out .= ((nn = 2) ? "@IMG2" : "@IMG") " | " e[1] " | " e[2] " | " e[3] " | " b "`n"
+            }
         }
         try FileDelete(tmp)
     }
@@ -8156,6 +8224,11 @@ ParsePack(txt) {
         if (p[1] = "@IMG") {
             if (p.Length >= 5 && p[5] != "")
                 imgs[CleanField(p[2]) "|" CleanField(p[3]) "|" CleanField(p[4])] := p[5]
+            continue
+        }
+        if (p[1] = "@IMG2") {
+            if (p.Length >= 5 && p[5] != "")
+                imgs[CleanField(p[2]) "|" CleanField(p[3]) "|" CleanField(p[4]) "|2"] := p[5]
             continue
         }
         if (p.Length < 4)
@@ -8270,18 +8343,20 @@ SaveImportedTime(tms, e, cmd, prof, overwrite, stats) {
 SaveImportedShot(imgs, e, cmd, prof, overwrite, tmpImg, stats) {
     if !IsObject(imgs)
         return
-    key := e[1] "|" e[2] "|" e[3]
-    if !imgs.Has(key)
-        return
-    dest := ShotPath(e[1], cmd, prof)
-    if (dest = "" || (FileExist(dest) && !overwrite))
-        return
-    if !B64ToFile(imgs[key], tmpImg)
-        return
-    DirCreate(ShotDir(prof))
-    if ImageToBmp24(tmpImg, dest) {
-        shotOk[dest] := 1
-        stats["img"] += 1
+    for nn in [1, 2] {
+        key := e[1] "|" e[2] "|" e[3] ((nn = 2) ? "|2" : "")
+        if !imgs.Has(key)
+            continue
+        dest := ShotPath(e[1], cmd, prof, nn)
+        if (dest = "" || (FileExist(dest) && !overwrite))
+            continue
+        if !B64ToFile(imgs[key], tmpImg)
+            continue
+        DirCreate(ShotDir(prof))
+        if ImageToBmp24(tmpImg, dest) {
+            shotOk[dest] := 1
+            stats["img"] += 1
+        }
     }
 }
 
