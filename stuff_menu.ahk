@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.37.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.37.2"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -7761,6 +7761,9 @@ TmClick() {
     global tmClicks
     if !(TimerOn || tmMeasuring || tmTesting)
         return
+    ; clic gauche + clic droit : les deux relâchements se suivent, on ne garde que le premier (le lâcher de la grenade)
+    if (tmClicks.Length >= 1 && A_TickCount - tmClicks[tmClicks.Length] < 400)
+        return
     tmClicks.Push(A_TickCount)
     TmDbg("clic relâché")
     if (tmClicks.Length > 30)
@@ -10358,6 +10361,7 @@ SafeHotkey(key, fn) {
 HotIf(InGame)
 SafeHotkey(MenuKey, (*) => Toggle())
 Hotkey("~LButton Up", (*) => (TmClick(), QuizThrow()))   ; chronomètre : moment où la grenade est lâchée
+Hotkey("~RButton Up", (*) => TmClick())   ; lancers au clic droit ou avec les deux clics
 SetRethrowHotkey()   ; chronomètre : relance avec la touche de sv_rethrow_last_grenade
 
 HotIf(MenuActive)

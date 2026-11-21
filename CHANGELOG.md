@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.37.2
+
+- Chronomètre / mesure du temps de vol : les lancers au clic droit ou avec les deux clics (gauche + droit) sont maintenant détectés. Le relâchement du clic droit compte comme moment du lâcher, et si les deux clics sont relâchés à la suite, seul le premier est retenu.
+
 ## v2.37.1
 
 - Séparateurs : deux fois plus de tirets (`──── TEXTE ────`). Les séparateurs déjà créés restent valides.
