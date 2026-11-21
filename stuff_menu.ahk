@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.37.0"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.37.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -5862,7 +5862,7 @@ ShowManager() {
         if (lbl = "")
             return
         plain := (lbl = "-")
-        nm := plain ? "──────" : "── " lbl " ──"
+        nm := plain ? "────────────" : "──── " lbl " ────"
         while (CatNameTaken(MapPath(), nm) != "")
             nm .= plain ? "─" : " "   ; nom unique
         AppendLine(MapPath(), "@cat | " nm)
