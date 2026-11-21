@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.36.2"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.36.3"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -10111,6 +10111,13 @@ CheckUpdate() {
         return
     if (remote = IniRead(IniFile, "State", "SkipUpdate", ""))
         return   ; version abandonnée après un retour à la précédente : proposée seulement depuis le launcher
+    static asked := false
+    if asked
+        return   ; une seule demande par lancement du menu
+    ; launcher visible : sa ligne « Version … disponible » suffit, pas de deuxième message par-dessus
+    if (launcherHwnd && WinExist("ahk_id " launcherHwnd))
+        return
+    asked := true
     msg := "Une nouvelle version est disponible : " remote " (tu as la " APP_VERSION ").`n`n"
     msg .= "Mettre à jour maintenant ?`nTes stuffs, favoris, profils et réglages ne sont pas touchés."
     ans := MsgBox(msg, "Mise à jour du menu", 0x40024)

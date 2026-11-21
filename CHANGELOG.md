@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.36.3
+
+- Mise à jour : le message « Une nouvelle version est disponible » ne s'affiche plus en double quand le launcher est ouvert (sa ligne « Version … disponible » sert alors d'annonce) et n'est demandé qu'une fois par lancement.
+
 ## v2.36.2
 
 - Repère 2 : 12 secondes (au lieu de 6) pour te placer avant la capture.
