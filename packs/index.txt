@@ -4,3 +4,4 @@
 de_nuke.stuffpack | Nuke ProToxEU Pack | Ya que les spawn en cours | 1 | 2026-11-22 | 13 | de_nuke
 de_mirage.stuffpack | Mirage ProToxEU Pack | Ya que les spawn en cours | 1 | 2026-11-22 | 15 | de_mirage
 de_inferno.stuffpack | Inferno ProToxEU Pack | Ya que les spawns en cours | 1 | 2026-11-22 | 11 | de_inferno
+de_dust2.stuffpack | Dust 2 ProToxEU Pack | Pack Complet | 1 | 2026-11-22 | 80 | de_dust2
