@@ -2,9 +2,9 @@
 # Un pack par ligne : fichier.stuffpack | Titre | Description
 # Seul le proprietaire du depot peut en ajouter (git push).
 de_nuke.stuffpack | Nuke ProToxEU Pack | Ya que les spawn en cours | 1 | 2026-11-22 | 13 | de_nuke
-de_mirage.stuffpack | Mirage ProToxEU Pack | Ya que les spawn en cours | 1 | 2026-11-22 | 15 | de_mirage
 de_inferno.stuffpack | Inferno ProToxEU Pack | Ya que les spawns en cours | 1 | 2026-11-22 | 11 | de_inferno
 de_cache.stuffpack | Cache ProToxEU Pack |  | 1 | 2026-11-22 | 15 | de_cache
 de_anubis.stuffpack | Anubis ProToxEU Pack | Ya que les spawns en cours | 1 | 2026-11-22 | 16 | de_anubis
 de_ancient.stuffpack | Ancient ProToxEU Pack | Pack complet | 2 | 2026-11-22 | 98 | de_ancient
 de_dust2.stuffpack | Dust2 ProToxEU Pack | Pack complet | 2 | 2026-11-22 | 104 | de_dust2
+de_mirage.stuffpack | Mirage ProToxEU Pack | Pack Complet | 2 | 2026-11-22 | 103 | de_mirage
