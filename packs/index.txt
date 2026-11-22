@@ -1,5 +1,4 @@
 # Packs de stuffs proposes dans le menu (bouton "Packs de stuffs").
 # Un pack par ligne : fichier.stuffpack | Titre | Description
 # Seul le proprietaire du depot peut en ajouter (git push).
-AncientV1.stuffpack | Ancient ProToxEU | Ancient stuff default | 2 | 2026-11-21 | 64 | de_ancient
-Dust2.stuffpack | Dust 2 ProToxEU | Dust 2 default stuff | 2 | 2026-11-22 | 52 | de_dust2
+
