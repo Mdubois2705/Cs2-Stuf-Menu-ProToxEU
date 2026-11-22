@@ -1,0 +1,16 @@
+CS2STUFFPACK;1;-64;Principal
+de_cache | SPAWN T | T 1 | setpos 2995.89 -168 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 2 | setpos 2949.02 -47 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 3 | setpos 2916.77 69.42 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 4 | setpos 2922.52 165.67 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 5 | setpos 3094.27 -152.58 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 6 | setpos 3041.77 -21.08 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 7 | setpos 3037.89 66.67 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 8 | setpos 3077.77 135.92 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 9 | setpos 3171.64 -100.83 1692; setang 0 182 0 | 
+de_cache | SPAWN T | T 10 | setpos 3162.14 -5 1692; setang 0 182 0 | 
+de_cache | SPAWN CT | CT 1 | setpos -1400.28 706.82 1679.78; setang 0 270 0 | 
+de_cache | SPAWN CT | CT 2 | setpos -1488.28 706.82 1679.78; setang 0 270 0 | 
+de_cache | SPAWN CT | CT 3 | setpos -1524.28 794.82 1679.78; setang 0 270 0 | 
+de_cache | SPAWN CT | CT 4 | setpos -1400.28 874.82 1679.78; setang 0 270 0 | 
+de_cache | SPAWN CT | CT 5 | setpos -1488.28 874.82 1679.78; setang 0 270 0 | 
