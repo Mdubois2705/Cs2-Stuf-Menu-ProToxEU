@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.38.1"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.39.0"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -582,7 +582,7 @@ BuildVirtual() {
     favItems := []
     for c in cats {
         for it in items[c] {
-            if favs.Has(it[5])
+            if (favs.Has(it[5]) && !IsSepCat(it[1]))
                 favItems.Push(it)
         }
     }
@@ -2790,7 +2790,7 @@ QzHide() {
 }
 
 Render() {
-    global catIdx
+    global catIdx, itemIdx
     names := []
     sel := 1
     title := ""
@@ -2815,6 +2815,11 @@ Render() {
     } else if (level = 2) {
         c := cats[catIdx]
         virt := (c = FAV_CAT || c = REC_CAT)
+        Loop items[c].Length {
+            if !IsSepCat(items[c][itemIdx][1])
+                break   ; le curseur ne reste jamais sur un séparateur
+            itemIdx := Mod(itemIdx, items[c].Length) + 1
+        }
         for it in items[c]
             names.Push(DispName(it, virt))
         sel := itemIdx
@@ -3005,7 +3010,11 @@ Move(d) {
                 break   ; les séparateurs sont sautés
         }
     } else if (level = 2) {
-        itemIdx := Mod(itemIdx - 1 + d + n, n) + 1
+        Loop n {
+            itemIdx := Mod(itemIdx - 1 + d + n, n) + 1
+            if !IsSepCat(items[cats[catIdx]][itemIdx][1])
+                break   ; les séparateurs de stuffs sont sautés
+        }
     } else {
         resIdx := Mod(resIdx - 1 + d + n, n) + 1
     }
@@ -3035,6 +3044,8 @@ Select() {
         itemIdx := 1
     } else {
         it := CurrentItem()
+        if IsSepCat(it[1])
+            return
         RunCmd(it[2], it[3])
         AddRecent(it)
         if CloseAfterRun
@@ -3144,6 +3155,8 @@ UpdateResults() {
         if (c = FAV_CAT || c = REC_CAT)
             continue
         for it in items[c] {
+            if IsSepCat(it[1])
+                continue
             tg := (it.Length >= 7) ? TagsDisp(it[7]) : ""
             hay := it[4] " " it[1] " " it[3] " " tg
             ok := true
@@ -5530,6 +5543,29 @@ MoveCatInFile(path, cat, dir) {
 
 ; Déplace un stuff d'un cran vers le haut (dir = -1) ou le bas (dir = 1) dans sa catégorie.
 ; pos = position du stuff parmi ceux de la catégorie (1 = premier). Renvoie la nouvelle position, 0 si rien n'a changé.
+; Insère une ligne juste après le stuff n° pos de la catégorie cat (à la fin de la catégorie si pos = 0). Renvoie la position de la nouvelle ligne.
+InsertAfterStuff(path, cat, pos, newLine) {
+    src := FileExist(path) ? ReadLines(path) : []
+    idxs := []
+    for i, line in src {
+        t := Trim(line)
+        if !IsDataLine(t)
+            continue
+        p := StrSplit(t, "|", " `t", 4)
+        if (p[1] != "@cat" && p.Length >= 3 && p[1] = cat)
+            idxs.Push(i)
+    }
+    if (idxs.Length = 0) {
+        AppendLine(path, newLine)
+        return 1
+    }
+    if (pos < 1 || pos > idxs.Length)
+        pos := idxs.Length
+    src.InsertAt(idxs[pos] + 1, newLine)
+    RewriteFile(path, src)
+    return pos + 1
+}
+
 MoveStuffPosInFile(path, cat, pos, dir) {
     if !FileExist(path)
         return 0
@@ -5666,8 +5702,9 @@ ShowManager() {
     btnStLock := d.Add("Button", "x+8 yp w86", "Cadenas")
     btnStDel := d.Add("Button", "x+8 yp w86", "Supprimer")
     txMoveLbl := d.Add("Text", "x290 y" row2t " w100", "Déplacer vers")
-    cbDest := d.Add("ComboBox", "x395 y" row2 " w230", [])
-    btnMove := d.Add("Button", "x+8 yp-1 w125 Default", "Déplacer")
+    cbDest := d.Add("ComboBox", "x395 y" row2 " w130", [])
+    btnMove := d.Add("Button", "x+8 yp-1 w85 Default", "Déplacer")
+    btnStSep := d.Add("Button", "x+8 yp w128", "Séparateur")
     d.SetFont("s9 c8A8F96")
     txNote := d.Add("Text", "x12 y" note " w748 r3", "Double-clique sur un stuff (ou « Modifier… ») pour tout changer : type, catégorie, nom, coordonnées, commandes, info. Supprimer une catégorie garde ses stuffs : ils sont déplacés dans « " FALLBACK_CAT " ». Sélectionne plusieurs stuffs avec Ctrl ou Maj. Un élément verrouillé ne peut être ni supprimé, ni renommé, ni déplacé.")
     d.SetFont("s" WinSz() " c" WinPal()["ok"])
@@ -5813,8 +5850,10 @@ ShowManager() {
         lvCat.Delete()
         ents := ReadEntries(MapPath())
         cnt := Map()
-        for ent in ents[2]
-            cnt[ent[1]] := cnt.Has(ent[1]) ? cnt[ent[1]] + 1 : 1
+        for ent in ents[2] {
+            if !IsSepCat(ent[2])   ; les séparateurs de stuffs ne comptent pas
+                cnt[ent[1]] := cnt.Has(ent[1]) ? cnt[ent[1]] + 1 : 1
+        }
         cbDest.Delete()
         pick := 0
         for k, cn in ents[1] {
@@ -5876,6 +5915,29 @@ ShowManager() {
         AppendLine(MapPath(), "@cat | " nm)
         RefreshCats(nm)
         Say("Séparateur ajouté en bas : place-le avec les flèches ▲▼")
+    }
+
+    ; Séparateur de stuffs : ligne de séparation dans la liste des stuffs (sautée dans le menu), ajoutée après le stuff sélectionné
+    NewStuffSep(*) {
+        cc := SelCat()
+        if (cc = "") {
+            Say("Sélectionne d'abord une catégorie")
+            return
+        }
+        if IsSepCat(cc) {
+            Say("Impossible : un séparateur de catégories ne contient rien")
+            return
+        }
+        lbl := CleanField(AskText("Séparateur de stuffs", "Texte du séparateur (par exemple : SMOKES).`nPour une simple ligne, tape un tiret : -", "", "ahk_id " d.Hwnd))
+        if (lbl = "")
+            return
+        nm := (lbl = "-") ? "────────────" : "──── " lbl " ────"
+        rows := SelRows()
+        pos := (rows.Length >= 1) ? rows[rows.Length][3] : 0
+        np := InsertAfterStuff(MapPath(), cc, pos, BuildLine(cc, nm, "echo", ""))
+        RefreshCats(cc)
+        RefreshStuffs(np)
+        Say("Séparateur ajouté" (pos ? " sous le stuff sélectionné" : " en bas de la catégorie") " : déplace-le avec les flèches ▲▼")
     }
 
     RenCat(*) {
@@ -6218,6 +6280,7 @@ ShowManager() {
     btnCatDn.OnEvent("Click", MoveCat.Bind(1))
     btnCatDel.OnEvent("Click", DelCat)
     btnCatSep.OnEvent("Click", NewSep)
+    btnStSep.OnEvent("Click", NewStuffSep)
     btnCatLock.OnEvent("Click", LockCat)
     btnUndo.OnEvent("Click", UndoStuff)
     HotIfWinActive("ahk_id " d.Hwnd)
@@ -6249,7 +6312,7 @@ ShowManager() {
     ui["lh0"] := lh0
     ui["fw0"] := fw0
     ys := Map()
-    for c in [btnCatNew, btnCatRen, btnCatDel, btnCatLock, btnCatSep, btnStEdit, btnStRen, btnStInfo, btnStLock, btnStDel, cbDest, btnMove, stText, btnClose, btnUndo, txMoveLbl, txNote] {
+    for c in [btnCatNew, btnCatRen, btnCatDel, btnCatLock, btnCatSep, btnStSep, btnStEdit, btnStRen, btnStInfo, btnStLock, btnStDel, cbDest, btnMove, stText, btnClose, btnUndo, txMoveLbl, txNote] {
         c.GetPos(, &cy)
         ys[c] := cy
     }

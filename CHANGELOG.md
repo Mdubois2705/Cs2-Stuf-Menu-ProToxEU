@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.39.0
+
+- **Séparateurs de stuffs** : nouveau bouton « Séparateur » (à côté de « Déplacer ») dans la gestion des stuffs. Il ajoute une ligne de séparation dans la catégorie, sous le stuff sélectionné (ou en bas). Dans le menu, elle s'affiche comme une ligne, est sautée au défilement et ne peut pas être lancée. Elle ne compte pas dans le nombre de stuffs, n'apparaît pas dans la recherche ni dans le quiz, et se déplace avec ▲▼ comme un stuff.
+
 ## v2.38.1
 
 - Partager des stuffs : liste « Map » et bouton « Cocher uniquement les stuffs de cette map » pour sélectionner d'un coup tous les stuffs d'une map (au lieu de les cocher un par un), puis « Exporter vers un fichier… ».
