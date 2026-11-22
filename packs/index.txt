@@ -2,3 +2,4 @@
 # Un pack par ligne : fichier.stuffpack | Titre | Description
 # Seul le proprietaire du depot peut en ajouter (git push).
 de_nuke.stuffpack | Nuke ProToxEU Pack | Ya que les spawn en cours | 1 | 2026-11-22 | 13 | de_nuke
+de_mirage.stuffpack | Mirage ProToxEU Pack | Ya que les spawn en cours | 1 | 2026-11-22 | 15 | de_mirage

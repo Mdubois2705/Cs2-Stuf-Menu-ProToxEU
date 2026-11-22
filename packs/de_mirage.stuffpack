@@ -1,0 +1,16 @@
+CS2STUFFPACK;1;-64;Principal
+de_mirage | SPAWN T | T 1 | setpos 1136 -256 -80; setang 0 270 0 | 
+de_mirage | SPAWN T | T 2 | setpos 1136 -160 -80; setang 0 270 0 | 
+de_mirage | SPAWN T | T 3 | setpos 1136 -64 -80; setang 0 90 0 | 
+de_mirage | SPAWN T | T 4 | setpos 1136 32 -80; setang 0 90 0 | 
+de_mirage | SPAWN T | T 5 | setpos 1216 -307 -80; setang 0 270 0 | 
+de_mirage | SPAWN T | T 6 | setpos 1216 -211 -80; setang 0 270 0 | 
+de_mirage | SPAWN T | T 7 | setpos 1216 -115 -80; setang 0 90 0 | 
+de_mirage | SPAWN T | T 8 | setpos 1216 -16 -80; setang 0 90 0 | 
+de_mirage | SPAWN T | T 9 | setpos 1296 -352 -80; setang 0 227 0 | 
+de_mirage | SPAWN T | T 10 | setpos 1296 32 -80; setang 0 141 0 | 
+de_mirage | SPAWN CT | CT 1 | setpos -1656 -1800 -176; setang 0 94 0 | 
+de_mirage | SPAWN CT | CT 2 | setpos -1776 -1800 -176; setang 0 36 0 | 
+de_mirage | SPAWN CT | CT 3 | setpos -1720 -1896 -176; setang 0 50 0 | 
+de_mirage | SPAWN CT | CT 4 | setpos -1656 -1976 -176; setang 0 299 0 | 
+de_mirage | SPAWN CT | CT 5 | setpos -1776 -1976 -176; setang 0 331 0 | 
