@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.37.5"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.38.1"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -8815,17 +8815,21 @@ ShowShare() {
     lvEx.ModifyCol(4, 190)
     lvEx.GetPos(&lx, &ly, &lw, &lh)
     r1 := ly + lh + 8
-    btnAll := d.Add("Button", "x22 y" r1 " w120", "Tout cocher")
-    btnNone := d.Add("Button", "x+8 yp w120", "Tout décocher")
-    btnFile := d.Add("Button", "x+8 yp w200", "Exporter vers un fichier…")
-    btnCode := d.Add("Button", "x+8 yp w200", "Copier le code")
-    stCount := d.Add("Text", "x22 y" (r1 + 36) " w724", "")
-    chkImg := d.Add("CheckBox", "x22 y" (r1 + 60) " w724 Checked", "Inclure les captures d'écran des stuffs (export vers un fichier uniquement)")
-    d.Add("Text", "x22 y" (r1 + 96) " w724", "Importer : reçu d'un ami ?")
-    btnImpF := d.Add("Button", "x22 y" (r1 + 122) " w240", "Importer un fichier .stuffpack…")
+    btnAll := d.Add("Button", "x22 y" r1 " w100", "Tout cocher")
+    btnNone := d.Add("Button", "x+8 yp w100", "Tout décocher")
+    btnFile := d.Add("Button", "x+8 yp w170", "Exporter vers un fichier…")
+    btnCode := d.Add("Button", "x+8 yp w130", "Copier le code")
+    btnPerMap := d.Add("Button", "x+8 yp w160", "Un pack par map…")
+    d.Add("Text", "x22 y" (r1 + 44) " w50", "Map :")
+    ddMapSel := d.Add("DropDownList", "x72 y" (r1 + 40) " w190", mapNames)
+    btnMapOnly := d.Add("Button", "x+8 yp-1 w330", "Cocher uniquement les stuffs de cette map")
+    stCount := d.Add("Text", "x22 y" (r1 + 76) " w724", "")
+    chkImg := d.Add("CheckBox", "x22 y" (r1 + 100) " w724 Checked", "Inclure les captures d'écran des stuffs (export vers un fichier uniquement)")
+    d.Add("Text", "x22 y" (r1 + 136) " w724", "Importer : reçu d'un ami ?")
+    btnImpF := d.Add("Button", "x22 y" (r1 + 162) " w240", "Importer un fichier .stuffpack…")
     btnImpC := d.Add("Button", "x+8 yp w230", "Importer depuis le presse-papiers (code)")
     btnPkO := d.Add("Button", "x+8 yp w140", "Packs en ligne...")
-    yEnd2 := r1 + 166
+    yEnd2 := r1 + 206
 
     ; ----- Onglet Sauvegardes -----
     tabs.UseTab(3)
@@ -8910,6 +8914,62 @@ ShowShare() {
             MsgBox("Export terminé : " sel.Length " stuff(s) et " nShots " capture(s) d'écran dans le fichier.`n`nTon ami verra les captures à l'import. Elles ne sont incluses que dans les fichiers .stuffpack, pas dans le code copié.", "Export", 0x40040)
         else if (nShots > 0)
             MsgBox("Export terminé SANS captures d'écran (case décochée). Coche « Inclure les captures » pour les envoyer aussi.", "Export", 0x40040)
+    }
+
+    ; Coche d'un coup tous les stuffs de la map choisie (et décoche le reste)
+    CheckMapOnly(*) {
+        mn := ddMapSel.Text
+        if (mn = "") {
+            Say("Choisis une map dans la liste")
+            return
+        }
+        n := 0
+        for i, r in rows {
+            on := (r[1] = mn)
+            lvEx.Modify(i, on ? "Check" : "-Check")
+            if on
+                n += 1
+        }
+        UpdCount()
+        Say(n " stuff(s) de " mn " coché(s) : clique sur « Exporter vers un fichier… »")
+    }
+
+    ; Un fichier .stuffpack par map (nom = nom de la map) pour les stuffs cochés, ou pour tous si rien n'est coché
+    ExportPerMap(*) {
+        sel := Picked()
+        if (sel.Length = 0) {
+            for r in rows
+                sel.Push(r)
+        }
+        if (sel.Length = 0) {
+            Say("Aucun stuff à exporter")
+            return
+        }
+        dir := DirSelect("*" A_Desktop, 3, "Dossier où créer un pack par map")
+        if (dir = "")
+            return
+        byMap := Map()
+        order := []
+        for e in sel {
+            if !byMap.Has(e[1]) {
+                byMap[e[1]] := []
+                order.Push(e[1])
+            }
+            byMap[e[1]].Push(e)
+        }
+        made := ""
+        total := 0
+        for mn in order {
+            lst := byMap[mn]
+            fp := RTrim(dir, "\") "\" RegExReplace(mn, "[^\w\-\.]", "_") ".stuffpack"
+            try FileDelete(fp)
+            withI := (chkImg.Value && CountShots(lst) > 0)
+            FileAppend(BuildPack(lst, withI), fp, "UTF-8-RAW")
+            made .= mn " (" lst.Length ")`n"
+            total += lst.Length
+        }
+        Say(order.Length " pack(s) créé(s) dans " dir)
+        MsgBox(order.Length " pack(s) créé(s), " total " stuff(s) en tout, dans :`n" dir "`n`n" made "`nPublie-les ensuite avec « Packs en ligne... > Publier un pack » (un fichier à la fois).", "Un pack par map", 0x40040)
     }
 
     ExportCode(*) {
@@ -9001,6 +9061,13 @@ ShowShare() {
     btnAll.OnEvent("Click", CheckAll.Bind(true))
     btnNone.OnEvent("Click", CheckAll.Bind(false))
     btnFile.OnEvent("Click", ExportFile)
+    btnPerMap.OnEvent("Click", ExportPerMap)
+    btnMapOnly.OnEvent("Click", CheckMapOnly)
+    ddMapSel.Choose(1)
+    for mi, mn0 in mapNames {
+        if (mn0 = loadedMap)
+            ddMapSel.Choose(mi)
+    }
     btnCode.OnEvent("Click", ExportCode)
     btnImpF.OnEvent("Click", ImportFileBtn)
     btnImpC.OnEvent("Click", ImportClipBtn)

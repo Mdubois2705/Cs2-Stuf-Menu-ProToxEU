@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.38.1
+
+- Partager des stuffs : liste « Map » et bouton « Cocher uniquement les stuffs de cette map » pour sélectionner d'un coup tous les stuffs d'une map (au lieu de les cocher un par un), puis « Exporter vers un fichier… ».
+
+## v2.38.0
+
+- Partager des stuffs : nouveau bouton « Un pack par map… ». Il crée en une fois un fichier `.stuffpack` par map (nommé d'après la map, ex. `de_ancient.stuffpack`) dans un dossier au choix, pour les stuffs cochés ou, si rien n'est coché, pour tous. Les captures sont jointes si la case est cochée.
+
 ## v2.37.5
 
 - Gestion des stuffs : plus d'erreur « The control is destroyed » quand on ferme la fenêtre de gestion pendant qu'une fenêtre de modification ou de saisie est ouverte (la liste n'est plus rafraîchie sur une fenêtre fermée).

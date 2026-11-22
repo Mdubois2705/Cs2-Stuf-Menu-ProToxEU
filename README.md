@@ -284,6 +284,8 @@ Le temps de vol d'un stuff peut être mémorisé et affiché dans le menu, sous 
 « Profils et partage de stuffs » ouvre une fenêtre à trois onglets : Profils, Partager des stuffs, Sauvegardes.
 
 - **Profils** : plusieurs jeux complets de stuffs (par exemple « Principal », « Stuffs de Léo », « Equipe »). Le profil Principal utilise `maps\` et `data\` ; les autres sont dans `profiles\<nom>\`. « Activer » recharge le menu avec le profil choisi. Chaque profil a ses stuffs, favoris, récents et cadenas.
+- **Cocher une map** : choisis la map dans la liste « Map » puis « Cocher uniquement les stuffs de cette map » : tous ses stuffs sont cochés (le reste décoché), il ne reste qu'à exporter.
+- **Un pack par map** : le bouton « Un pack par map… » crée d'un coup un fichier `.stuffpack` par map (ex. `de_ancient.stuffpack`) dans un dossier au choix, pour les stuffs cochés ou, si rien n'est coché, pour tous (utile pour publier des packs).
 - **Exporter** : coche les stuffs à partager, puis « Exporter vers un fichier… » (`.stuffpack`) ou « Copier le code » (texte à coller dans Discord, de préférence dans un bloc de code ; pour beaucoup de stuffs, envoie plutôt le fichier).
 - **Importer** : « Importer un fichier… » ou « Importer depuis le presse-papiers ». Une fenêtre liste les stuffs reçus avec leur statut (Nouveau, Doublon, Identique). Tu coches ceux à garder, tu choisis le profil de destination et ce qu'il faut faire des doublons : ignorer, garder les deux (le nouveau est renommé) ou remplacer le tien.
 - **Profil complet** : « Exporter le profil… » crée un `.zip` (maps, temps de vol, favoris, cadenas, captures, réglages sans les chemins de ce PC). « Importer un profil… » le recrée sur un autre PC ; un profil existant est sauvegardé avant d'être remplacé.
