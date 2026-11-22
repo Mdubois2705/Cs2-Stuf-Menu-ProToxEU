@@ -1,0 +1,14 @@
+CS2STUFFPACK;1;-64;Principal
+de_nuke | SPAWN T | T 1 | setpos -1808 -1025 -336.63; setang 0 329 0 | 
+de_nuke | SPAWN T | T 2 | setpos -1808 -1089 -336.63; setang 0 340 0 | 
+de_nuke | SPAWN T | T 3 | setpos -1832 -1160 -336.63; setang 0 40 0 | 
+de_nuke | SPAWN T | T 4 | setpos -1878 -980 -336.63; setang 0 294 0 | 
+de_nuke | SPAWN T | T 5 | setpos -1874 -1076 -336.63; setang 0 336 0 | 
+de_nuke | SPAWN T | T 6 | setpos -1947.01 -965.11 -336.63; setang 0 312 0 | 
+de_nuke | SPAWN T | T 7 | setpos -1929 -1025 -336.63; setang 0 3 0 | 
+de_nuke | SPAWN T | T 8 | setpos -1947.01 -1102.11 -336.63; setang 0 74.5 0 | 
+de_nuke | SPAWN CT | CT 1 | setpos 2512 -504 -271; setang 0 145 0 | 
+de_nuke | SPAWN CT | CT 2 | setpos 2584 -504 -271; setang 0 161 0 | 
+de_nuke | SPAWN CT | CT 3 | setpos 2552 -424 -271; setang 0 207.5 0 | 
+de_nuke | SPAWN CT | CT 4 | setpos 2504 -344 -271; setang 0 271 0 | 
+de_nuke | SPAWN CT | CT 5 | setpos 2585 -344 -271; setang 0 200.5 0 | 
