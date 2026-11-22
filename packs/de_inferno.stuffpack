@@ -1,0 +1,12 @@
+CS2STUFFPACK;1;-64;Principal
+de_inferno | SPAWN T | T 1 | setpos -1520.06 430.89 18; setang 0 267 0 | 
+de_inferno | SPAWN T | T 2 | setpos -1586.52 440.79 18; setang 0 337 0 | 
+de_inferno | SPAWN T | T 3 | setpos -1657.23 419.58 18; setang 0 358.5 0 | 
+de_inferno | SPAWN T | T 4 | setpos -1675.62 351.7 18; setang 0 48 0 | 
+de_inferno | SPAWN T | T 5 | setpos -1662.18 288.76 18; setang 0 77.5 0 | 
+de_inferno | SPAWN CT | CT 1 | setpos 2292.06 2027.69 204.84; setang 0 70 0 | 
+de_inferno | SPAWN CT | CT 2 | setpos 2353 1977 204.84; setang 0 97.5 0 | 
+de_inferno | SPAWN CT | CT 3 | setpos 2472.35 2005.97 204.84; setang 0 160 0 | 
+de_inferno | SPAWN CT | CT 4 | setpos 2397 2079 219; setang 0 135 0 | 
+de_inferno | SPAWN CT | CT 5 | setpos 2493 2090 204.84; setang 0 223.5 0 | 
+de_inferno | SPAWN CT | CT 6 | setpos 2456.83 2153.16 204.84; setang 0 251.5 0 | 
