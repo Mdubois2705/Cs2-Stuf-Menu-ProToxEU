@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.37.4
+
+- Gestion des stuffs : quand on agrandit la fenêtre, les boutons ▲ ▼ ne laissent plus de traces (la fenêtre est entièrement redessinée).
+
 ## v2.37.3
 
 - Chronomètre : les stuffs longs (plus de 9 secondes entre le lâcher et l'explosion) sont maintenant mesurés. Avant, le départ était oublié après 9 s et le temps ignoré (limite portée à 25 s).

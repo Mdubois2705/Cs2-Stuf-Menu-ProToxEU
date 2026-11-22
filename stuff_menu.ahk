@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.37.3"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.37.4"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -5796,6 +5796,8 @@ ShowManager() {
         edFind.Move(, , Max(120, ui["fw0"] + dw - 70))
         btnStUp.Move(ui["bx0"] + dw)
         btnStDn.Move(ui["bx1"] + dw)
+        ; redessine toute la fenêtre et ses contrôles : plus de traces de boutons déplacés
+        try DllCall("user32\RedrawWindow", "Ptr", d.Hwnd, "Ptr", 0, "Ptr", 0, "UInt", 0x0085)   ; INVALIDATE | ERASE | ALLCHILDREN
     }
 
     RefreshCats(keep := "") {
