@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.37.5
+
+- Gestion des stuffs : plus d'erreur « The control is destroyed » quand on ferme la fenêtre de gestion pendant qu'une fenêtre de modification ou de saisie est ouverte (la liste n'est plus rafraîchie sur une fenêtre fermée).
+
 ## v2.37.4
 
 - Gestion des stuffs : quand on agrandit la fenêtre, les boutons ▲ ▼ ne laissent plus de traces (la fenêtre est entièrement redessinée).

@@ -7,7 +7,7 @@
 ;  Données perso (favoris, récents) : dossier data\
 ; =====================================================================
 
-APP_VERSION := "2.37.4"   ; à garder identique au fichier VERSION du dépôt
+APP_VERSION := "2.37.5"   ; à garder identique au fichier VERSION du dépôt
 UPDATE_REPO := "Mdubois2705/Cs2-Stuf-Menu-ProToxEU"
 
 ; ---------- Configuration ----------
@@ -5687,6 +5687,8 @@ ShowManager() {
         return (loadedMap != "") ? loadedMap : mapNames[1]
     }
     Say(msg) {
+        if !mgrOpen   ; fenêtre fermée entre-temps (pendant une fenêtre de saisie, par exemple)
+            return
         stText.Text := msg
     }
     SelCat() {
@@ -5722,6 +5724,8 @@ ShowManager() {
     }
 
     RefreshStuffs(selPos := 0) {
+        if !mgrOpen
+            return
         lvSt.Delete()
         cc := SelCat()
         if (cc = "")
@@ -5801,6 +5805,8 @@ ShowManager() {
     }
 
     RefreshCats(keep := "") {
+        if !mgrOpen   ; fenêtre fermée pendant une action (fenêtre de modification, saisie...)
+            return
         ui["busy"] := true
         if (keep = "")
             keep := SelCat()
